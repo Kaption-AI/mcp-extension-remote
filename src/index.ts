@@ -30,30 +30,11 @@ import type { Env } from "./types";
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
 export { RelayMCP, RelayRoom, DeploymentChainDO };
 
-// ─── MCP Handler (authenticated tool calls) ───────────────────────────
-
-const mcpApp = new Hono<{ Bindings: Env }>();
-
-mcpApp.all("/sse", async (c) => {
-  try {
-    const handler = RelayMCP.serveSSE("/sse", { binding: "MCP_OBJECT" });
-    return await handler.fetch(c.req.raw, c.env, c.executionCtx);
-  } catch (error) {
-    // [H1] Never leak internal details
-    console.error("[mcp] SSE handler error");
-    return c.text("Internal Server Error", 500);
-  }
-});
-
-mcpApp.all("/mcp", async (c) => {
-  try {
-    const handler = RelayMCP.serve("/mcp", { binding: "MCP_OBJECT" });
-    return await handler.fetch(c.req.raw, c.env, c.executionCtx);
-  } catch (error) {
-    console.error("[mcp] MCP handler error");
-    return c.text("Internal Server Error", 500);
-  }
-});
+// ─── MCP Handlers (authenticated tool calls) ────────────────────────
+// Pass directly to OAuthProvider as apiHandlers so ctx.props (set by
+// the OAuthProvider after token validation) flows through correctly.
+const sseHandler = RelayMCP.serveSSE("/sse");
+const mcpHandler = RelayMCP.serve("/mcp");
 
 // ─── Non-OAuth routes ─────────────────────────────────────────────────
 
@@ -150,8 +131,8 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     // - Everything else → defaultHandler (Next.js)
     const oauthHandler = new OAuthProvider({
       apiHandlers: {
-        "/sse": mcpApp as any,
-        "/mcp": mcpApp as any,
+        "/sse": sseHandler as any,
+        "/mcp": mcpHandler as any,
       },
       authorizeEndpoint: "/authorize",
       tokenEndpoint: "/token",
