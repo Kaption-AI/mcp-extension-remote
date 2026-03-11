@@ -36,7 +36,7 @@ const mcpApp = new Hono<{ Bindings: Env }>();
 
 mcpApp.all("/sse", async (c) => {
   try {
-    const handler = RelayMCP.serveSSE("/sse");
+    const handler = RelayMCP.serveSSE("/sse", { binding: "MCP_OBJECT" });
     return await handler.fetch(c.req.raw, c.env, c.executionCtx);
   } catch (error) {
     // [H1] Never leak internal details
@@ -47,7 +47,7 @@ mcpApp.all("/sse", async (c) => {
 
 mcpApp.all("/mcp", async (c) => {
   try {
-    const handler = RelayMCP.serve("/mcp");
+    const handler = RelayMCP.serve("/mcp", { binding: "MCP_OBJECT" });
     return await handler.fetch(c.req.raw, c.env, c.executionCtx);
   } catch (error) {
     console.error("[mcp] MCP handler error");
