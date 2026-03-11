@@ -1,0 +1,92 @@
+/**
+ * RelayMCP — McpAgent Durable Object that registers tools and relays
+ * tool calls to the appropriate RelayRoom (by phone number).
+ */
+
+import { McpAgent } from "agents/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { TOOLS, zodToJsonSchema } from "./tools";
+import type { Env } from "./types";
+
+export class RelayMCP extends McpAgent<Env> {
+  server = new McpServer({
+    name: "Kaption WhatsApp MCP (Cloud)",
+    version: "1.0.0",
+  });
+
+  async init() {
+    // Register all WhatsApp tools — each one relays to the extension via RelayRoom
+    for (const tool of TOOLS) {
+      this.server.tool(
+        tool.name,
+        tool.description,
+        zodToJsonSchema(tool.inputSchema) as any,
+        async (params: Record<string, unknown>, extra: any) => {
+          // Extract phone from the authenticated token props
+          const phone = this.getPhoneFromContext(extra);
+          if (!phone) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: "Authentication error: no phone number in token. Re-authenticate via OTP.",
+                },
+              ],
+            };
+          }
+
+          try {
+            const result = await this.relayToExtension(phone, tool.name, params);
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: typeof result === "string" ? result : JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          } catch (err: any) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Error: ${err.message}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        },
+      );
+    }
+  }
+
+  /**
+   * Extract phone number from OAuth token props.
+   * The OAuthProvider injects `props` into the request context.
+   */
+  private getPhoneFromContext(extra: any): string | null {
+    // The MCP agent framework passes auth info through the extra context
+    // props.phone is set during completeAuthorization in the OTP handler
+    try {
+      const props = (this as any).props;
+      if (props?.phone) return props.phone;
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  /**
+   * Relay a tool call to the RelayRoom for the given phone number.
+   */
+  private async relayToExtension(
+    phone: string,
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<unknown> {
+    const roomId = this.env.RELAY_ROOM.idFromName(phone);
+    const room = this.env.RELAY_ROOM.get(roomId);
+    return room.handleMcpRequest(method, params);
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mcp-remote",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-26",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Custom domain
+  "routes": [
+    { "pattern": "mcp-ext.kaptionai.com", "custom_domain": true }
+  ],
+
+  // Durable Objects
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_OBJECT",
+        "class_name": "RelayMCP"
+      },
+      {
+        "name": "RELAY_ROOM",
+        "class_name": "RelayRoom"
+      },
+      {
+        "name": "DEPLOYMENT_CHAIN",
+        "class_name": "DeploymentChainDO"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["RelayMCP", "RelayRoom", "DeploymentChainDO"]
+    }
+  ],
+
+  "observability": {
+    "logs": {
+      "enabled": true
+    }
+  },
+
+  // KV Namespaces
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "TO_BE_CREATED"
+    },
+    {
+      "binding": "AUTH_KV",
+      "id": "TO_BE_CREATED"
+    }
+  ],
+
+  "vars": {
+    "INTERNAL_API_BASE_URL": "https://api.kaptionai.com",
+    "BUILD_HASH": "__BUILD_HASH__",
+    "COMMIT_SHA": "__COMMIT_SHA__"
+  }
+
+  // Secrets (set via `wrangler secret put`):
+  // - INTERNAL_API_KEY: API key for rest-api OTP endpoint
+  // - DEPLOY_API_KEY: API key for transparency chain append
+}
