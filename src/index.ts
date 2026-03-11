@@ -143,34 +143,10 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       return outerApp.fetch(request, env, ctx);
     }
 
-    // For /authorize GET, parse OAuth info and HMAC-sign it before passing to Next.js
-    let enrichedRequest = request;
-    if (url.pathname === "/authorize" && request.method === "GET") {
-      try {
-        const oauthReqInfo =
-          await env.OAUTH_PROVIDER.parseAuthRequest(request);
-        if (!oauthReqInfo.clientId) {
-          return new Response("Invalid authorization request", {
-            status: 400,
-          });
-        }
-        const encoded = btoa(JSON.stringify(oauthReqInfo));
-        // [M3] HMAC-sign the payload
-        const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
-        const newUrl = new URL(request.url);
-        newUrl.searchParams.set("_oauthReqInfo", signed);
-        enrichedRequest = new Request(newUrl.toString(), request);
-      } catch {
-        return new Response(
-          "Invalid authorization request. Register your MCP client first via POST /register.",
-          { status: 400 },
-        );
-      }
-    }
-
     // OAuthProvider handles:
     // - /sse, /mcp → apiHandlers (OAuth token-protected MCP)
     // - /token → token exchange
+    // - /register → RFC 7591 dynamic client registration
     // - Everything else → defaultHandler (Next.js)
     const oauthHandler = new OAuthProvider({
       apiHandlers: {
@@ -185,10 +161,37 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       defaultHandler: {
         async fetch(
           req: Request,
-          e: Env,
+          oauthEnv: Env,
           c: ExecutionContext,
         ): Promise<Response> {
-          const response = await nextHandler.fetch(req, e, c);
+          const reqUrl = new URL(req.url);
+
+          // [M3] For /authorize GET, HMAC-sign the oauthReqInfo before passing to Next.js
+          // env.OAUTH_PROVIDER (OAuthHelpers) is available here inside defaultHandler
+          let finalReq = req;
+          if (reqUrl.pathname === "/authorize" && req.method === "GET") {
+            try {
+              const oauthReqInfo =
+                await oauthEnv.OAUTH_PROVIDER.parseAuthRequest(req);
+              if (!oauthReqInfo.clientId) {
+                return new Response("Invalid authorization request", {
+                  status: 400,
+                });
+              }
+              const encoded = btoa(JSON.stringify(oauthReqInfo));
+              const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
+              const newUrl = new URL(req.url);
+              newUrl.searchParams.set("_oauthReqInfo", signed);
+              finalReq = new Request(newUrl.toString(), req);
+            } catch {
+              return new Response(
+                "Invalid authorization request. Register your MCP client first via POST /register.",
+                { status: 400 },
+              );
+            }
+          }
+
+          const response = await nextHandler.fetch(finalReq, oauthEnv, c);
           // [L4] Add request ID to response
           const newResponse = new Response(response.body, response);
           newResponse.headers.set("x-request-id", requestId);
@@ -197,6 +200,6 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       } as any,
     });
 
-    return oauthHandler.fetch(enrichedRequest, env, ctx);
+    return oauthHandler.fetch(request, env, ctx);
   };
 }
