@@ -82,7 +82,7 @@ jobs:
               \"version\": \"$VERSION\",
               \"commitSha\": \"${{ github.sha }}\",
               \"buildHash\": \"${{ env.BUILD_HASH }}\",
-              \"sigstoreBundleUrl\": \"https://github.com/Kaption-AI/kaption-mcp-remote/actions/runs/${{ github.run_id }}\",
+              \"sigstoreBundleUrl\": \"https://github.com/Kaption-AI/mcp-extension-remote/actions/runs/${{ github.run_id }}\",
               \"rekorLogIndex\": \"${{ env.REKOR_INDEX }}\",
               \"deployedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
             }"

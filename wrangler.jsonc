@@ -45,11 +45,11 @@
   "kv_namespaces": [
     {
       "binding": "OAUTH_KV",
-      "id": "TO_BE_CREATED"
+      "id": "d8f86606c8e543079ebbdd7d72376a05"
     },
     {
       "binding": "AUTH_KV",
-      "id": "TO_BE_CREATED"
+      "id": "8fa6d1eaea5c479db99bb46aa4c1521e"
     }
   ],
 
