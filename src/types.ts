@@ -6,8 +6,10 @@ export interface Env {
   MCP_OBJECT: DurableObjectNamespace;
   RELAY_ROOM: DurableObjectNamespace<RelayRoom>;
   DEPLOYMENT_CHAIN: DurableObjectNamespace<DeploymentChainDO>;
+  EXT_OAUTH_KV: KVNamespace;
+  EXT_AUTH_KV: KVNamespace;
+  // Alias required by @cloudflare/workers-oauth-provider (hardcoded)
   OAUTH_KV: KVNamespace;
-  AUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
   INTERNAL_API_BASE_URL: string;
   INTERNAL_API_KEY: string;

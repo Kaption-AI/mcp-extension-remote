@@ -30,6 +30,6 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: msg }, { status: 400 });
   }
 
-  await revokeExtensionSession(env.AUTH_KV, parsed.data.token);
+  await revokeExtensionSession(env.EXT_AUTH_KV, parsed.data.token);
   return Response.json({ ok: true });
 }

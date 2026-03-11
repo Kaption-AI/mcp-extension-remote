@@ -235,7 +235,7 @@ export class RelayRoom extends DurableObject<Env> {
    * [H6] Validate the auth token sent in the first WebSocket message.
    */
   private async handleAuthHandshake(token: string): Promise<void> {
-    const phone = await validateExtensionSession(this.env.AUTH_KV, token);
+    const phone = await validateExtensionSession(this.env.EXT_AUTH_KV, token);
     if (!phone) {
       this.extensionWs?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired token" }),

@@ -44,11 +44,15 @@
   // KV Namespaces
   "kv_namespaces": [
     {
+      "binding": "EXT_OAUTH_KV",
+      "id": "d8f86606c8e543079ebbdd7d72376a05"
+    },
+    {
       "binding": "OAUTH_KV",
       "id": "d8f86606c8e543079ebbdd7d72376a05"
     },
     {
-      "binding": "AUTH_KV",
+      "binding": "EXT_AUTH_KV",
       "id": "8fa6d1eaea5c479db99bb46aa4c1521e"
     }
   ],

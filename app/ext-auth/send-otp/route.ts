@@ -43,21 +43,21 @@ export async function POST(request: Request): Promise<Response> {
   const { phone } = parsed.data;
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  if (!(await checkIpRateLimit(env.AUTH_KV, ip))) {
+  if (!(await checkIpRateLimit(env.EXT_AUTH_KV, ip))) {
     return Response.json(
       { error: "Too many requests. Try again later." },
       { status: 429 },
     );
   }
 
-  if (await checkCooldown(env.AUTH_KV, phone)) {
+  if (await checkCooldown(env.EXT_AUTH_KV, phone)) {
     return Response.json(
       { error: "Please wait 60 seconds before requesting a new code" },
       { status: 429 },
     );
   }
 
-  if (!(await checkRateLimit(env.AUTH_KV, phone))) {
+  if (!(await checkRateLimit(env.EXT_AUTH_KV, phone))) {
     return Response.json(
       { error: "Too many OTP requests. Try again in an hour." },
       { status: 429 },
@@ -65,10 +65,10 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const code = generateOTP();
-  await storeOTP(env.AUTH_KV, phone, code);
-  await setCooldown(env.AUTH_KV, phone);
-  await incrementRateLimit(env.AUTH_KV, phone);
-  await incrementIpRateLimit(env.AUTH_KV, ip);
+  await storeOTP(env.EXT_AUTH_KV, phone, code);
+  await setCooldown(env.EXT_AUTH_KV, phone);
+  await incrementRateLimit(env.EXT_AUTH_KV, phone);
+  await incrementIpRateLimit(env.EXT_AUTH_KV, ip);
 
   try {
     const apiBase = env.INTERNAL_API_BASE_URL.replace(/\/$/, "");

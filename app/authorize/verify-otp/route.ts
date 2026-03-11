@@ -34,7 +34,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const { phone, code, oauthReqInfo } = parsed.data;
 
-  const result = await verifyOTP(env.AUTH_KV, phone, code);
+  const result = await verifyOTP(env.EXT_AUTH_KV, phone, code);
 
   if (!result.valid) {
     return Response.json({ error: result.error }, { status: 400 });

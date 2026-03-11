@@ -37,7 +37,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const { phone, code } = parsed.data;
 
-  const result = await verifyOTP(env.AUTH_KV, phone, code);
+  const result = await verifyOTP(env.EXT_AUTH_KV, phone, code);
 
   if (!result.valid) {
     return Response.json({ error: result.error }, { status: 400 });
@@ -45,7 +45,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // Generate and store a cloud token for the extension
   const cloudToken = generateCloudToken();
-  await storeExtensionSession(env.AUTH_KV, cloudToken, phone);
+  await storeExtensionSession(env.EXT_AUTH_KV, cloudToken, phone);
 
   console.log(`[ext-auth] Session created for ${sanitizeForLog(phone)}`);
   return Response.json({ ok: true, cloud_token: cloudToken });
