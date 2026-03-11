@@ -179,7 +179,9 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       },
       authorizeEndpoint: "/authorize",
       tokenEndpoint: "/token",
-      // [H4] Registration handled by Next.js API route (app/register/route.ts)
+      // Advertise registration endpoint in /.well-known/oauth-authorization-server
+      // so MCP clients (Claude Code, Cursor, etc.) can auto-register
+      clientRegistrationEndpoint: "/register",
       defaultHandler: {
         async fetch(
           req: Request,
