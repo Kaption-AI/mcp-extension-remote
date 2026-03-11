@@ -3,7 +3,7 @@ import type { OTPRecord, RateLimitRecord } from "./types";
 const OTP_TTL = 300; // 5 minutes
 const COOLDOWN_TTL = 60; // 60 seconds between sends
 const RATE_WINDOW_TTL = 3600; // 1 hour window
-const MAX_SENDS_PER_HOUR = 3;
+const MAX_SENDS_PER_HOUR = 10;
 const MAX_VERIFY_ATTEMPTS = 5;
 
 // [C2/M2] Rejection sampling threshold to avoid modulo bias
