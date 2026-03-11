@@ -1,9 +1,11 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { RelayRoom } from "./relay-room";
+import type { DeploymentChainDO } from "./deployment-chain";
 
 export interface Env {
   MCP_OBJECT: DurableObjectNamespace;
-  RELAY_ROOM: DurableObjectNamespace;
-  DEPLOYMENT_CHAIN: DurableObjectNamespace;
+  RELAY_ROOM: DurableObjectNamespace<RelayRoom>;
+  DEPLOYMENT_CHAIN: DurableObjectNamespace<DeploymentChainDO>;
   OAUTH_KV: KVNamespace;
   AUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;

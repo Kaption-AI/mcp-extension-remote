@@ -2,3 +2,7 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+.next/
+.open-next/
+next-env.d.ts
+tsconfig.tsbuildinfo

@@ -1,31 +1,46 @@
-name: Sign and Deploy
+name: Test, Build & Deploy
 
 on:
   push:
     branches: [main]
 
 permissions:
-  id-token: write    # Required for Sigstore keyless signing
+  id-token: write
   contents: read
 
 jobs:
-  deploy:
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
 
+  deploy:
+    name: Build & Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
       - run: npm ci
 
-      - name: Build worker bundle
-        run: npx wrangler deploy --dry-run --outdir dist/ --minify src/index.ts
+      - name: Build OpenNext worker
+        run: npm run build:worker
+        env:
+          NODE_ENV: production
 
       - name: Compute build hash
         run: |
-          BUILD_HASH=$(shasum -a 256 dist/index.js | cut -d' ' -f1)
+          BUILD_HASH=$(shasum -a 256 .open-next/worker.js | cut -d' ' -f1)
           echo "BUILD_HASH=$BUILD_HASH" >> $GITHUB_ENV
           echo "Build SHA-256: $BUILD_HASH"
 
@@ -35,12 +50,11 @@ jobs:
       - name: Create Sigstore signature bundle
         run: |
           cosign sign-blob \
-            --bundle dist/index.js.sigstore.json \
+            --bundle .open-next/worker.js.sigstore.json \
             --yes \
-            dist/index.js
+            .open-next/worker.js
 
-          # Extract Rekor log index from bundle
-          REKOR_INDEX=$(cat dist/index.js.sigstore.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('rekorBundle',{}).get('logIndex','unknown'))" 2>/dev/null || echo "unknown")
+          REKOR_INDEX=$(cat .open-next/worker.js.sigstore.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('rekorBundle',{}).get('logIndex','unknown'))" 2>/dev/null || echo "unknown")
           echo "REKOR_INDEX=$REKOR_INDEX" >> $GITHUB_ENV
 
       - name: Upload signed artifacts
@@ -48,14 +62,15 @@ jobs:
         with:
           name: signed-worker-${{ github.sha }}
           path: |
-            dist/index.js
-            dist/index.js.sigstore.json
+            .open-next/worker.js
+            .open-next/worker.js.sigstore.json
 
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: deploy --minify src/index.ts
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
 
       - name: Record deployment in transparency chain
         run: |
@@ -67,7 +82,7 @@ jobs:
               \"version\": \"$VERSION\",
               \"commitSha\": \"${{ github.sha }}\",
               \"buildHash\": \"${{ env.BUILD_HASH }}\",
-              \"sigstoreBundleUrl\": \"https://github.com/kaptionai/kaption-mcp-remote/actions/runs/${{ github.run_id }}\",
+              \"sigstoreBundleUrl\": \"https://github.com/Kaption-AI/kaption-mcp-remote/actions/runs/${{ github.run_id }}\",
               \"rekorLogIndex\": \"${{ env.REKOR_INDEX }}\",
               \"deployedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
             }"

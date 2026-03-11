@@ -12,7 +12,7 @@ export class RelayMCP extends McpAgent<Env> {
   server = new McpServer({
     name: "Kaption WhatsApp MCP (Cloud)",
     version: "1.0.0",
-  });
+  }) as any; // McpServer version compat between agents and @modelcontextprotocol/sdk
 
   async init() {
     // Register all WhatsApp tools — each one relays to the extension via RelayRoom
@@ -65,7 +65,7 @@ export class RelayMCP extends McpAgent<Env> {
    * Extract phone number from OAuth token props.
    * The OAuthProvider injects `props` into the request context.
    */
-  private getPhoneFromContext(extra: any): string | null {
+  private getPhoneFromContext(_extra: any): string | null {
     // The MCP agent framework passes auth info through the extra context
     // props.phone is set during completeAuthorization in the OTP handler
     try {

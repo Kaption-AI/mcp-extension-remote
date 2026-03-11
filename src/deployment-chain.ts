@@ -49,10 +49,12 @@ export class DeploymentChainDO extends DurableObject<Env> {
   }
 
   /**
-   * Get the full deployment history.
+   * Get deployment history with pagination. [L3] Capped at 100 entries per response.
    */
-  async getHistory(): Promise<ChainEntry[]> {
-    return this.loadEntries();
+  async getHistory(limit = 100, offset = 0): Promise<{ entries: ChainEntry[]; total: number }> {
+    const all = await this.loadEntries();
+    const entries = all.slice(offset, offset + Math.min(limit, 100));
+    return { entries, total: all.length };
   }
 
   /**

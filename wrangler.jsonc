@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "mcp-remote",
-  "main": "src/index.ts",
+  "main": ".open-next/worker.js",
   "compatibility_date": "2025-10-26",
   "compatibility_flags": ["nodejs_compat"],
 
@@ -57,6 +57,12 @@
     "INTERNAL_API_BASE_URL": "https://api.kaptionai.com",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
+  },
+
+  // Static assets from OpenNext build
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
   }
 
   // Secrets (set via `wrangler secret put`):
