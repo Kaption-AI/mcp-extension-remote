@@ -146,6 +146,17 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     if (url.pathname.startsWith("/transparency")) {
       return outerApp.fetch(request, env, ctx);
     }
+    // Store phone hint by IP for pre-filling the authorize form.
+    // The /sse?phone=X request comes from the CLI; /authorize opens in the
+    // browser on the same machine → same IP.  Short TTL, harmless if stale.
+    if (url.pathname === "/sse" && url.searchParams.has("phone")) {
+      const ip = request.headers.get("cf-connecting-ip") || "unknown";
+      const phone = url.searchParams.get("phone")!;
+      ctx.waitUntil(
+        env.OAUTH_KV.put(`login_hint:${ip}`, phone, { expirationTtl: 300 }),
+      );
+    }
+
     // OAuthProvider handles:
     // - /sse, /mcp → apiHandlers (OAuth token-protected MCP)
     // - /token → token exchange
@@ -185,6 +196,14 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
               const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
               const newUrl = new URL(req.url);
               newUrl.searchParams.set("_oauthReqInfo", signed);
+
+              // Look up phone hint stored by /sse?phone= (same IP)
+              const ip = req.headers.get("cf-connecting-ip") || "unknown";
+              const phoneHint = await env.OAUTH_KV.get(`login_hint:${ip}`);
+              if (phoneHint) {
+                newUrl.searchParams.set("_loginHint", phoneHint);
+              }
+
               finalReq = new Request(newUrl.toString(), req);
             } catch {
               return new Response(

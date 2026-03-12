@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export default function PhoneForm({ oauthReqInfo }: { oauthReqInfo: string }) {
+export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqInfo: string; loginHint?: string }) {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(loginHint);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 

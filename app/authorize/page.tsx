@@ -9,6 +9,8 @@ export default async function AuthorizePage({
   const params = await searchParams;
   const oauthReqInfo =
     typeof params._oauthReqInfo === "string" ? params._oauthReqInfo : "";
+  const loginHint =
+    typeof params._loginHint === "string" ? params._loginHint : "";
 
   return (
     <Suspense
@@ -18,7 +20,7 @@ export default async function AuthorizePage({
         </div>
       }
     >
-      <PhoneForm oauthReqInfo={oauthReqInfo} />
+      <PhoneForm oauthReqInfo={oauthReqInfo} loginHint={loginHint} />
     </Suspense>
   );
 }
