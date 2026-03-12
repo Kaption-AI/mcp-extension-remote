@@ -57,6 +57,37 @@ describe("Tool registration", () => {
     }
   });
 
+  it("query description contains HOW TO READ MESSAGES guidance", () => {
+    const queryTool = TOOLS.find((t) => t.name === "query")!;
+    expect(queryTool.description).toContain("HOW TO READ MESSAGES:");
+    expect(queryTool.description).toContain("pass its id");
+    expect(queryTool.description).toContain('Do NOT use entity="messages" for this');
+  });
+
+  it("query description contains AUDIO TRANSCRIPTIONS guidance", () => {
+    const queryTool = TOOLS.find((t) => t.name === "query")!;
+    expect(queryTool.description).toContain("AUDIO TRANSCRIPTIONS:");
+    expect(queryTool.description).toContain('entity="transcriptions"');
+  });
+
+  it("query description contains multi-account guidance", () => {
+    const queryTool = TOOLS.find((t) => t.name === "query")!;
+    expect(queryTool.description).toContain("Multiple WhatsApp accounts");
+    expect(queryTool.description).toContain('entity="session"');
+    expect(queryTool.description).toContain("target_session");
+  });
+
+  it("every tool schema field has a .describe()", () => {
+    for (const tool of TOOLS) {
+      const jsonSchema = zodToJsonSchema(tool.inputSchema);
+      const props = jsonSchema.properties as Record<string, any> | undefined;
+      if (!props) continue;
+      for (const [key, prop] of Object.entries(props)) {
+        expect(prop.description ?? prop.oneOf, `${tool.name}.${key} missing description`).toBeDefined();
+      }
+    }
+  });
+
   it("every tool has a valid Zod inputSchema", () => {
     for (const tool of TOOLS) {
       // Should parse without throwing
