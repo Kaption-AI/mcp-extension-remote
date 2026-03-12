@@ -9,23 +9,29 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { TOOLS as CLOUD_TOOLS, zodToJsonSchema } from "./tools";
+import { TOOLS as CLOUD_TOOLS, zodToJsonSchema, type ToolDefinition } from "./tools";
 import { existsSync } from "fs";
 import { resolve } from "path";
 
 const localToolsPath = resolve(__dirname, "../../kaption-mcp/src/tools.ts");
 const hasLocalBridge = existsSync(localToolsPath);
 
-describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", async () => {
-  const { TOOLS: LOCAL_TOOLS } = await import("../../kaption-mcp/src/tools");
+let LOCAL_TOOLS: ToolDefinition[] = [];
 
+if (hasLocalBridge) {
+  // Dynamic import only when the file exists (local dev, not CI)
+  const mod = await import("../../kaption-mcp/src/tools");
+  LOCAL_TOOLS = mod.TOOLS;
+}
+
+describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
   it("same number of tools", () => {
     expect(CLOUD_TOOLS).toHaveLength(LOCAL_TOOLS.length);
   });
 
   it("same tool names in same order", () => {
-    const cloudNames = CLOUD_TOOLS.map((t: any) => t.name);
-    const localNames = LOCAL_TOOLS.map((t: any) => t.name);
+    const cloudNames = CLOUD_TOOLS.map((t) => t.name);
+    const localNames = LOCAL_TOOLS.map((t) => t.name);
     expect(cloudNames).toEqual(localNames);
   });
 
@@ -66,8 +72,8 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", async () => {
     };
 
     for (const [name, input] of Object.entries(sampleInputs)) {
-      const cloudTool = CLOUD_TOOLS.find((t: any) => t.name === name)!;
-      const localTool = LOCAL_TOOLS.find((t: any) => t.name === name)!;
+      const cloudTool = CLOUD_TOOLS.find((t) => t.name === name)!;
+      const localTool = LOCAL_TOOLS.find((t) => t.name === name)!;
 
       const cloudResult = cloudTool.inputSchema.safeParse(input);
       const localResult = localTool.inputSchema.safeParse(input);
@@ -92,8 +98,8 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", async () => {
     };
 
     for (const [name, input] of Object.entries(invalidInputs)) {
-      const cloudTool = CLOUD_TOOLS.find((t: any) => t.name === name)!;
-      const localTool = LOCAL_TOOLS.find((t: any) => t.name === name)!;
+      const cloudTool = CLOUD_TOOLS.find((t) => t.name === name)!;
+      const localTool = LOCAL_TOOLS.find((t) => t.name === name)!;
 
       const cloudResult = cloudTool.inputSchema.safeParse(input);
       const localResult = localTool.inputSchema.safeParse(input);
