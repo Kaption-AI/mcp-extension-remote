@@ -10,6 +10,9 @@
  * - [H3] Origin validation on WebSocket upgrade
  * - [H6] Token sent in first WebSocket message (auth handshake), not URL
  * - [M5] Pending requests capped at 50
+ *
+ * Hibernation: Auth state is persisted via WebSocket attachment tags
+ * so that the DO can hibernate and resume without losing the connection.
  */
 
 import { DurableObject } from "cloudflare:workers";
@@ -20,6 +23,11 @@ interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
   timeout: ReturnType<typeof setTimeout>;
+}
+
+interface WsAttachment {
+  authenticated: boolean;
+  phone: string | null;
 }
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -85,6 +93,9 @@ export class RelayRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     this.extensionWs = server;
     this.authenticated = false;
+    this.phone = null;
+    // Persist initial (unauthenticated) state in WS attachment for hibernation
+    this.setWsAttachment(server, { authenticated: false, phone: null });
 
     server.addEventListener("message", (event) => {
       this.handleExtensionMessage(event.data as string);
@@ -114,6 +125,10 @@ export class RelayRoom extends DurableObject<Env> {
     method: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
+    // Restore state from hibernation if needed
+    this.restoreFromHibernation();
+
+    console.log(`[RelayRoom] handleMcpRequest: method=${method}, phone=${this.phone}, authenticated=${this.authenticated}, hasWs=${!!this.extensionWs}`);
     if (!this.extensionWs || !this.authenticated) {
       throw new Error(
         "Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge.",
@@ -158,6 +173,7 @@ export class RelayRoom extends DurableObject<Env> {
    * Check if the extension is currently connected and authenticated.
    */
   isExtensionConnected(): boolean {
+    this.restoreFromHibernation();
     return this.extensionWs !== null && this.authenticated;
   }
 
@@ -268,6 +284,10 @@ export class RelayRoom extends DurableObject<Env> {
 
     this.authenticated = true;
     this.phone = phone;
+    console.log(`[RelayRoom] Legacy auth OK, phone=${phone}`);
+    if (this.extensionWs) {
+      this.setWsAttachment(this.extensionWs, { authenticated: true, phone });
+    }
     this.extensionWs?.send(JSON.stringify({ type: "auth_ok", phone }));
   }
 
@@ -291,6 +311,10 @@ export class RelayRoom extends DurableObject<Env> {
 
     this.authenticated = true;
     this.phone = phone;
+    console.log(`[RelayRoom] JWT auth OK, phone=${phone}`);
+    if (this.extensionWs) {
+      this.setWsAttachment(this.extensionWs, { authenticated: true, phone });
+    }
     this.extensionWs?.send(JSON.stringify({ type: "auth_ok", phone }));
   }
 
@@ -305,10 +329,57 @@ export class RelayRoom extends DurableObject<Env> {
     }
   }
 
+  // ─── Hibernation support ─────────────────────────────────────────────
+
+  /**
+   * Persist auth state in the WebSocket attachment so it survives hibernation.
+   */
+  private setWsAttachment(ws: WebSocket, attachment: WsAttachment): void {
+    try {
+      (ws as any).serializeAttachment(attachment);
+    } catch {
+      // serializeAttachment not available outside hibernation context
+    }
+  }
+
+  /**
+   * Restore in-memory state from WebSocket attachments after hibernation.
+   * Called when the DO wakes up (from webSocketMessage or handleMcpRequest).
+   */
+  private restoreFromHibernation(): void {
+    if (this.extensionWs && this.authenticated) return; // Already restored
+
+    const sockets = this.ctx.getWebSockets();
+    if (sockets.length === 0) return;
+
+    // Find the authenticated WebSocket
+    for (const ws of sockets) {
+      try {
+        const attachment = (ws as any).deserializeAttachment() as WsAttachment | null;
+        if (attachment?.authenticated) {
+          this.extensionWs = ws;
+          this.authenticated = true;
+          this.phone = attachment.phone;
+          console.log(`[RelayRoom] Restored from hibernation: phone=${this.phone}`);
+          return;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // No authenticated socket found — pick first available
+    if (!this.extensionWs && sockets.length > 0) {
+      this.extensionWs = sockets[0];
+    }
+  }
+
   /**
    * Durable Object WebSocket hibernation handler.
    */
   async webSocketMessage(ws: WebSocket, message: string): Promise<void> {
+    // Restore auth state from attachment after hibernation
+    this.restoreFromHibernation();
     if (!this.extensionWs) {
       this.extensionWs = ws;
     }
