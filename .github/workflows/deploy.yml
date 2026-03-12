@@ -54,7 +54,7 @@ jobs:
             --yes \
             .open-next/worker.js
 
-          REKOR_INDEX=$(cat .open-next/worker.js.sigstore.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('rekorBundle',{}).get('logIndex','unknown'))" 2>/dev/null || echo "unknown")
+          REKOR_INDEX=$(cat .open-next/worker.js.sigstore.json | python3 -c "import sys,json; b=json.load(sys.stdin); print(b.get('verificationMaterial',{}).get('tlogEntries',[{}])[0].get('logIndex','unknown'))" 2>/dev/null || echo "unknown")
           echo "REKOR_INDEX=$REKOR_INDEX" >> $GITHUB_ENV
 
       - name: Upload signed artifacts
