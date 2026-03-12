@@ -37,7 +37,8 @@ export class RelayMCP extends McpAgent<Env> {
             // Sanitize args for DO RPC — the MCP SDK may inject non-serializable
             // properties (AbortSignal etc.) into the args object
             const cleanArgs = JSON.parse(JSON.stringify(args));
-            console.log(`[RelayMCP] Relaying ${tool.name} to phone=${phone}`);
+            const { sanitizeForLog } = await import("./otp");
+            console.log(`[RelayMCP] Relaying ${tool.name} to phone=${sanitizeForLog(phone)}`);
             const result = await this.relayToExtension(phone, tool.name, cleanArgs);
             return {
               content: [

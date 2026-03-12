@@ -5,7 +5,6 @@ import {
   ExtSendOTPSchema,
   ExtVerifyOTPSchema,
   RevokeSessionSchema,
-  RegisterClientSchema,
   isAllowedRedirectUri,
 } from "./schemas";
 
@@ -182,61 +181,6 @@ describe("RevokeSessionSchema", () => {
 
   it("rejects missing token", () => {
     const result = RevokeSessionSchema.safeParse({});
-    expect(result.success).toBe(false);
-  });
-});
-
-// ─── RegisterClientSchema ───────────────────────────────────────────
-
-describe("RegisterClientSchema", () => {
-  it("accepts valid registration", () => {
-    const result = RegisterClientSchema.safeParse({
-      client_id: "my-client",
-      redirect_uris: ["https://claude.ai/callback"],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts optional client_name", () => {
-    const result = RegisterClientSchema.safeParse({
-      client_id: "my-client",
-      client_name: "My MCP Client",
-      redirect_uris: ["http://localhost:3000/callback"],
-    });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.client_name).toBe("My MCP Client");
-    }
-  });
-
-  it("rejects missing client_id", () => {
-    const result = RegisterClientSchema.safeParse({
-      redirect_uris: ["https://claude.ai/callback"],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects empty redirect_uris array", () => {
-    const result = RegisterClientSchema.safeParse({
-      client_id: "my-client",
-      redirect_uris: [],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects invalid URL in redirect_uris", () => {
-    const result = RegisterClientSchema.safeParse({
-      client_id: "my-client",
-      redirect_uris: ["not-a-url"],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects non-array redirect_uris", () => {
-    const result = RegisterClientSchema.safeParse({
-      client_id: "my-client",
-      redirect_uris: "https://claude.ai/callback",
-    });
     expect(result.success).toBe(false);
   });
 });

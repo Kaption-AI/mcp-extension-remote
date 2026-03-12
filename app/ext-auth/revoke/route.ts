@@ -10,14 +10,14 @@ import { revokeExtensionSession } from "@/src/otp";
 import type { Env } from "@/src/types";
 import { corsOptions, withCors } from "../cors";
 
-export async function OPTIONS(): Promise<Response> {
-  return corsOptions();
+export async function OPTIONS(request: Request): Promise<Response> {
+  return corsOptions(request);
 }
 
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return withCors(Response.json({ error: "Invalid content type" }, { status: 400 }));
+    return withCors(Response.json({ error: "Invalid content type" }, { status: 400 }), request);
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -26,15 +26,15 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }));
+    return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
   }
 
   const parsed = RevokeSessionSchema.safeParse(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return withCors(Response.json({ error: msg }, { status: 400 }));
+    return withCors(Response.json({ error: msg }, { status: 400 }), request);
   }
 
-  await revokeExtensionSession(env.EXT_AUTH_KV, parsed.data.token);
-  return withCors(Response.json({ ok: true }));
+  await revokeExtensionSession(env.OAUTH_KV, parsed.data.token);
+  return withCors(Response.json({ ok: true }), request);
 }

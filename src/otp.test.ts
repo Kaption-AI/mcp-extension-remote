@@ -7,8 +7,6 @@ import {
   hmacVerify,
   sanitizeForLog,
   generateCloudToken,
-  checkCooldown,
-  setCooldown,
   checkRateLimit,
   incrementRateLimit,
   checkIpRateLimit,
@@ -209,32 +207,22 @@ describe("OTP KV operations", () => {
     kv = createMockKV();
   });
 
-  describe("cooldown", () => {
-    it("returns false when no cooldown set", async () => {
-      expect(await checkCooldown(kv, "5491155551234")).toBe(false);
-    });
-
-    it("returns true after cooldown is set", async () => {
-      await setCooldown(kv, "5491155551234");
-      expect(await checkCooldown(kv, "5491155551234")).toBe(true);
-    });
-  });
-
   describe("rate limiting", () => {
     it("allows first request", async () => {
       expect(await checkRateLimit(kv, "5491155551234")).toBe(true);
     });
 
-    it("allows up to 3 requests", async () => {
-      await incrementRateLimit(kv, "5491155551234");
-      await incrementRateLimit(kv, "5491155551234");
+    it("allows up to 50 requests", async () => {
+      for (let i = 0; i < 49; i++) {
+        await incrementRateLimit(kv, "5491155551234");
+      }
       expect(await checkRateLimit(kv, "5491155551234")).toBe(true);
     });
 
-    it("blocks 4th request", async () => {
-      await incrementRateLimit(kv, "5491155551234");
-      await incrementRateLimit(kv, "5491155551234");
-      await incrementRateLimit(kv, "5491155551234");
+    it("blocks 51st request", async () => {
+      for (let i = 0; i < 50; i++) {
+        await incrementRateLimit(kv, "5491155551234");
+      }
       expect(await checkRateLimit(kv, "5491155551234")).toBe(false);
     });
   });
@@ -244,8 +232,8 @@ describe("OTP KV operations", () => {
       expect(await checkIpRateLimit(kv, "1.2.3.4")).toBe(true);
     });
 
-    it("blocks after 10 requests", async () => {
-      for (let i = 0; i < 10; i++) {
+    it("blocks after 100 requests", async () => {
+      for (let i = 0; i < 100; i++) {
         await incrementIpRateLimit(kv, "1.2.3.4");
       }
       expect(await checkIpRateLimit(kv, "1.2.3.4")).toBe(false);

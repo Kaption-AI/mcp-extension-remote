@@ -8,8 +8,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { SendOTPSchema } from "@/src/schemas";
 import {
   generateOTP,
-  checkCooldown,
-  setCooldown,
   checkRateLimit,
   incrementRateLimit,
   checkIpRateLimit,
@@ -45,23 +43,15 @@ export async function POST(request: Request): Promise<Response> {
 
   // [M1] IP-based rate limiting
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  if (!(await checkIpRateLimit(env.EXT_AUTH_KV, ip))) {
+  if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {
     return Response.json(
       { error: "Too many requests. Try again later." },
       { status: 429 },
     );
   }
 
-  // Check cooldown (60s between sends)
-  if (await checkCooldown(env.EXT_AUTH_KV, phone)) {
-    return Response.json(
-      { error: "Please wait 60 seconds before requesting a new code" },
-      { status: 429 },
-    );
-  }
-
   // Check hourly rate limit
-  if (!(await checkRateLimit(env.EXT_AUTH_KV, phone))) {
+  if (!(await checkRateLimit(env.OAUTH_KV, phone))) {
     return Response.json(
       { error: "Too many OTP requests. Try again in an hour." },
       { status: 429 },
@@ -70,10 +60,9 @@ export async function POST(request: Request): Promise<Response> {
 
   // Generate and store OTP
   const code = generateOTP();
-  await storeOTP(env.EXT_AUTH_KV, phone, code);
-  await setCooldown(env.EXT_AUTH_KV, phone);
-  await incrementRateLimit(env.EXT_AUTH_KV, phone);
-  await incrementIpRateLimit(env.EXT_AUTH_KV, ip);
+  await storeOTP(env.OAUTH_KV, phone, code);
+  await incrementRateLimit(env.OAUTH_KV, phone);
+  await incrementIpRateLimit(env.OAUTH_KV, ip);
 
   // Send OTP via rest-api → WhatsApp Cloud API
   try {

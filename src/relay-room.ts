@@ -128,7 +128,6 @@ export class RelayRoom extends DurableObject<Env> {
     // Restore state from hibernation if needed
     this.restoreFromHibernation();
 
-    console.log(`[RelayRoom] handleMcpRequest: method=${method}, phone=${this.phone}, authenticated=${this.authenticated}, hasWs=${!!this.extensionWs}`);
     if (!this.extensionWs || !this.authenticated) {
       throw new Error(
         "Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge.",
@@ -284,7 +283,8 @@ export class RelayRoom extends DurableObject<Env> {
 
     this.authenticated = true;
     this.phone = phone;
-    console.log(`[RelayRoom] Legacy auth OK, phone=${phone}`);
+    const { sanitizeForLog } = await import("./otp");
+    console.log(`[RelayRoom] Legacy auth OK, phone=${sanitizeForLog(phone)}`);
     if (this.extensionWs) {
       this.setWsAttachment(this.extensionWs, { authenticated: true, phone });
     }
@@ -311,7 +311,8 @@ export class RelayRoom extends DurableObject<Env> {
 
     this.authenticated = true;
     this.phone = phone;
-    console.log(`[RelayRoom] JWT auth OK, phone=${phone}`);
+    const { sanitizeForLog } = await import("./otp");
+    console.log(`[RelayRoom] JWT auth OK, phone=${sanitizeForLog(phone)}`);
     if (this.extensionWs) {
       this.setWsAttachment(this.extensionWs, { authenticated: true, phone });
     }
@@ -360,7 +361,7 @@ export class RelayRoom extends DurableObject<Env> {
           this.extensionWs = ws;
           this.authenticated = true;
           this.phone = attachment.phone;
-          console.log(`[RelayRoom] Restored from hibernation: phone=${this.phone}`);
+          // Restored from hibernation — phone is already sanitized in auth logs
           return;
         }
       } catch {

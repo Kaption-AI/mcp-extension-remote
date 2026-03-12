@@ -36,7 +36,7 @@ function constantTimeEqual(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
-/** Check hourly rate limit (max 3 sends per hour). Returns true if allowed. */
+/** Check hourly rate limit (max 50 sends per hour). Returns true if allowed. */
 export async function checkRateLimit(kv: KVNamespace, phone: string): Promise<boolean> {
   const key = `rate:otp-send:${phone}`;
   const raw = await kv.get(key);
@@ -236,7 +236,6 @@ export async function validateJwt(
     const phone =
       (payload as any).phoneNumber ||
       (payload as any).phone ||
-      (payload as any).userToken ||
       null;
     return phone;
   } catch {
@@ -248,7 +247,7 @@ export async function validateJwt(
 export function extractPhoneFromJwt(jwt: string): string | null {
   try {
     const payload = JSON.parse(atob(jwt.split(".")[1]));
-    return payload.phone || payload.sub || payload.phoneNumber || null;
+    return payload.phoneNumber || payload.phone || null;
   } catch {
     return null;
   }

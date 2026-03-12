@@ -39,14 +39,6 @@ export const RevokeSessionSchema = z.object({
   token: z.string().min(1, "Missing token"),
 });
 
-export const RegisterClientSchema = z.object({
-  client_id: z.string().min(1, "Missing client_id"),
-  client_name: z.string().optional(),
-  redirect_uris: z
-    .array(z.string().url("Each redirect_uri must be a valid URL"))
-    .min(1, "At least one redirect_uri is required"),
-});
-
 /** [H4] Allowed redirect URI patterns for OAuth clients */
 const ALLOWED_REDIRECT_PATTERNS = [
   /^https:\/\/([a-z0-9-]+\.)?claude\.ai(\/.*)?$/,

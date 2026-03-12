@@ -15,14 +15,14 @@ import {
 import type { Env } from "@/src/types";
 import { corsOptions, withCors } from "../cors";
 
-export async function OPTIONS(): Promise<Response> {
-  return corsOptions();
+export async function OPTIONS(request: Request): Promise<Response> {
+  return corsOptions(request);
 }
 
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return withCors(Response.json({ error: "Invalid content type" }, { status: 400 }));
+    return withCors(Response.json({ error: "Invalid content type" }, { status: 400 }), request);
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -31,27 +31,27 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }));
+    return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
   }
 
   const parsed = await ExtVerifyOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return withCors(Response.json({ error: msg }, { status: 400 }));
+    return withCors(Response.json({ error: msg }, { status: 400 }), request);
   }
 
   const { phone, code } = parsed.data;
 
-  const result = await verifyOTP(env.EXT_AUTH_KV, phone, code);
+  const result = await verifyOTP(env.OAUTH_KV, phone, code);
 
   if (!result.valid) {
-    return withCors(Response.json({ error: result.error }, { status: 400 }));
+    return withCors(Response.json({ error: result.error }, { status: 400 }), request);
   }
 
   // Generate and store a cloud token for the extension
   const cloudToken = generateCloudToken();
-  await storeExtensionSession(env.EXT_AUTH_KV, cloudToken, phone);
+  await storeExtensionSession(env.OAUTH_KV, cloudToken, phone);
 
   console.log(`[ext-auth] Session created for ${sanitizeForLog(phone)}`);
-  return withCors(Response.json({ ok: true, cloud_token: cloudToken }));
+  return withCors(Response.json({ ok: true, cloud_token: cloudToken }), request);
 }
