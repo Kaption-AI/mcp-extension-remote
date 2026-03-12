@@ -85,20 +85,29 @@ outerApp.get("/ws/ext", async (c) => {
 });
 
 // Transparency endpoints
+
+// Enrich chain entries with a public Rekor URL for easy verification
+function withRekorUrl<T extends { event: { rekorLogIndex: string } }>(entry: T): T & { rekorUrl?: string } {
+  const idx = entry.event.rekorLogIndex;
+  return idx && idx !== "unknown"
+    ? { ...entry, rekorUrl: `https://search.sigstore.dev/?logIndex=${idx}` }
+    : entry;
+}
+
 outerApp.get("/transparency", async (c) => {
   const chainId = c.env.DEPLOYMENT_CHAIN.idFromName("main");
   const chain = c.env.DEPLOYMENT_CHAIN.get(chainId);
   const limit = Math.min(parseInt(c.req.query("limit") || "100", 10), 100);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10), 0);
   const history = await chain.getHistory(limit, offset);
-  return c.json(history);
+  return c.json({ ...history, entries: history.entries.map(withRekorUrl) });
 });
 
 outerApp.get("/transparency/latest", async (c) => {
   const chainId = c.env.DEPLOYMENT_CHAIN.idFromName("main");
   const chain = c.env.DEPLOYMENT_CHAIN.get(chainId);
   const latest = await chain.getLatest();
-  return c.json(latest || { message: "No deployments recorded" });
+  return c.json(latest ? withRekorUrl(latest) : { message: "No deployments recorded" });
 });
 
 outerApp.get("/transparency/verify", async (c) => {
