@@ -70,13 +70,13 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
           id="phone"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="5491157390064"
+          placeholder="1234567890"
           required
           autoComplete="tel"
           className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-base outline-none focus:border-green-500"
         />
         <p className="text-xs text-neutral-500 mt-1.5">
-          Enter your full number without + or spaces (e.g. 5491157390064)
+          Enter your full number without + or spaces
         </p>
 
         {error && <p className="text-red-500 text-[13px] mt-2">{error}</p>}

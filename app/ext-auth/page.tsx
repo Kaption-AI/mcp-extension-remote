@@ -87,7 +87,7 @@ export default function ExtAuthPage() {
             id="phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="5491157390064"
+            placeholder="1234567890"
             required
             className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-base outline-none focus:border-green-500"
           />
