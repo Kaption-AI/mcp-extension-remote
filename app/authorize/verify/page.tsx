@@ -96,14 +96,16 @@ function OTPForm() {
 
 export default function VerifyPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
-          <p className="text-neutral-400">Loading...</p>
-        </div>
-      }
-    >
-      <OTPForm />
-    </Suspense>
+    <div className="flex items-center justify-center min-h-screen p-5">
+      <Suspense
+        fallback={
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
+            <p className="text-neutral-400">Loading...</p>
+          </div>
+        }
+      >
+        <OTPForm />
+      </Suspense>
+    </div>
   );
 }
