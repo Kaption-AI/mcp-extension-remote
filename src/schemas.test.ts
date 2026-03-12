@@ -12,15 +12,22 @@ import {
 
 describe("SendOTPSchema", () => {
   it("accepts a valid phone number", async () => {
-    const result = await SendOTPSchema.safeParseAsync({ phone: "5491155551234" });
+    const result = await SendOTPSchema.safeParseAsync({
+      phone: "5491155551234",
+      oauthReqInfo: "signed-state",
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.phone).toBe("5491155551234");
+      expect(result.data.oauthReqInfo).toBe("signed-state");
     }
   });
 
   it("strips formatting characters from phone", async () => {
-    const result = await SendOTPSchema.safeParseAsync({ phone: "+54 (911) 5555-1234" });
+    const result = await SendOTPSchema.safeParseAsync({
+      phone: "+54 (911) 5555-1234",
+      oauthReqInfo: "signed-state",
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.phone).toBe("5491155551234");
@@ -28,7 +35,7 @@ describe("SendOTPSchema", () => {
   });
 
   it("rejects empty phone", async () => {
-    const result = await SendOTPSchema.safeParseAsync({ phone: "" });
+    const result = await SendOTPSchema.safeParseAsync({ phone: "", oauthReqInfo: "signed-state" });
     expect(result.success).toBe(false);
   });
 
@@ -38,21 +45,21 @@ describe("SendOTPSchema", () => {
   });
 
   it("rejects phone with letters", async () => {
-    const result = await SendOTPSchema.safeParseAsync({ phone: "abc12345678" });
+    const result = await SendOTPSchema.safeParseAsync({ phone: "abc12345678", oauthReqInfo: "signed-state" });
     expect(result.success).toBe(false);
   });
 
   it("rejects phone too short (< 8 digits)", async () => {
-    const result = await SendOTPSchema.safeParseAsync({ phone: "1234567" });
+    const result = await SendOTPSchema.safeParseAsync({ phone: "1234567", oauthReqInfo: "signed-state" });
     expect(result.success).toBe(false);
   });
 
   it("rejects phone too long (> 15 digits)", async () => {
-    const result = await SendOTPSchema.safeParseAsync({ phone: "1234567890123456" });
+    const result = await SendOTPSchema.safeParseAsync({ phone: "1234567890123456", oauthReqInfo: "signed-state" });
     expect(result.success).toBe(false);
   });
 
-  it("accepts optional oauthReqInfo", async () => {
+  it("requires oauthReqInfo", async () => {
     const result = await SendOTPSchema.safeParseAsync({
       phone: "5491155551234",
       oauthReqInfo: "some-state",
@@ -62,6 +69,11 @@ describe("SendOTPSchema", () => {
       expect(result.data.oauthReqInfo).toBe("some-state");
     }
   });
+
+  it("rejects missing oauthReqInfo", async () => {
+    const result = await SendOTPSchema.safeParseAsync({ phone: "5491155551234" });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ─── VerifyOTPSchema ────────────────────────────────────────────────
@@ -69,48 +81,42 @@ describe("SendOTPSchema", () => {
 describe("VerifyOTPSchema", () => {
   it("accepts valid input", async () => {
     const result = await VerifyOTPSchema.safeParseAsync({
-      phone: "5491155551234",
+      verifyTicket: "encrypted-ticket",
       code: "123456",
-      oauthReqInfo: "signed-state",
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.phone).toBe("5491155551234");
+      expect(result.data.verifyTicket).toBe("encrypted-ticket");
       expect(result.data.code).toBe("123456");
-      expect(result.data.oauthReqInfo).toBe("signed-state");
     }
   });
 
   it("rejects non-6-digit code", async () => {
     const result = await VerifyOTPSchema.safeParseAsync({
-      phone: "5491155551234",
+      verifyTicket: "encrypted-ticket",
       code: "12345",
-      oauthReqInfo: "state",
     });
     expect(result.success).toBe(false);
   });
 
   it("rejects code with letters", async () => {
     const result = await VerifyOTPSchema.safeParseAsync({
-      phone: "5491155551234",
+      verifyTicket: "encrypted-ticket",
       code: "12345a",
-      oauthReqInfo: "state",
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects empty oauthReqInfo", async () => {
+  it("rejects empty verifyTicket", async () => {
     const result = await VerifyOTPSchema.safeParseAsync({
-      phone: "5491155551234",
+      verifyTicket: "",
       code: "123456",
-      oauthReqInfo: "",
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects missing oauthReqInfo", async () => {
+  it("rejects missing verifyTicket", async () => {
     const result = await VerifyOTPSchema.safeParseAsync({
-      phone: "5491155551234",
       code: "123456",
     });
     expect(result.success).toBe(false);

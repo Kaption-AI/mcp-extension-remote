@@ -12,6 +12,8 @@ export interface Env {
   INTERNAL_API_KEY: string;
   DEPLOY_API_KEY?: string;
   JWT_SECRET: string;
+  PHONE_REF_SECRET: string;
+  EPHEMERAL_STATE_SECRET: string;
   BUILD_HASH: string;
   COMMIT_SHA: string;
 }
@@ -28,7 +30,8 @@ export interface RateLimitRecord {
 }
 
 export interface ExtensionSession {
-  phone: string;
+  accountRef: string;
+  phoneCiphertext: string;
   createdAt: number;
 }
 

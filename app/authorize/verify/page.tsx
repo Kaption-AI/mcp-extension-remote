@@ -5,25 +5,21 @@ import { useState, Suspense } from "react";
 
 function OTPForm() {
   const searchParams = useSearchParams();
-  const phone = searchParams.get("phone") || "";
-  const oauthReqInfo = searchParams.get("oauthReqInfo") || "";
+  const verifyTicket = searchParams.get("ticket") || "";
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (!phone || !oauthReqInfo) {
+  if (!verifyTicket) {
     return (
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
         <h1 className="text-xl mb-2 text-neutral-50">Invalid Request</h1>
         <p className="text-sm text-neutral-400">
-          Missing phone or OAuth state. Go back and try again.
+          Missing verification session. Go back and try again.
         </p>
       </div>
     );
   }
-
-  const maskedPhone =
-    phone.slice(0, 3) + "****" + phone.slice(-4);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +30,7 @@ function OTPForm() {
       const res = await fetch("/authorize/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code, oauthReqInfo }),
+        body: JSON.stringify({ verifyTicket, code }),
       });
       const data = (await res.json()) as { redirectTo?: string; error?: string };
 
@@ -54,7 +50,7 @@ function OTPForm() {
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
       <h1 className="text-xl mb-2 text-neutral-50">Enter Verification Code</h1>
       <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
-        We sent a 6-digit code to <strong>{maskedPhone}</strong> via WhatsApp.
+        We sent a 6-digit code to your WhatsApp number.
       </p>
 
       <form onSubmit={handleSubmit}>

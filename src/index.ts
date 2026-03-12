@@ -24,7 +24,14 @@ import { Hono } from "hono";
 import { RelayMCP } from "./relay-mcp";
 import { RelayRoom } from "./relay-room";
 import { DeploymentChainDO } from "./deployment-chain";
-import { hmacSign } from "./otp";
+import {
+  decryptLoginHint,
+  deriveAccountRef,
+  encryptLoginHint,
+  extractPhoneFromJwt,
+  hmacSign,
+  validateExtensionSession,
+} from "./otp";
 import type { Env } from "./types";
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
@@ -50,36 +57,42 @@ outerApp.get("/ws/ext", async (c) => {
   const url = new URL(c.req.url);
 
   // Support ?phone= (legacy), ?token= (cloud bridge client), and ?jwt= (JWT auth)
-  let phoneHint = url.searchParams.get("phone");
+  let accountRefHint: string | null = null;
+  const phoneHint = url.searchParams.get("phone");
   const token = url.searchParams.get("token");
   const jwt = url.searchParams.get("jwt");
 
-  if (!phoneHint && jwt) {
-    // Extract phone from JWT payload for routing (full validation happens in RelayRoom)
-    const { extractPhoneFromJwt } = await import("./otp");
-    phoneHint = extractPhoneFromJwt(jwt);
-    if (!phoneHint) {
+  if (phoneHint) {
+    accountRefHint = await deriveAccountRef(phoneHint, c.env.PHONE_REF_SECRET);
+  }
+
+  if (!accountRefHint && jwt) {
+    const jwtPhone = extractPhoneFromJwt(jwt);
+    if (!jwtPhone) {
       return c.text("Invalid JWT: cannot extract phone", 400);
     }
+    accountRefHint = await deriveAccountRef(jwtPhone, c.env.PHONE_REF_SECRET);
   }
 
-  if (!phoneHint && token) {
-    // Look up phone from extension session token in KV
-    const { validateExtensionSession } = await import("./otp");
-    const phone = await validateExtensionSession(c.env.OAUTH_KV, token);
-    if (!phone) {
+  if (!accountRefHint && token) {
+    const session = await validateExtensionSession(
+      c.env.OAUTH_KV,
+      token,
+      c.env.EPHEMERAL_STATE_SECRET,
+    );
+    if (!session) {
       return c.text("Invalid or expired token", 401);
     }
-    phoneHint = phone;
+    accountRefHint = session.accountRef;
   }
 
-  if (!phoneHint) {
+  if (!accountRefHint) {
     return c.text("Missing phone, token, or jwt parameter", 400);
   }
 
-  // Route to the RelayRoom for this phone number via fetch (not RPC)
+  // Route to the RelayRoom for this account reference via fetch (not RPC)
   // to properly handle WebSocket upgrade across DO boundary
-  const roomId = c.env.RELAY_ROOM.idFromName(phoneHint);
+  const roomId = c.env.RELAY_ROOM.idFromName(accountRefHint);
   const room = c.env.RELAY_ROOM.get(roomId);
   return room.fetch(c.req.raw);
 });
@@ -209,9 +222,11 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     if (url.pathname === "/sse" && url.searchParams.has("phone")) {
       const ip = request.headers.get("cf-connecting-ip") || "unknown";
       const phone = url.searchParams.get("phone")!;
-      ctx.waitUntil(
-        env.OAUTH_KV.put(`login_hint:${ip}`, phone, { expirationTtl: 300 }),
-      );
+      ctx.waitUntil((async () => {
+        const encryptedHint = await encryptLoginHint(phone, env.EPHEMERAL_STATE_SECRET);
+        if (!encryptedHint) return;
+        await env.OAUTH_KV.put(`login_hint:${ip}`, encryptedHint, { expirationTtl: 300 });
+      })());
     }
 
     // OAuthProvider handles:
@@ -256,9 +271,15 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
 
               // Look up phone hint stored by /sse?phone= (same IP)
               const ip = req.headers.get("cf-connecting-ip") || "unknown";
-              const phoneHint = await env.OAUTH_KV.get(`login_hint:${ip}`);
-              if (phoneHint) {
-                newUrl.searchParams.set("_loginHint", phoneHint);
+              const encryptedHint = await env.OAUTH_KV.get(`login_hint:${ip}`);
+              if (encryptedHint) {
+                const phoneHint = await decryptLoginHint(
+                  encryptedHint,
+                  env.EPHEMERAL_STATE_SECRET,
+                );
+                if (phoneHint) {
+                  newUrl.searchParams.set("_loginHint", phoneHint);
+                }
               }
 
               finalReq = new Request(newUrl.toString(), req);

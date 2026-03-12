@@ -31,7 +31,7 @@ AI Client (Claude/ChatGPT/Cursor)
 │        │                            │
 │  ┌─────▼──────┐                    │
 │  │ RelayRoom  │ ◄── WebSocket ──┐  │
-│  │ (DO/phone) │                 │  │
+│  │ (DO/accountRef) │            │  │
 │  └────────────┘                 │  │
 └─────────────────────────────────┼──┘
                                   │
@@ -44,7 +44,7 @@ AI Client (Claude/ChatGPT/Cursor)
 | DO | Keyed By | Purpose |
 |----|----------|---------|
 | **RelayMCP** | OAuth session | McpAgent — registers tools, relays JSON-RPC to RelayRoom |
-| **RelayRoom** | Phone number | WebSocket bridge to extension, auth handshake, request/response matching |
+| **RelayRoom** | Opaque accountRef | WebSocket bridge to extension, auth handshake, request/response matching |
 | **DeploymentChainDO** | `"main"` | Append-only hash chain for deployment transparency |
 
 ## Request Flow
@@ -54,7 +54,7 @@ AI Client (Claude/ChatGPT/Cursor)
 3. User authenticates with WhatsApp OTP at `/authorize`
 4. Client exchanges code for token at `/token`
 5. Client sends tool calls via SSE (`/sse`) or Streamable HTTP (`/mcp`)
-6. **RelayMCP** DO receives the call, routes to **RelayRoom** for the phone
+6. **RelayMCP** DO receives the call, routes to **RelayRoom** for the accountRef
 7. **RelayRoom** forwards JSON-RPC to the extension over WebSocket
 8. Extension executes in WhatsApp Web context, returns result
 9. Result flows back: RelayRoom → RelayMCP → AI client
@@ -217,6 +217,8 @@ scripts/
 | `INTERNAL_API_KEY` | API key for rest-api OTP endpoint |
 | `DEPLOY_API_KEY` | API key for transparency chain append |
 | `JWT_SECRET` | Shared JWT signing secret (same as rest-api, schedule, metadata workers) |
+| `PHONE_REF_SECRET` | HMAC secret used to derive opaque durable account references from phone numbers |
+| `EPHEMERAL_STATE_SECRET` | Encryption secret for short-lived login hints, verify tickets, and encrypted session phone payloads |
 
 ## Related Projects
 

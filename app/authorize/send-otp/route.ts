@@ -7,6 +7,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { SendOTPSchema } from "@/src/schemas";
 import {
+  createVerifyTicket,
+  deriveAccountRef,
   generateOTP,
   checkRateLimit,
   incrementRateLimit,
@@ -39,7 +41,11 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: msg }, { status: 400 });
   }
 
-  const { phone } = parsed.data;
+  const { phone, oauthReqInfo } = parsed.data;
+  const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
+  if (!accountRef) {
+    return Response.json({ error: "Invalid phone number format" }, { status: 400 });
+  }
 
   // [M1] IP-based rate limiting
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
@@ -51,7 +57,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Check hourly rate limit
-  if (!(await checkRateLimit(env.OAUTH_KV, phone))) {
+  if (!(await checkRateLimit(env.OAUTH_KV, accountRef))) {
     return Response.json(
       { error: "Too many OTP requests. Try again in an hour." },
       { status: 429 },
@@ -60,8 +66,8 @@ export async function POST(request: Request): Promise<Response> {
 
   // Generate and store OTP
   const code = generateOTP();
-  await storeOTP(env.OAUTH_KV, phone, code);
-  await incrementRateLimit(env.OAUTH_KV, phone);
+  await storeOTP(env.OAUTH_KV, accountRef, code);
+  await incrementRateLimit(env.OAUTH_KV, accountRef);
   await incrementIpRateLimit(env.OAUTH_KV, ip);
 
   // Send OTP via rest-api → WhatsApp Cloud API
@@ -85,7 +91,16 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    return Response.json({ ok: true });
+    const verifyTicket = await createVerifyTicket(
+      phone,
+      oauthReqInfo,
+      env.EPHEMERAL_STATE_SECRET,
+    );
+    if (!verifyTicket) {
+      return Response.json({ error: "Failed to prepare verification flow." }, { status: 500 });
+    }
+
+    return Response.json({ ok: true, verifyTicket });
   } catch (err) {
     // [H1] + [L2] Sanitize error logging
     console.error(`[otp] Send error for ${sanitizeForLog(phone)}`);

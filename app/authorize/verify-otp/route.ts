@@ -7,7 +7,13 @@
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { VerifyOTPSchema } from "@/src/schemas";
-import { verifyOTP, hmacVerify, sanitizeForLog } from "@/src/otp";
+import {
+  deriveAccountRef,
+  hmacVerify,
+  readVerifyTicket,
+  sanitizeForLog,
+  verifyOTP,
+} from "@/src/otp";
 import type { Env } from "@/src/types";
 
 export async function POST(request: Request): Promise<Response> {
@@ -32,9 +38,19 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: msg }, { status: 400 });
   }
 
-  const { phone, code, oauthReqInfo } = parsed.data;
+  const { verifyTicket, code } = parsed.data;
+  const ticket = await readVerifyTicket(verifyTicket, env.EPHEMERAL_STATE_SECRET);
+  if (!ticket) {
+    return Response.json({ error: "Verification session expired. Request a new code." }, { status: 400 });
+  }
 
-  const result = await verifyOTP(env.OAUTH_KV, phone, code);
+  const { phone, oauthReqInfo } = ticket;
+  const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
+  if (!accountRef) {
+    return Response.json({ error: "Invalid phone number format" }, { status: 400 });
+  }
+
+  const result = await verifyOTP(env.OAUTH_KV, accountRef, code);
 
   if (!result.valid) {
     return Response.json({ error: result.error }, { status: 400 });
@@ -63,14 +79,14 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
       metadata: {
-        label: `WhatsApp ${sanitizeForLog(phone)}`,
+        label: `WhatsApp ${accountRef.slice(0, 13)}`,
       },
       props: {
-        phone,
+        accountRef,
       },
       request: oauthReq,
       scope: oauthReq.scope,
-      userId: phone,
+      userId: accountRef,
     });
 
     return Response.json({ redirectTo });

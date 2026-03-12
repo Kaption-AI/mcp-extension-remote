@@ -1,6 +1,6 @@
 /**
  * RelayMCP — McpAgent Durable Object that registers tools and relays
- * tool calls to the appropriate RelayRoom (by phone number).
+ * tool calls to the appropriate RelayRoom (by account reference).
  */
 
 import { McpAgent } from "agents/mcp";
@@ -26,13 +26,13 @@ export class RelayMCP extends McpAgent<Env> {
           inputSchema: tool.inputSchema,
         },
         async (args: Record<string, unknown>) => {
-          const phone = this.getPhone();
-          if (!phone) {
+          const accountRef = this.getAccountRef();
+          if (!accountRef) {
             return {
               content: [
                 {
                   type: "text" as const,
-                  text: "Authentication error: no phone number in token. Re-authenticate via OTP.",
+                  text: "Authentication error: no account reference in token. Re-authenticate via OTP.",
                 },
               ],
             };
@@ -42,9 +42,11 @@ export class RelayMCP extends McpAgent<Env> {
             // Sanitize args for DO RPC — the MCP SDK may inject non-serializable
             // properties (AbortSignal etc.) into the args object
             const cleanArgs = JSON.parse(JSON.stringify(args));
-            const { sanitizeForLog } = await import("./otp");
-            console.log(`[RelayMCP] Relaying ${tool.name} to phone=${sanitizeForLog(phone)}`);
-            const result = await this.relayToExtension(phone, tool.name, cleanArgs);
+            const { sanitizeAccountRefForLog } = await import("./otp");
+            console.log(
+              `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)}`,
+            );
+            const result = await this.relayToExtension(accountRef, tool.name, cleanArgs);
             return {
               content: [
                 {
@@ -69,10 +71,10 @@ export class RelayMCP extends McpAgent<Env> {
     }
   }
 
-  private getPhone(): string | null {
+  private getAccountRef(): string | null {
     try {
       const props = (this as any).props;
-      if (props?.phone) return props.phone;
+      if (props?.accountRef) return props.accountRef;
     } catch {
       // ignore
     }
@@ -80,11 +82,11 @@ export class RelayMCP extends McpAgent<Env> {
   }
 
   private async relayToExtension(
-    phone: string,
+    accountRef: string,
     method: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    const roomId = this.env.RELAY_ROOM.idFromName(phone);
+    const roomId = this.env.RELAY_ROOM.idFromName(accountRef);
     const room = this.env.RELAY_ROOM.get(roomId);
     return room.handleMcpRequest(method, params);
   }

@@ -65,4 +65,6 @@
   // - INTERNAL_API_KEY: API key for rest-api OTP endpoint
   // - DEPLOY_API_KEY: API key for transparency chain append
   // - JWT_SECRET: Shared JWT signing secret (same as rest-api, schedule, metadata workers)
+  // - PHONE_REF_SECRET: HMAC secret for durable accountRef derivation
+  // - EPHEMERAL_STATE_SECRET: Encryption secret for short-lived UI/session state
 }

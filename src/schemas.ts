@@ -14,16 +14,16 @@ const phone = z
 
 /** 6-digit OTP code */
 const otpCode = z.string().regex(/^\d{6}$/, "Code must be 6 digits");
+const verifyTicket = z.string().min(1, "Missing verification ticket");
 
 export const SendOTPSchema = z.object({
   phone,
-  oauthReqInfo: z.string().optional(),
+  oauthReqInfo: z.string().min(1, "Missing OAuth state"),
 });
 
 export const VerifyOTPSchema = z.object({
-  phone,
+  verifyTicket,
   code: otpCode,
-  oauthReqInfo: z.string().min(1, "Missing OAuth state"),
 });
 
 export const ExtSendOTPSchema = z.object({

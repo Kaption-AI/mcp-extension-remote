@@ -1,5 +1,5 @@
 /**
- * RelayRoom Durable Object — one per phone number.
+ * RelayRoom Durable Object — one per account reference.
  *
  * The Chrome extension connects via WebSocket.
  * MCP tool calls arrive via handleMcpRequest() and are forwarded
@@ -17,7 +17,12 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./types";
-import { validateExtensionSession, validateJwt } from "./otp";
+import {
+  deriveAccountRef,
+  sanitizeAccountRefForLog,
+  validateExtensionSession,
+  validateJwt,
+} from "./otp";
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -27,7 +32,7 @@ interface PendingRequest {
 
 interface WsAttachment {
   authenticated: boolean;
-  phone: string | null;
+  accountRef: string | null;
 }
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -63,7 +68,7 @@ export class RelayRoom extends DurableObject<Env> {
   private pendingRequests = new Map<string | number, PendingRequest>();
   private requestCounter = 0;
   private authenticated = false;
-  private phone: string | null = null;
+  private accountRef: string | null = null;
 
   /**
    * Route incoming fetch requests — handles WebSocket upgrades for the extension.
@@ -93,9 +98,9 @@ export class RelayRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     this.extensionWs = server;
     this.authenticated = false;
-    this.phone = null;
+    this.accountRef = null;
     // Persist initial (unauthenticated) state in WS attachment for hibernation
-    this.setWsAttachment(server, { authenticated: false, phone: null });
+    this.setWsAttachment(server, { authenticated: false, accountRef: null });
 
     server.addEventListener("message", (event) => {
       this.handleExtensionMessage(event.data as string);
@@ -104,14 +109,14 @@ export class RelayRoom extends DurableObject<Env> {
     server.addEventListener("close", () => {
       this.extensionWs = null;
       this.authenticated = false;
-      this.phone = null;
+      this.accountRef = null;
       this.rejectAllPending("Extension disconnected");
     });
 
     server.addEventListener("error", () => {
       this.extensionWs = null;
       this.authenticated = false;
-      this.phone = null;
+      this.accountRef = null;
     });
 
     return new Response(null, { status: 101, webSocket: client });
@@ -271,8 +276,12 @@ export class RelayRoom extends DurableObject<Env> {
    * [H6] Validate the auth token sent in the first WebSocket message (legacy).
    */
   private async handleAuthHandshake(token: string): Promise<void> {
-    const phone = await validateExtensionSession(this.env.OAUTH_KV, token);
-    if (!phone) {
+    const session = await validateExtensionSession(
+      this.env.OAUTH_KV,
+      token,
+      this.env.EPHEMERAL_STATE_SECRET,
+    );
+    if (!session) {
       this.extensionWs?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired token" }),
       );
@@ -282,13 +291,23 @@ export class RelayRoom extends DurableObject<Env> {
     }
 
     this.authenticated = true;
-    this.phone = phone;
-    const { sanitizeForLog } = await import("./otp");
-    console.log(`[RelayRoom] Legacy auth OK, phone=${sanitizeForLog(phone)}`);
+    this.accountRef = session.accountRef;
+    console.log(
+      `[RelayRoom] Legacy auth OK, account=${sanitizeAccountRefForLog(session.accountRef)}`,
+    );
     if (this.extensionWs) {
-      this.setWsAttachment(this.extensionWs, { authenticated: true, phone });
+      this.setWsAttachment(this.extensionWs, {
+        authenticated: true,
+        accountRef: session.accountRef,
+      });
     }
-    this.extensionWs?.send(JSON.stringify({ type: "auth_ok", phone }));
+    this.extensionWs?.send(
+      JSON.stringify(
+        session.phone
+          ? { type: "auth_ok", phone: session.phone }
+          : { type: "auth_ok" },
+      ),
+    );
   }
 
   /**
@@ -309,12 +328,23 @@ export class RelayRoom extends DurableObject<Env> {
       return;
     }
 
+    const accountRef = await deriveAccountRef(phone, this.env.PHONE_REF_SECRET);
+    if (!accountRef) {
+      this.extensionWs?.send(
+        JSON.stringify({ type: "auth_error", error: "Invalid or expired JWT" }),
+      );
+      this.extensionWs?.close(4001, "JWT authentication failed");
+      this.extensionWs = null;
+      return;
+    }
+
     this.authenticated = true;
-    this.phone = phone;
-    const { sanitizeForLog } = await import("./otp");
-    console.log(`[RelayRoom] JWT auth OK, phone=${sanitizeForLog(phone)}`);
+    this.accountRef = accountRef;
+    console.log(
+      `[RelayRoom] JWT auth OK, account=${sanitizeAccountRefForLog(accountRef)}`,
+    );
     if (this.extensionWs) {
-      this.setWsAttachment(this.extensionWs, { authenticated: true, phone });
+      this.setWsAttachment(this.extensionWs, { authenticated: true, accountRef });
     }
     this.extensionWs?.send(JSON.stringify({ type: "auth_ok", phone }));
   }
@@ -360,8 +390,7 @@ export class RelayRoom extends DurableObject<Env> {
         if (attachment?.authenticated) {
           this.extensionWs = ws;
           this.authenticated = true;
-          this.phone = attachment.phone;
-          // Restored from hibernation — phone is already sanitized in auth logs
+          this.accountRef = attachment.accountRef;
           return;
         }
       } catch {
@@ -394,7 +423,7 @@ export class RelayRoom extends DurableObject<Env> {
     if (this.extensionWs === ws) {
       this.extensionWs = null;
       this.authenticated = false;
-      this.phone = null;
+      this.accountRef = null;
       this.rejectAllPending("Extension disconnected");
     }
   }

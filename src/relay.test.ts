@@ -909,23 +909,24 @@ describe("extension auth flow schemas", () => {
 // ─── OAuth flow validation ──────────────────────────────────────────
 
 describe("OAuth flow schemas", () => {
-  it("SendOTPSchema requires phone, optional oauthReqInfo", async () => {
-    const result = await SendOTPSchema.safeParseAsync({ phone: "5491155551234" });
-    expect(result.success).toBe(true);
-  });
-
-  it("VerifyOTPSchema requires phone + code + oauthReqInfo", async () => {
-    const result = await VerifyOTPSchema.safeParseAsync({
+  it("SendOTPSchema requires phone and oauthReqInfo", async () => {
+    const result = await SendOTPSchema.safeParseAsync({
       phone: "5491155551234",
-      code: "123456",
       oauthReqInfo: "signed-state",
     });
     expect(result.success).toBe(true);
   });
 
-  it("VerifyOTPSchema rejects missing oauthReqInfo", async () => {
+  it("VerifyOTPSchema requires verifyTicket + code", async () => {
     const result = await VerifyOTPSchema.safeParseAsync({
-      phone: "5491155551234",
+      verifyTicket: "encrypted-ticket",
+      code: "123456",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("VerifyOTPSchema rejects missing verifyTicket", async () => {
+    const result = await VerifyOTPSchema.safeParseAsync({
       code: "123456",
     });
     expect(result.success).toBe(false);

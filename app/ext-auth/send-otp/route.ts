@@ -7,6 +7,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ExtSendOTPSchema } from "@/src/schemas";
 import {
+  deriveAccountRef,
   generateOTP,
   checkRateLimit,
   incrementRateLimit,
@@ -44,6 +45,10 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const { phone } = parsed.data;
+  const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
+  if (!accountRef) {
+    return withCors(Response.json({ error: "Invalid phone number format" }, { status: 400 }), request);
+  }
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {
@@ -53,7 +58,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  if (!(await checkRateLimit(env.OAUTH_KV, phone))) {
+  if (!(await checkRateLimit(env.OAUTH_KV, accountRef))) {
     return withCors(
       Response.json({ error: "Too many OTP requests. Try again in an hour." }, { status: 429 }),
       request,
@@ -61,8 +66,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const code = generateOTP();
-  await storeOTP(env.OAUTH_KV, phone, code);
-  await incrementRateLimit(env.OAUTH_KV, phone);
+  await storeOTP(env.OAUTH_KV, accountRef, code);
+  await incrementRateLimit(env.OAUTH_KV, accountRef);
   await incrementIpRateLimit(env.OAUTH_KV, ip);
 
   try {

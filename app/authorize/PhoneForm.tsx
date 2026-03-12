@@ -34,11 +34,11 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: normalized, oauthReqInfo }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
+      const data = (await res.json()) as { ok?: boolean; verifyTicket?: string; error?: string };
 
-      if (data.ok) {
+      if (data.ok && data.verifyTicket) {
         router.push(
-          `/authorize/verify?phone=${encodeURIComponent(normalized)}&oauthReqInfo=${encodeURIComponent(oauthReqInfo)}`,
+          `/authorize/verify?ticket=${encodeURIComponent(data.verifyTicket)}`,
         );
       } else {
         setError(data.error || "Failed to send code");

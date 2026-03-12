@@ -7,6 +7,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ExtVerifyOTPSchema } from "@/src/schemas";
 import {
+  deriveAccountRef,
   verifyOTP,
   generateCloudToken,
   storeExtensionSession,
@@ -41,8 +42,12 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const { phone, code } = parsed.data;
+  const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
+  if (!accountRef) {
+    return withCors(Response.json({ error: "Invalid phone number format" }, { status: 400 }), request);
+  }
 
-  const result = await verifyOTP(env.OAUTH_KV, phone, code);
+  const result = await verifyOTP(env.OAUTH_KV, accountRef, code);
 
   if (!result.valid) {
     return withCors(Response.json({ error: result.error }, { status: 400 }), request);
@@ -50,7 +55,13 @@ export async function POST(request: Request): Promise<Response> {
 
   // Generate and store a cloud token for the extension
   const cloudToken = generateCloudToken();
-  await storeExtensionSession(env.OAUTH_KV, cloudToken, phone);
+  await storeExtensionSession(
+    env.OAUTH_KV,
+    cloudToken,
+    accountRef,
+    phone,
+    env.EPHEMERAL_STATE_SECRET,
+  );
 
   console.log(`[ext-auth] Session created for ${sanitizeForLog(phone)}`);
   return withCors(Response.json({ ok: true, cloud_token: cloudToken }), request);

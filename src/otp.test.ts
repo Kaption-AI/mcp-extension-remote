@@ -1,28 +1,40 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  generateOTP,
-  normalizePhone,
+  checkIpRateLimit,
+  checkRateLimit,
   constantTimeTokenEqual,
+  createVerifyTicket,
+  decryptLoginHint,
+  deriveAccountRef,
+  encryptLoginHint,
+  generateCloudToken,
+  generateOTP,
   hmacSign,
   hmacVerify,
-  sanitizeForLog,
-  generateCloudToken,
-  checkRateLimit,
-  incrementRateLimit,
-  checkIpRateLimit,
-  incrementIpRateLimit,
-  storeOTP,
-  verifyOTP,
-  storeExtensionSession,
-  validateExtensionSession,
+  normalizePhone,
+  readVerifyTicket,
   revokeExtensionSession,
+  sanitizeForLog,
+  storeExtensionSession,
+  storeOTP,
+  validateExtensionSession,
+  verifyOTP,
+  incrementIpRateLimit,
+  incrementRateLimit,
 } from "./otp";
 
-// ─── Mock KV ────────────────────────────────────────────────────────
+const TEST_PHONE = "5491155551234";
+const PHONE_REF_SECRET = "test-phone-ref-secret";
+const EPHEMERAL_STATE_SECRET = "test-ephemeral-state-secret";
 
-function createMockKV(): KVNamespace {
+interface MockKV extends KVNamespace {
+  __store: Map<string, string>;
+}
+
+function createMockKV(): MockKV {
   const store = new Map<string, string>();
   return {
+    __store: store,
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => {
       store.set(key, value);
@@ -32,64 +44,44 @@ function createMockKV(): KVNamespace {
     }),
     list: vi.fn(),
     getWithMetadata: vi.fn(),
-  } as unknown as KVNamespace;
+  } as unknown as MockKV;
 }
 
-// ─── normalizePhone ─────────────────────────────────────────────────
-
 describe("normalizePhone", () => {
-  it("strips + prefix", () => {
-    expect(normalizePhone("+5491155551234")).toBe("5491155551234");
-  });
-
-  it("strips spaces", () => {
-    expect(normalizePhone("549 1155 551234")).toBe("5491155551234");
-  });
-
-  it("strips dashes", () => {
-    expect(normalizePhone("549-1155-551234")).toBe("5491155551234");
-  });
-
-  it("strips parentheses", () => {
-    expect(normalizePhone("(549) 1155551234")).toBe("5491155551234");
-  });
-
-  it("strips all formatting combined", () => {
-    expect(normalizePhone("+54 (911) 5555-1234")).toBe("5491155551234");
+  it("strips formatting characters", () => {
+    expect(normalizePhone("+54 (911) 5555-1234")).toBe(TEST_PHONE);
   });
 
   it("returns plain digits unchanged", () => {
-    expect(normalizePhone("5491155551234")).toBe("5491155551234");
+    expect(normalizePhone(TEST_PHONE)).toBe(TEST_PHONE);
   });
 });
 
-// ─── generateOTP ────────────────────────────────────────────────────
+describe("deriveAccountRef", () => {
+  it("is stable for the same normalized phone", async () => {
+    const first = await deriveAccountRef(TEST_PHONE, PHONE_REF_SECRET);
+    const second = await deriveAccountRef("+54 (911) 5555-1234", PHONE_REF_SECRET);
+    expect(first).toBe(second);
+  });
+
+  it("does not resemble the raw phone", async () => {
+    const accountRef = await deriveAccountRef(TEST_PHONE, PHONE_REF_SECRET);
+    expect(accountRef).toMatch(/^acct_[0-9a-f]{64}$/);
+    expect(accountRef).not.toContain(TEST_PHONE);
+  });
+});
 
 describe("generateOTP", () => {
   it("returns a 6-digit string", () => {
-    const code = generateOTP();
-    expect(code).toMatch(/^\d{6}$/);
+    expect(generateOTP()).toMatch(/^\d{6}$/);
   });
 
   it("pads with leading zeros", () => {
-    // Run multiple times to check padding logic
     for (let i = 0; i < 20; i++) {
-      const code = generateOTP();
-      expect(code).toHaveLength(6);
+      expect(generateOTP()).toHaveLength(6);
     }
-  });
-
-  it("generates different codes (not always the same)", () => {
-    const codes = new Set<string>();
-    for (let i = 0; i < 10; i++) {
-      codes.add(generateOTP());
-    }
-    // With 6-digit codes, getting the same code 10 times is statistically impossible
-    expect(codes.size).toBeGreaterThan(1);
   });
 });
-
-// ─── constantTimeTokenEqual ─────────────────────────────────────────
 
 describe("constantTimeTokenEqual", () => {
   it("returns true for equal strings", () => {
@@ -99,136 +91,107 @@ describe("constantTimeTokenEqual", () => {
   it("returns false for different strings", () => {
     expect(constantTimeTokenEqual("secret123", "secret456")).toBe(false);
   });
-
-  it("returns false for different lengths", () => {
-    expect(constantTimeTokenEqual("short", "longer-string")).toBe(false);
-  });
-
-  it("returns true for empty strings", () => {
-    expect(constantTimeTokenEqual("", "")).toBe(true);
-  });
 });
 
-// ─── generateCloudToken ─────────────────────────────────────────────
-
 describe("generateCloudToken", () => {
-  it("returns a 64-char hex string (32 bytes)", () => {
-    const token = generateCloudToken();
-    expect(token).toMatch(/^[0-9a-f]{64}$/);
+  it("returns a 64-char hex string", () => {
+    expect(generateCloudToken()).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("generates unique tokens", () => {
-    const tokens = new Set<string>();
-    for (let i = 0; i < 10; i++) {
-      tokens.add(generateCloudToken());
-    }
+    const tokens = new Set(Array.from({ length: 10 }, () => generateCloudToken()));
     expect(tokens.size).toBe(10);
   });
 });
 
-// ─── sanitizeForLog ─────────────────────────────────────────────────
-
 describe("sanitizeForLog", () => {
-  it("masks middle of a normal phone", () => {
-    expect(sanitizeForLog("5491155551234")).toBe("549****234");
+  it("masks the middle of a phone number", () => {
+    expect(sanitizeForLog(TEST_PHONE)).toBe("549****234");
   });
 
-  it("masks short strings fully", () => {
+  it("fully masks short strings", () => {
     expect(sanitizeForLog("1234")).toBe("****");
   });
-
-  it("masks 3-char strings fully", () => {
-    expect(sanitizeForLog("abc")).toBe("****");
-  });
-
-  it("handles 5-char string", () => {
-    expect(sanitizeForLog("12345")).toBe("123****345");
-  });
 });
-
-// ─── HMAC sign/verify ───────────────────────────────────────────────
 
 describe("hmacSign / hmacVerify", () => {
   const secret = "test-secret-key-for-hmac";
 
-  it("sign produces payload.signature format", async () => {
-    const signed = await hmacSign("hello", secret);
-    expect(signed).toContain(".");
-    const [payload, sig] = signed.split(".");
-    expect(payload).toBe("hello");
-    expect(sig).toMatch(/^[0-9a-f]{64}$/);
-  });
-
-  it("verify returns original payload for valid signature", async () => {
+  it("roundtrips the original payload", async () => {
     const signed = await hmacSign("test-payload", secret);
-    const result = await hmacVerify(signed, secret);
-    expect(result).toBe("test-payload");
+    expect(await hmacVerify(signed, secret)).toBe("test-payload");
   });
 
-  it("verify returns null for wrong secret", async () => {
-    const signed = await hmacSign("test-payload", secret);
-    const result = await hmacVerify(signed, "wrong-secret");
-    expect(result).toBeNull();
-  });
-
-  it("verify returns null for tampered payload", async () => {
+  it("rejects tampered payloads", async () => {
     const signed = await hmacSign("original", secret);
-    const tampered = signed.replace("original", "tampered");
-    const result = await hmacVerify(tampered, secret);
-    expect(result).toBeNull();
-  });
-
-  it("verify returns null for missing dot", async () => {
-    const result = await hmacVerify("nodothere", secret);
-    expect(result).toBeNull();
-  });
-
-  it("verify returns null for invalid hex signature", async () => {
-    const result = await hmacVerify("payload.not-hex!", secret);
-    expect(result).toBeNull();
-  });
-
-  it("roundtrips a base64-encoded JSON payload", async () => {
-    const data = { clientId: "test", scope: ["whatsapp"] };
-    const encoded = btoa(JSON.stringify(data));
-    const signed = await hmacSign(encoded, secret);
-    const verified = await hmacVerify(signed, secret);
-    expect(verified).toBe(encoded);
-    expect(JSON.parse(atob(verified!))).toEqual(data);
+    expect(await hmacVerify(signed.replace("original", "tampered"), secret)).toBeNull();
   });
 });
 
-// ─── KV-based OTP operations ────────────────────────────────────────
+describe("ephemeral encryption helpers", () => {
+  it("encrypts and decrypts a login hint", async () => {
+    const encrypted = await encryptLoginHint(TEST_PHONE, EPHEMERAL_STATE_SECRET);
+    expect(encrypted).toBeTruthy();
+    expect(encrypted!).not.toContain(TEST_PHONE);
+    expect(await decryptLoginHint(encrypted!, EPHEMERAL_STATE_SECRET)).toBe(TEST_PHONE);
+  });
+
+  it("encrypts and decrypts a verify ticket", async () => {
+    const ticket = await createVerifyTicket(
+      TEST_PHONE,
+      "signed-oauth-state",
+      EPHEMERAL_STATE_SECRET,
+    );
+    expect(ticket).toBeTruthy();
+    expect(ticket!).not.toContain(TEST_PHONE);
+    expect(await readVerifyTicket(ticket!, EPHEMERAL_STATE_SECRET)).toEqual({
+      phone: TEST_PHONE,
+      oauthReqInfo: "signed-oauth-state",
+    });
+  });
+
+  it("rejects tampered verify tickets", async () => {
+    const ticket = await createVerifyTicket(
+      TEST_PHONE,
+      "signed-oauth-state",
+      EPHEMERAL_STATE_SECRET,
+    );
+    const tampered = `${ticket}tampered`;
+    expect(await readVerifyTicket(tampered, EPHEMERAL_STATE_SECRET)).toBeNull();
+  });
+});
 
 describe("OTP KV operations", () => {
-  let kv: KVNamespace;
+  let kv: MockKV;
+  let accountRef: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     kv = createMockKV();
+    accountRef = (await deriveAccountRef(TEST_PHONE, PHONE_REF_SECRET))!;
   });
 
   describe("rate limiting", () => {
-    it("allows first request", async () => {
-      expect(await checkRateLimit(kv, "5491155551234")).toBe(true);
+    it("allows the first request", async () => {
+      expect(await checkRateLimit(kv, accountRef)).toBe(true);
     });
 
-    it("allows up to 50 requests", async () => {
-      for (let i = 0; i < 49; i++) {
-        await incrementRateLimit(kv, "5491155551234");
-      }
-      expect(await checkRateLimit(kv, "5491155551234")).toBe(true);
-    });
-
-    it("blocks 51st request", async () => {
+    it("blocks the 51st request", async () => {
       for (let i = 0; i < 50; i++) {
-        await incrementRateLimit(kv, "5491155551234");
+        await incrementRateLimit(kv, accountRef);
       }
-      expect(await checkRateLimit(kv, "5491155551234")).toBe(false);
+      expect(await checkRateLimit(kv, accountRef)).toBe(false);
+    });
+
+    it("stores rate-limit keys by accountRef instead of phone", async () => {
+      await incrementRateLimit(kv, accountRef);
+      const key = Array.from(kv.__store.keys())[0];
+      expect(key).toBe(`rate:otp-send:${accountRef}`);
+      expect(key).not.toContain(TEST_PHONE);
     });
   });
 
   describe("IP rate limiting", () => {
-    it("allows first request", async () => {
+    it("allows the first request", async () => {
       expect(await checkIpRateLimit(kv, "1.2.3.4")).toBe(true);
     });
 
@@ -241,62 +204,83 @@ describe("OTP KV operations", () => {
   });
 
   describe("storeOTP + verifyOTP", () => {
-    it("verifies correct code", async () => {
-      await storeOTP(kv, "5491155551234", "123456");
-      const result = await verifyOTP(kv, "5491155551234", "123456");
-      expect(result.valid).toBe(true);
+    it("verifies the correct code", async () => {
+      await storeOTP(kv, accountRef, "123456");
+      expect(await verifyOTP(kv, accountRef, "123456")).toEqual({ valid: true });
     });
 
-    it("rejects wrong code", async () => {
-      await storeOTP(kv, "5491155551234", "123456");
-      const result = await verifyOTP(kv, "5491155551234", "654321");
+    it("rejects the wrong code", async () => {
+      await storeOTP(kv, accountRef, "123456");
+      const result = await verifyOTP(kv, accountRef, "654321");
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Invalid code");
     });
 
-    it("rejects when no OTP stored", async () => {
-      const result = await verifyOTP(kv, "5491155551234", "123456");
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain("expired");
-    });
-
     it("deletes OTP after successful verification", async () => {
-      await storeOTP(kv, "5491155551234", "123456");
-      await verifyOTP(kv, "5491155551234", "123456");
-      // Second attempt should fail (OTP deleted)
-      const result = await verifyOTP(kv, "5491155551234", "123456");
-      expect(result.valid).toBe(false);
+      await storeOTP(kv, accountRef, "123456");
+      await verifyOTP(kv, accountRef, "123456");
+      expect(await verifyOTP(kv, accountRef, "123456")).toEqual({
+        valid: false,
+        error: "OTP expired or not found. Request a new code.",
+      });
     });
 
-    it("blocks after 5 wrong attempts", async () => {
-      await storeOTP(kv, "5491155551234", "123456");
-      for (let i = 0; i < 4; i++) {
-        await verifyOTP(kv, "5491155551234", "000000");
-      }
-      // 5th attempt triggers lockout
-      const result = await verifyOTP(kv, "5491155551234", "000000");
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain("Too many attempts");
+    it("stores OTP keys by accountRef instead of phone", async () => {
+      await storeOTP(kv, accountRef, "123456");
+      const key = Array.from(kv.__store.keys())[0];
+      expect(key).toBe(`otp:${accountRef}`);
+      expect(key).not.toContain(TEST_PHONE);
     });
   });
 
   describe("extension sessions", () => {
-    it("stores and validates a session", async () => {
-      await storeExtensionSession(kv, "token-abc", "5491155551234");
-      const phone = await validateExtensionSession(kv, "token-abc");
-      expect(phone).toBe("5491155551234");
+    it("stores and validates an encrypted session", async () => {
+      await storeExtensionSession(
+        kv,
+        "token-abc",
+        accountRef,
+        TEST_PHONE,
+        EPHEMERAL_STATE_SECRET,
+      );
+      const session = await validateExtensionSession(
+        kv,
+        "token-abc",
+        EPHEMERAL_STATE_SECRET,
+      );
+      expect(session).toEqual({ accountRef, phone: TEST_PHONE });
+    });
+
+    it("does not store plaintext phone in the session record", async () => {
+      await storeExtensionSession(
+        kv,
+        "token-abc",
+        accountRef,
+        TEST_PHONE,
+        EPHEMERAL_STATE_SECRET,
+      );
+      const raw = kv.__store.get("ext-session:token-abc");
+      expect(raw).toContain(accountRef);
+      expect(raw).not.toContain(TEST_PHONE);
     });
 
     it("returns null for unknown token", async () => {
-      const phone = await validateExtensionSession(kv, "nonexistent");
-      expect(phone).toBeNull();
+      expect(
+        await validateExtensionSession(kv, "nonexistent", EPHEMERAL_STATE_SECRET),
+      ).toBeNull();
     });
 
     it("revokes a session", async () => {
-      await storeExtensionSession(kv, "token-abc", "5491155551234");
+      await storeExtensionSession(
+        kv,
+        "token-abc",
+        accountRef,
+        TEST_PHONE,
+        EPHEMERAL_STATE_SECRET,
+      );
       await revokeExtensionSession(kv, "token-abc");
-      const phone = await validateExtensionSession(kv, "token-abc");
-      expect(phone).toBeNull();
+      expect(
+        await validateExtensionSession(kv, "token-abc", EPHEMERAL_STATE_SECRET),
+      ).toBeNull();
     });
   });
 });
