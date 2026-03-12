@@ -16,10 +16,15 @@ export class RelayMCP extends McpAgent<Env> {
 
   async init() {
     for (const tool of TOOLS) {
-      this.server.tool(
+      // Use registerTool() with explicit config object — server.tool() has
+      // ambiguous overloads that misinterpret ZodObject schemas as annotations
+      // (because ZodObject has _def so isZodRawShapeCompat returns false).
+      this.server.registerTool(
         tool.name,
-        tool.description,
-        tool.inputSchema,
+        {
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        },
         async (args: Record<string, unknown>) => {
           const phone = this.getPhone();
           if (!phone) {
