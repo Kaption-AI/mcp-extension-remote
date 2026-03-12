@@ -39,6 +39,10 @@ export interface DeploymentEvent {
   sigstoreBundleUrl: string;
   rekorLogIndex: string;
   deployedAt: string;
+  // Phase 2: post-deploy attestation fields (optional for backwards compat)
+  cfVersionId?: string;
+  preDeployRekorIndex?: string;
+  source?: "github-actions" | "manual" | "heartbeat";
 }
 
 export interface ChainEntry {

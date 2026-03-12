@@ -3,6 +3,8 @@ name: Test, Build & Deploy
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 6 * * *' # daily heartbeat at 6am UTC
 
 permissions:
   id-token: write
@@ -44,18 +46,28 @@ jobs:
           echo "BUILD_HASH=$BUILD_HASH" >> $GITHUB_ENV
           echo "Build SHA-256: $BUILD_HASH"
 
-      - name: Sign with Sigstore (keyless)
+      # ─── PRE-DEPLOY: Sign the bundle and record in Rekor ───────────
+      - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.0
 
-      - name: Create Sigstore signature bundle
+      - name: Pre-deploy Sigstore signing
+        id: pre_sign
         run: |
           cosign sign-blob \
             --bundle .open-next/worker.js.sigstore.json \
             --yes \
             .open-next/worker.js
 
-          REKOR_INDEX=$(cat .open-next/worker.js.sigstore.json | python3 -c "import sys,json; b=json.load(sys.stdin); print(b.get('verificationMaterial',{}).get('tlogEntries',[{}])[0].get('logIndex','unknown'))" 2>/dev/null || echo "unknown")
-          echo "REKOR_INDEX=$REKOR_INDEX" >> $GITHUB_ENV
+          PRE_REKOR_INDEX=$(python3 -c "
+          import json, sys
+          b = json.load(open('.open-next/worker.js.sigstore.json'))
+          entries = b.get('verificationMaterial', {}).get('tlogEntries', [{}])
+          print(entries[0].get('logIndex', 'unknown'))
+          " 2>/dev/null || echo "unknown")
+
+          echo "PRE_REKOR_INDEX=$PRE_REKOR_INDEX" >> $GITHUB_ENV
+          echo "pre_rekor_index=$PRE_REKOR_INDEX" >> $GITHUB_OUTPUT
+          echo "Pre-deploy Rekor index: $PRE_REKOR_INDEX"
 
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
@@ -65,6 +77,7 @@ jobs:
             .open-next/worker.js
             .open-next/worker.js.sigstore.json
 
+      # ─── DEPLOY ────────────────────────────────────────────────────
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
@@ -72,10 +85,72 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
 
+      # ─── POST-DEPLOY: Fetch CF version, attest, record ────────────
+      - name: Post-deploy attestation
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Fetch the latest CF deployment version ID
+          CF_VERSION=$(curl -s \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/mcp-remote/deployments" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          deployments = data.get('result', {}).get('deployments', [])
+          print(deployments[0]['id'] if deployments else 'unknown')
+          " 2>/dev/null || echo "unknown")
+
+          echo "CF_VERSION_ID=$CF_VERSION" >> $GITHUB_ENV
+          echo "CF version: $CF_VERSION"
+
+          # Re-hash to confirm nothing changed
+          POST_HASH=$(shasum -a 256 .open-next/worker.js | cut -d' ' -f1)
+          if [ "$POST_HASH" != "${{ env.BUILD_HASH }}" ]; then
+            echo "::error::BUILD HASH MISMATCH! Pre=${{ env.BUILD_HASH }} Post=$POST_HASH"
+            exit 1
+          fi
+
+          # Build post-deploy attestation payload
+          PAYLOAD=$(python3 -c "
+          import json
+          print(json.dumps({
+            'commit': '${{ github.sha }}',
+            'cf_version_id': '$CF_VERSION',
+            'pre_deploy_rekor_index': '${{ env.PRE_REKOR_INDEX }}',
+            'sha256': '${{ env.BUILD_HASH }}',
+            'source': 'github-actions'
+          }))
+          ")
+
+          echo "$PAYLOAD" > /tmp/post-deploy-attestation.json
+
+          # Sign the post-deploy attestation blob in Rekor
+          cosign sign-blob \
+            --bundle /tmp/post-deploy-attestation.sigstore.json \
+            --yes \
+            /tmp/post-deploy-attestation.json
+
+          POST_REKOR_INDEX=$(python3 -c "
+          import json
+          b = json.load(open('/tmp/post-deploy-attestation.sigstore.json'))
+          entries = b.get('verificationMaterial', {}).get('tlogEntries', [{}])
+          print(entries[0].get('logIndex', 'unknown'))
+          " 2>/dev/null || echo "unknown")
+
+          echo "POST_REKOR_INDEX=$POST_REKOR_INDEX" >> $GITHUB_ENV
+          echo "Post-deploy Rekor index: $POST_REKOR_INDEX"
+
       - name: Record deployment in transparency chain
         run: |
+          DEPLOY_SOURCE="github-actions"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            DEPLOY_SOURCE="heartbeat"
+          fi
+
           VERSION=$(node -p "require('./package.json').version")
-          curl -s -X POST https://mcp-ext.kaptionai.com/transparency/append \
+          curl -sf -X POST https://mcp-ext.kaptionai.com/transparency/append \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
@@ -83,6 +158,10 @@ jobs:
               \"commitSha\": \"${{ github.sha }}\",
               \"buildHash\": \"${{ env.BUILD_HASH }}\",
               \"sigstoreBundleUrl\": \"https://github.com/Kaption-AI/mcp-extension-remote/actions/runs/${{ github.run_id }}\",
-              \"rekorLogIndex\": \"${{ env.REKOR_INDEX }}\",
-              \"deployedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              \"rekorLogIndex\": \"${{ env.PRE_REKOR_INDEX }}\",
+              \"deployedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+              \"cfVersionId\": \"${{ env.CF_VERSION_ID }}\",
+              \"preDeployRekorIndex\": \"${{ env.PRE_REKOR_INDEX }}\",
+              \"postDeployRekorIndex\": \"${{ env.POST_REKOR_INDEX }}\",
+              \"source\": \"$DEPLOY_SOURCE\"
             }"

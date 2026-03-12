@@ -1,0 +1,65 @@
+name: Verify Deployment Integrity
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # every 30 minutes
+  workflow_dispatch: {} # allow manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Cross-reference CF deploys vs transparency chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch CF deployment history
+        run: |
+          curl -sf \
+            "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/workers/scripts/mcp-remote/deployments" \
+            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            > cf_deployments.json
+          echo "CF deployments fetched:"
+          python3 -c "import json; d=json.load(open('cf_deployments.json')); print(f\"{len(d.get('result',{}).get('deployments',[]))} versions found\")"
+
+      - name: Fetch transparency chain
+        run: |
+          curl -sf https://mcp-ext.kaptionai.com/transparency > chain.json
+          echo "Chain fetched:"
+          python3 -c "import json; d=json.load(open('chain.json')); print(f\"{d.get('total',0)} entries\")"
+
+      - name: Verify chain integrity
+        run: |
+          RESULT=$(curl -sf https://mcp-ext.kaptionai.com/transparency/verify)
+          echo "$RESULT"
+          VALID=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('valid', False))")
+          if [ "$VALID" != "True" ]; then
+            echo "::error::Transparency chain integrity check FAILED"
+            exit 1
+          fi
+          echo "Chain integrity verified."
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cross-reference deployments
+        run: node scripts/verify-chain.js
+
+      - name: Alert on gap
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ALERT_WEBHOOK }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -sf -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "text": "🚨 *DEPLOYMENT INTEGRITY ALERT* — mcp-ext.kaptionai.com\nA Cloudflare deployment version exists with no matching Rekor attestation in the transparency chain.\nInvestigate: https://github.com/Kaption-AI/mcp-extension-remote/actions"
+              }'
+            echo "Slack alert sent."
+          else
+            echo "::warning::SLACK_ALERT_WEBHOOK not configured — skipping Slack notification"
+          fi

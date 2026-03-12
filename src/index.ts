@@ -117,6 +117,54 @@ outerApp.get("/transparency/verify", async (c) => {
   return c.json(result);
 });
 
+outerApp.get("/transparency/gaps", async (c) => {
+  const cfToken = c.req.header("Authorization")?.replace("Bearer ", "");
+  const accountId = c.req.query("account_id");
+
+  if (!cfToken || !accountId) {
+    return c.json(
+      { error: "Provide Authorization: Bearer <CF_TOKEN> and ?account_id=<ID>" },
+      400,
+    );
+  }
+
+  // Fetch CF deployment history
+  const cfRes = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/mcp-remote/deployments`,
+    { headers: { Authorization: `Bearer ${cfToken}` } },
+  );
+  if (!cfRes.ok) {
+    return c.json({ error: "Failed to fetch CF deployments", status: cfRes.status }, 502);
+  }
+  const cfData = (await cfRes.json()) as {
+    result?: { deployments?: { id: string; created_on: string; source?: string }[] };
+  };
+  const cfDeployments = cfData.result?.deployments ?? [];
+
+  // Load chain entries
+  const chainId = c.env.DEPLOYMENT_CHAIN.idFromName("main");
+  const chain = c.env.DEPLOYMENT_CHAIN.get(chainId);
+  const { entries } = await chain.getHistory(100, 0);
+
+  const attestedIds = new Set(entries.filter(e => e.event.cfVersionId).map(e => e.event.cfVersionId));
+  const firstAttested = entries.find(e => e.event.cfVersionId);
+  const cutoff = firstAttested?.event.deployedAt;
+
+  const gaps = cfDeployments.filter(d => {
+    if (attestedIds.has(d.id)) return false;
+    if (cutoff && d.created_on <= cutoff) return false; // pre-attestation era
+    return true;
+  });
+
+  return c.json({
+    cfVersions: cfDeployments.length,
+    chainEntries: entries.length,
+    attestedVersions: attestedIds.size,
+    gaps: gaps.map(d => ({ id: d.id, created_on: d.created_on, source: d.source })),
+    clean: gaps.length === 0,
+  });
+});
+
 outerApp.post("/transparency/append", async (c) => {
   const apiKey = c.req.header("Authorization")?.replace("Bearer ", "");
   if (!c.env.DEPLOY_API_KEY || apiKey !== c.env.DEPLOY_API_KEY) {
