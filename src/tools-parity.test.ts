@@ -5,23 +5,27 @@
  * This prevents the two from drifting apart again.
  * The local bridge (kaption-mcp/src/tools.ts) is the canonical source of truth.
  *
- * NOTE: We cannot use zodToJsonSchema across module boundaries because
- * instanceof checks fail when zod is loaded from different node_modules.
- * Instead we compare descriptions, tool names, and parse behavior directly.
+ * Skips in CI where the local bridge repo isn't available as a sibling directory.
  */
 
 import { describe, it, expect } from "vitest";
 import { TOOLS as CLOUD_TOOLS, zodToJsonSchema } from "./tools";
-import { TOOLS as LOCAL_TOOLS } from "../../kaption-mcp/src/tools";
+import { existsSync } from "fs";
+import { resolve } from "path";
 
-describe("Tool parity: local ↔ cloud", () => {
+const localToolsPath = resolve(__dirname, "../../kaption-mcp/src/tools.ts");
+const hasLocalBridge = existsSync(localToolsPath);
+
+describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", async () => {
+  const { TOOLS: LOCAL_TOOLS } = await import("../../kaption-mcp/src/tools");
+
   it("same number of tools", () => {
     expect(CLOUD_TOOLS).toHaveLength(LOCAL_TOOLS.length);
   });
 
   it("same tool names in same order", () => {
-    const cloudNames = CLOUD_TOOLS.map((t) => t.name);
-    const localNames = LOCAL_TOOLS.map((t) => t.name);
+    const cloudNames = CLOUD_TOOLS.map((t: any) => t.name);
+    const localNames = LOCAL_TOOLS.map((t: any) => t.name);
     expect(cloudNames).toEqual(localNames);
   });
 
@@ -39,7 +43,6 @@ describe("Tool parity: local ↔ cloud", () => {
       const props = jsonSchema.properties as Record<string, any> | undefined;
       if (!props) continue;
       for (const [key, prop] of Object.entries(props)) {
-        // Union types (oneOf) don't have a top-level description, that's ok
         expect(
           prop.description ?? prop.oneOf,
           `${tool.name}.${key} missing description`
@@ -63,8 +66,8 @@ describe("Tool parity: local ↔ cloud", () => {
     };
 
     for (const [name, input] of Object.entries(sampleInputs)) {
-      const cloudTool = CLOUD_TOOLS.find((t) => t.name === name)!;
-      const localTool = LOCAL_TOOLS.find((t) => t.name === name)!;
+      const cloudTool = CLOUD_TOOLS.find((t: any) => t.name === name)!;
+      const localTool = LOCAL_TOOLS.find((t: any) => t.name === name)!;
 
       const cloudResult = cloudTool.inputSchema.safeParse(input);
       const localResult = localTool.inputSchema.safeParse(input);
@@ -83,14 +86,14 @@ describe("Tool parity: local ↔ cloud", () => {
       query: { entity: "invalid" },
       summarize_conversation: {},
       manage_labels: { action: "invalid" },
-      manage_notes: { action: "get" }, // missing contact_id
-      download_media: { message_id: "msg-1" }, // missing conversation_id
-      manage_chat: { action: "archive" }, // missing conversation_id
+      manage_notes: { action: "get" },
+      download_media: { message_id: "msg-1" },
+      manage_chat: { action: "archive" },
     };
 
     for (const [name, input] of Object.entries(invalidInputs)) {
-      const cloudTool = CLOUD_TOOLS.find((t) => t.name === name)!;
-      const localTool = LOCAL_TOOLS.find((t) => t.name === name)!;
+      const cloudTool = CLOUD_TOOLS.find((t: any) => t.name === name)!;
+      const localTool = LOCAL_TOOLS.find((t: any) => t.name === name)!;
 
       const cloudResult = cloudTool.inputSchema.safeParse(input);
       const localResult = localTool.inputSchema.safeParse(input);
