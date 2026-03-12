@@ -273,6 +273,7 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
               const ip = req.headers.get("cf-connecting-ip") || "unknown";
               const encryptedHint = await env.OAUTH_KV.get(`login_hint:${ip}`);
               if (encryptedHint) {
+                c.waitUntil(env.OAUTH_KV.delete(`login_hint:${ip}`));
                 const phoneHint = await decryptLoginHint(
                   encryptedHint,
                   env.EPHEMERAL_STATE_SECRET,
