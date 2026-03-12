@@ -44,7 +44,7 @@ function isValidJsonRpc(msg: unknown): msg is Record<string, unknown> {
     if (obj.id !== undefined && (obj.result !== undefined || obj.error !== undefined)) return true;
   }
   // Allow heartbeat messages
-  if (obj.type === "pong" || obj.method === "pong") return true;
+  if (obj.type === "ping" || obj.type === "pong" || obj.method === "pong") return true;
   // Allow auth handshake (JWT-based or legacy token-based)
   if (obj.type === "auth" && (typeof obj.jwt === "string" || typeof obj.token === "string")) return true;
   return false;
@@ -217,6 +217,12 @@ export class RelayRoom extends DurableObject<Env> {
           id: null,
         }),
       );
+      return;
+    }
+
+    // Heartbeat ping — respond with pong
+    if (obj.type === "ping") {
+      this.extensionWs?.send(JSON.stringify({ type: "pong" }));
       return;
     }
 
