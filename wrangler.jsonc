@@ -44,16 +44,8 @@
   // KV Namespaces
   "kv_namespaces": [
     {
-      "binding": "EXT_OAUTH_KV",
-      "id": "d8f86606c8e543079ebbdd7d72376a05"
-    },
-    {
       "binding": "OAUTH_KV",
       "id": "d8f86606c8e543079ebbdd7d72376a05"
-    },
-    {
-      "binding": "EXT_AUTH_KV",
-      "id": "8fa6d1eaea5c479db99bb46aa4c1521e"
     }
   ],
 
@@ -72,4 +64,5 @@
   // Secrets (set via `wrangler secret put`):
   // - INTERNAL_API_KEY: API key for rest-api OTP endpoint
   // - DEPLOY_API_KEY: API key for transparency chain append
+  // - JWT_SECRET: Shared JWT signing secret (same as rest-api, schedule, metadata workers)
 }

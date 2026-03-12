@@ -1,9 +1,8 @@
 import type { OTPRecord, RateLimitRecord } from "./types";
 
 const OTP_TTL = 300; // 5 minutes
-const COOLDOWN_TTL = 60; // 60 seconds between sends
 const RATE_WINDOW_TTL = 3600; // 1 hour window
-const MAX_SENDS_PER_HOUR = 10;
+const MAX_SENDS_PER_HOUR = 50;
 const MAX_VERIFY_ATTEMPTS = 5;
 
 // [C2/M2] Rejection sampling threshold to avoid modulo bias
@@ -35,19 +34,6 @@ function constantTimeEqual(a: string, b: string): boolean {
     mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return mismatch === 0;
-}
-
-/** Check if the phone is on cooldown (60s between sends). */
-export async function checkCooldown(kv: KVNamespace, phone: string): Promise<boolean> {
-  const key = `rate:otp-cooldown:${phone}`;
-  const val = await kv.get(key);
-  return val !== null;
-}
-
-/** Set cooldown for a phone. */
-export async function setCooldown(kv: KVNamespace, phone: string): Promise<void> {
-  const key = `rate:otp-cooldown:${phone}`;
-  await kv.put(key, "1", { expirationTtl: COOLDOWN_TTL });
 }
 
 /** Check hourly rate limit (max 3 sends per hour). Returns true if allowed. */
@@ -102,7 +88,7 @@ export async function checkIpRateLimit(kv: KVNamespace, ip: string): Promise<boo
   const elapsed = Date.now() - record.windowStart;
 
   if (elapsed > RATE_WINDOW_TTL * 1000) return true;
-  return record.count < 10; // 10 OTP sends per IP per hour
+  return record.count < 100; // 100 OTP sends per IP per hour
 }
 
 /** Increment the IP-based send rate counter. */
@@ -170,7 +156,7 @@ export async function verifyOTP(
     }
     // Re-store with incremented attempts, keeping remaining TTL
     const elapsed = (Date.now() - record.createdAt) / 1000;
-    const remainingTtl = Math.max(1, Math.ceil(OTP_TTL - elapsed));
+    const remainingTtl = Math.max(60, Math.ceil(OTP_TTL - elapsed));
     await kv.put(key, JSON.stringify(record), { expirationTtl: remainingTtl });
     return { valid: false, error: `Invalid code. ${MAX_VERIFY_ATTEMPTS - record.attempts} attempts remaining.` };
   }
@@ -227,6 +213,45 @@ export async function revokeExtensionSession(
  */
 export function constantTimeTokenEqual(a: string, b: string): boolean {
   return constantTimeEqual(a, b);
+}
+
+// ─── JWT Validation ──────────────────────────────────────────────────
+
+/** Validate a Kaption JWT by calling the internal API. Returns phone if valid. */
+/**
+ * Validate a Kaption JWT using the shared JWT_SECRET.
+ * Returns the phone number if valid, null otherwise.
+ * Uses the same jose.jwtVerify pattern as schedule/metadata workers.
+ */
+export async function validateJwt(
+  jwtSecret: string,
+  jwt: string,
+): Promise<string | null> {
+  try {
+    const { jwtVerify } = await import("jose");
+    const secret = new TextEncoder().encode(jwtSecret);
+    const { payload } = await jwtVerify(jwt, secret);
+
+    // JWT payload has phoneNumber (and userId) — same as schedule/metadata workers
+    const phone =
+      (payload as any).phoneNumber ||
+      (payload as any).phone ||
+      (payload as any).userToken ||
+      null;
+    return phone;
+  } catch {
+    return null;
+  }
+}
+
+/** Extract phone from JWT without validation (for routing only). */
+export function extractPhoneFromJwt(jwt: string): string | null {
+  try {
+    const payload = JSON.parse(atob(jwt.split(".")[1]));
+    return payload.phone || payload.sub || payload.phoneNumber || null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── HMAC Signing for oauthReqInfo (M3) ──────────────────────────────

@@ -14,7 +14,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./types";
-import { validateExtensionSession } from "./otp";
+import { validateExtensionSession, validateJwt } from "./otp";
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -45,8 +45,8 @@ function isValidJsonRpc(msg: unknown): msg is Record<string, unknown> {
   }
   // Allow heartbeat messages
   if (obj.type === "pong" || obj.method === "pong") return true;
-  // Allow auth handshake
-  if (obj.type === "auth" && typeof obj.token === "string") return true;
+  // Allow auth handshake (JWT-based or legacy token-based)
+  if (obj.type === "auth" && (typeof obj.jwt === "string" || typeof obj.token === "string")) return true;
   return false;
 }
 
@@ -56,6 +56,17 @@ export class RelayRoom extends DurableObject<Env> {
   private requestCounter = 0;
   private authenticated = false;
   private phone: string | null = null;
+
+  /**
+   * Route incoming fetch requests — handles WebSocket upgrades for the extension.
+   */
+  async fetch(request: Request): Promise<Response> {
+    const upgradeHeader = request.headers.get("Upgrade");
+    if (upgradeHeader === "websocket") {
+      return this.handleExtensionWebSocket(request);
+    }
+    return new Response("Not found", { status: 404 });
+  }
 
   /**
    * Handle WebSocket upgrade from the Chrome extension.
@@ -187,9 +198,13 @@ export class RelayRoom extends DurableObject<Env> {
 
     const obj = msg as Record<string, unknown>;
 
-    // [H6] Auth handshake — first message must authenticate
-    if (obj.type === "auth" && typeof obj.token === "string") {
-      this.handleAuthHandshake(obj.token as string);
+    // [H6] Auth handshake — first message must authenticate (JWT or legacy token)
+    if (obj.type === "auth" && (typeof obj.jwt === "string" || typeof obj.token === "string")) {
+      if (typeof obj.jwt === "string") {
+        this.handleJwtAuth(obj.jwt as string);
+      } else {
+        this.handleAuthHandshake(obj.token as string);
+      }
       return;
     }
 
@@ -232,15 +247,38 @@ export class RelayRoom extends DurableObject<Env> {
   }
 
   /**
-   * [H6] Validate the auth token sent in the first WebSocket message.
+   * [H6] Validate the auth token sent in the first WebSocket message (legacy).
    */
   private async handleAuthHandshake(token: string): Promise<void> {
-    const phone = await validateExtensionSession(this.env.EXT_AUTH_KV, token);
+    const phone = await validateExtensionSession(this.env.OAUTH_KV, token);
     if (!phone) {
       this.extensionWs?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired token" }),
       );
       this.extensionWs?.close(4001, "Authentication failed");
+      this.extensionWs = null;
+      return;
+    }
+
+    this.authenticated = true;
+    this.phone = phone;
+    this.extensionWs?.send(JSON.stringify({ type: "auth_ok", phone }));
+  }
+
+  /**
+   * Validate a Kaption JWT sent in the auth handshake.
+   * Calls the internal API to verify the JWT and extract the phone number.
+   */
+  private async handleJwtAuth(jwt: string): Promise<void> {
+    const phone = await validateJwt(
+      this.env.JWT_SECRET,
+      jwt,
+    );
+    if (!phone) {
+      this.extensionWs?.send(
+        JSON.stringify({ type: "auth_error", error: "Invalid or expired JWT" }),
+      );
+      this.extensionWs?.close(4001, "JWT authentication failed");
       this.extensionWs = null;
       return;
     }

@@ -47,18 +47,41 @@ outerApp.get("/ws/ext", async (c) => {
     return c.text("Expected WebSocket upgrade", 426);
   }
 
-  // Extract phone hint from query (used for room routing only, not auth)
-  // Actual authentication happens via the auth handshake message in RelayRoom
   const url = new URL(c.req.url);
-  const phoneHint = url.searchParams.get("phone");
-  if (!phoneHint) {
-    return c.text("Missing phone parameter", 400);
+
+  // Support ?phone= (legacy), ?token= (cloud bridge client), and ?jwt= (JWT auth)
+  let phoneHint = url.searchParams.get("phone");
+  const token = url.searchParams.get("token");
+  const jwt = url.searchParams.get("jwt");
+
+  if (!phoneHint && jwt) {
+    // Extract phone from JWT payload for routing (full validation happens in RelayRoom)
+    const { extractPhoneFromJwt } = await import("./otp");
+    phoneHint = extractPhoneFromJwt(jwt);
+    if (!phoneHint) {
+      return c.text("Invalid JWT: cannot extract phone", 400);
+    }
   }
 
-  // Route to the RelayRoom for this phone number
+  if (!phoneHint && token) {
+    // Look up phone from extension session token in KV
+    const { validateExtensionSession } = await import("./otp");
+    const phone = await validateExtensionSession(c.env.OAUTH_KV, token);
+    if (!phone) {
+      return c.text("Invalid or expired token", 401);
+    }
+    phoneHint = phone;
+  }
+
+  if (!phoneHint) {
+    return c.text("Missing phone, token, or jwt parameter", 400);
+  }
+
+  // Route to the RelayRoom for this phone number via fetch (not RPC)
+  // to properly handle WebSocket upgrade across DO boundary
   const roomId = c.env.RELAY_ROOM.idFromName(phoneHint);
   const room = c.env.RELAY_ROOM.get(roomId);
-  return room.handleExtensionWebSocket(c.req.raw);
+  return room.fetch(c.req.raw);
 });
 
 // Transparency endpoints
@@ -123,7 +146,6 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     if (url.pathname.startsWith("/transparency")) {
       return outerApp.fetch(request, env, ctx);
     }
-
     // OAuthProvider handles:
     // - /sse, /mcp → apiHandlers (OAuth token-protected MCP)
     // - /token → token exchange

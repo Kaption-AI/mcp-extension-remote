@@ -5,7 +5,7 @@
 
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { TOOLS, zodToJsonSchema } from "./tools";
+import { TOOLS } from "./tools";
 import type { Env } from "./types";
 
 export class RelayMCP extends McpAgent<Env> {
@@ -15,15 +15,13 @@ export class RelayMCP extends McpAgent<Env> {
   }) as any; // McpServer version compat between agents and @modelcontextprotocol/sdk
 
   async init() {
-    // Register all WhatsApp tools — each one relays to the extension via RelayRoom
     for (const tool of TOOLS) {
       this.server.tool(
         tool.name,
         tool.description,
-        zodToJsonSchema(tool.inputSchema) as any,
-        async (params: Record<string, unknown>, extra: any) => {
-          // Extract phone from the authenticated token props
-          const phone = this.getPhoneFromContext(extra);
+        tool.inputSchema,
+        async (args: Record<string, unknown>) => {
+          const phone = this.getPhone();
           if (!phone) {
             return {
               content: [
@@ -36,7 +34,10 @@ export class RelayMCP extends McpAgent<Env> {
           }
 
           try {
-            const result = await this.relayToExtension(phone, tool.name, params);
+            // Sanitize args for DO RPC — the MCP SDK may inject non-serializable
+            // properties (AbortSignal etc.) into the args object
+            const cleanArgs = JSON.parse(JSON.stringify(args));
+            const result = await this.relayToExtension(phone, tool.name, cleanArgs);
             return {
               content: [
                 {
@@ -61,13 +62,7 @@ export class RelayMCP extends McpAgent<Env> {
     }
   }
 
-  /**
-   * Extract phone number from OAuth token props.
-   * The OAuthProvider injects `props` into the request context.
-   */
-  private getPhoneFromContext(_extra: any): string | null {
-    // The MCP agent framework passes auth info through the extra context
-    // props.phone is set during completeAuthorization in the OTP handler
+  private getPhone(): string | null {
     try {
       const props = (this as any).props;
       if (props?.phone) return props.phone;
@@ -77,9 +72,6 @@ export class RelayMCP extends McpAgent<Env> {
     return null;
   }
 
-  /**
-   * Relay a tool call to the RelayRoom for the given phone number.
-   */
   private async relayToExtension(
     phone: string,
     method: string,
