@@ -13,14 +13,16 @@ export default async function AuthorizePage({
     typeof params._loginHint === "string" ? params._loginHint : "";
 
   return (
-    <Suspense
-      fallback={
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
-          <p className="text-neutral-400">Loading...</p>
-        </div>
-      }
-    >
-      <PhoneForm oauthReqInfo={oauthReqInfo} loginHint={loginHint} />
-    </Suspense>
+    <div className="flex items-center justify-center min-h-screen p-5">
+      <Suspense
+        fallback={
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
+            <p className="text-neutral-400">Loading...</p>
+          </div>
+        }
+      >
+        <PhoneForm oauthReqInfo={oauthReqInfo} loginHint={loginHint} />
+      </Suspense>
+    </div>
   );
 }

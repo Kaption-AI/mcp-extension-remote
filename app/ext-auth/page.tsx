@@ -67,6 +67,7 @@ export default function ExtAuthPage() {
   }
 
   return (
+    <div className="flex items-center justify-center min-h-screen p-5">
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
       <h1 className="text-xl mb-2 text-neutral-50">Kaption Cloud Bridge</h1>
       <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
@@ -149,6 +150,7 @@ export default function ExtAuthPage() {
           </div>
         </>
       )}
+    </div>
     </div>
   );
 }
