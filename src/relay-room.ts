@@ -35,8 +35,8 @@ interface WsAttachment {
   accountRef: string | null;
 }
 
-const REQUEST_TIMEOUT_MS = 30_000;
-const MAX_MESSAGE_SIZE = 64 * 1024; // [H2] 64KB
+const REQUEST_TIMEOUT_MS = 120_000; // 2 minutes — media downloads from WhatsApp CDN can be slow
+const MAX_MESSAGE_SIZE = 16 * 1024 * 1024; // [H2] 16MB — must accommodate base64-encoded media (images, audio, video)
 const MAX_PENDING_REQUESTS = 50; // [M5]
 
 /** [H3] Allowed WebSocket origins */
