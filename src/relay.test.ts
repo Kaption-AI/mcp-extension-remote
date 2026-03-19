@@ -40,10 +40,11 @@ describe("Tool registration", () => {
     "manage_scheduled_messages",
     "manage_lists",
     "get_api_info",
+    "get_analytics",
   ];
 
-  it("exports exactly 10 tools", () => {
-    expect(TOOLS).toHaveLength(10);
+  it("exports exactly 11 tools", () => {
+    expect(TOOLS).toHaveLength(11);
   });
 
   it("exports all expected tool names", () => {
