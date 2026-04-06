@@ -31,6 +31,7 @@ import {
   extractPhoneFromJwt,
   hmacSign,
   validateExtensionSession,
+  validateJwt,
 } from "./otp";
 import type { Env } from "./types";
 
@@ -47,6 +48,31 @@ const mcpHandler = RelayMCP.serve("/mcp");
 
 const outerApp = new Hono<{ Bindings: Env }>();
 
+// [H7] Short-lived token exchange — removes JWT from WebSocket URL
+outerApp.post("/ws/auth", async (c) => {
+  const auth = c.req.header("Authorization");
+  if (!auth?.startsWith("Bearer ")) {
+    return c.text("Unauthorized", 401);
+  }
+  const jwt = auth.slice(7);
+
+  // Validate JWT and extract phone → accountRef
+  const phone = await validateJwt(c.env.JWT_SECRET, jwt);
+  if (!phone) {
+    return c.text("Invalid JWT", 401);
+  }
+  const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
+  if (!accountRef) {
+    return c.text("Invalid JWT", 401);
+  }
+
+  // Generate single-use token, store in KV with 30s TTL
+  const token = crypto.randomUUID();
+  await c.env.OAUTH_KV.put(`ws-auth:${token}`, accountRef, { expirationTtl: 30 });
+
+  return c.json({ token });
+});
+
 // [H6] WebSocket endpoint — token validated via auth handshake in RelayRoom
 outerApp.get("/ws/ext", async (c) => {
   const upgradeHeader = c.req.header("Upgrade");
@@ -56,13 +82,25 @@ outerApp.get("/ws/ext", async (c) => {
 
   const url = new URL(c.req.url);
 
-  // Support ?phone= (legacy), ?token= (cloud bridge client), and ?jwt= (JWT auth)
+  // Support ?wstoken= (short-lived, preferred), ?phone= (legacy), ?token= (extension session), ?jwt= (JWT auth)
   let accountRefHint: string | null = null;
+  const wstoken = url.searchParams.get("wstoken");
   const phoneHint = url.searchParams.get("phone");
   const token = url.searchParams.get("token");
   const jwt = url.searchParams.get("jwt");
 
-  if (phoneHint) {
+  // Preferred: short-lived single-use token from POST /ws/auth
+  if (wstoken) {
+    const ref = await c.env.OAUTH_KV.get(`ws-auth:${wstoken}`);
+    if (!ref) {
+      return c.text("Invalid or expired wstoken", 401);
+    }
+    accountRefHint = ref;
+    // Single-use: delete immediately
+    c.executionCtx.waitUntil(c.env.OAUTH_KV.delete(`ws-auth:${wstoken}`));
+  }
+
+  if (!accountRefHint && phoneHint) {
     accountRefHint = await deriveAccountRef(phoneHint, c.env.PHONE_REF_SECRET);
   }
 
@@ -87,7 +125,7 @@ outerApp.get("/ws/ext", async (c) => {
   }
 
   if (!accountRefHint) {
-    return c.text("Missing phone, token, or jwt parameter", 400);
+    return c.text("Missing phone, token, jwt, or wstoken parameter", 400);
   }
 
   // Route to the RelayRoom for this account reference via fetch (not RPC)
@@ -210,7 +248,7 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       request.headers.get("x-request-id") || crypto.randomUUID();
 
     // Routes that bypass OAuth entirely
-    if (url.pathname === "/ws/ext") {
+    if (url.pathname === "/ws/ext" || url.pathname === "/ws/auth") {
       return outerApp.fetch(request, env, ctx);
     }
     if (url.pathname.startsWith("/transparency")) {
