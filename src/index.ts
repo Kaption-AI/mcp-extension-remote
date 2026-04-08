@@ -50,27 +50,32 @@ const outerApp = new Hono<{ Bindings: Env }>();
 
 // [H7] Short-lived token exchange — removes JWT from WebSocket URL
 outerApp.post("/ws/auth", async (c) => {
-  const auth = c.req.header("Authorization");
-  if (!auth?.startsWith("Bearer ")) {
-    return c.text("Unauthorized", 401);
-  }
-  const jwt = auth.slice(7);
+  try {
+    const auth = c.req.header("Authorization");
+    if (!auth?.startsWith("Bearer ")) {
+      return c.text("Unauthorized", 401);
+    }
+    const jwt = auth.slice(7);
 
-  // Validate JWT and extract phone → accountRef
-  const phone = await validateJwt(c.env.JWT_SECRET, jwt);
-  if (!phone) {
-    return c.text("Invalid JWT", 401);
-  }
-  const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
-  if (!accountRef) {
-    return c.text("Invalid JWT", 401);
-  }
+    // Validate JWT and extract phone → accountRef
+    const phone = await validateJwt(c.env.JWT_SECRET, jwt);
+    if (!phone) {
+      return c.text("Invalid JWT", 401);
+    }
+    const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
+    if (!accountRef) {
+      return c.text("Invalid JWT", 401);
+    }
 
-  // Generate single-use token, store in KV with 30s TTL
-  const token = crypto.randomUUID();
-  await c.env.OAUTH_KV.put(`ws-auth:${token}`, accountRef, { expirationTtl: 30 });
+    // Generate single-use token, store in KV with 30s TTL
+    const token = crypto.randomUUID();
+    await c.env.OAUTH_KV.put(`ws-auth:${token}`, accountRef, { expirationTtl: 30 });
 
-  return c.json({ token });
+    return c.json({ token });
+  } catch (e: any) {
+    console.error("[ws/auth] Token exchange error:", e?.message || e);
+    return c.text("Internal error: " + (e?.message || "unknown"), 500);
+  }
 });
 
 // [H6] WebSocket endpoint — token validated via auth handshake in RelayRoom

@@ -305,6 +305,7 @@ export const TOOLS: ToolDefinition[] = [
       limit: z.number().min(1).max(500).optional().describe("Max items for paginated sections (default 20, max 500)"),
       offset: z.number().min(0).optional().describe("Skip N items for pagination"),
       format: z.enum(["json", "csv", "txt", "vcf"]).optional().describe("Export format (required for export_chat/export_contacts)"),
+      query: z.string().optional().describe("Search keyword — filter analytics to only messages containing this text. Shows activity patterns for conversations mentioning a topic."),
       include_transcriptions: z.boolean().optional().describe("Include audio transcriptions in exports (default true)"),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
