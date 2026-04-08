@@ -69,7 +69,7 @@ outerApp.post("/ws/auth", async (c) => {
 
     // Generate single-use token, store in KV with 30s TTL
     const token = crypto.randomUUID();
-    await c.env.OAUTH_KV.put(`ws-auth:${token}`, accountRef, { expirationTtl: 30 });
+    await c.env.OAUTH_KV.put(`ws-auth:${token}`, accountRef, { expirationTtl: 60 });
 
     return c.json({ token });
   } catch (e: any) {
