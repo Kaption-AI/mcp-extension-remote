@@ -48,6 +48,19 @@ const mcpHandler = RelayMCP.serve("/mcp");
 
 const outerApp = new Hono<{ Bindings: Env }>();
 
+// CORS preflight for /ws/auth — needed for Chrome extension fetch (no host_permissions)
+outerApp.options("/ws/auth", (c) => {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
+});
+
 // [H7] Short-lived token exchange — removes JWT from WebSocket URL
 outerApp.post("/ws/auth", async (c) => {
   try {
@@ -71,7 +84,7 @@ outerApp.post("/ws/auth", async (c) => {
     const token = crypto.randomUUID();
     await c.env.OAUTH_KV.put(`ws-auth:${token}`, accountRef, { expirationTtl: 60 });
 
-    return c.json({ token });
+    return c.json({ token }, 200, { "Access-Control-Allow-Origin": "*" });
   } catch (e: any) {
     console.error("[ws/auth] Token exchange error:", e?.message || e);
     return c.text("Internal error: " + (e?.message || "unknown"), 500);
