@@ -25,12 +25,15 @@ const attestedVersionIds = new Set(
     .map((e) => e.event.cfVersionId),
 );
 
-// Development deploys on 2026-03-12 via `wrangler deploy` directly.
-// These bypassed the CI pipeline (Sigstore signing + transparency chain).
-// The `npm run deploy` script now guards against this (requires $CI=true).
+// Manual deploys via `wrangler deploy` directly — bypassed CI pipeline
+// (Sigstore signing + transparency chain). Permanently excluded from checks.
+// The `npm run deploy` script guards against this (requires $CI=true).
 const KNOWN_MANUAL_DEPLOYS = new Set([
   "22508965-5272-46b9-b251-affc92f452fa", // 2026-03-12T23:05 manual wrangler
   "3b600d1f-096d-4cb4-ace3-f8c08e49f46d", // 2026-03-12T23:04 manual wrangler
+  "14587bc4-0380-4920-afc5-a1272a4a70ab", // 2026-04-08T10:56 manual wrangler
+  "c3d083d9-cbda-46d5-af1d-cae9ffc80cda", // 2026-04-08T10:56 manual wrangler
+  "14050aa1-a806-4c8f-8f2b-062070f6b05d", // 2026-04-08T10:48 manual wrangler
 ]);
 
 // Find CF versions with no chain entry

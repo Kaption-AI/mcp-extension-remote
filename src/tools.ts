@@ -65,6 +65,8 @@ export const TOOLS: ToolDefinition[] = [
       list: z.string().optional().describe("Filter conversations by list name or ID (Personal accounts)"),
       community: z.string().optional().describe("Filter conversations by community name or ID"),
       group: z.string().optional().describe("Filter contacts by group ID — only return contacts that are members of this group"),
+      exclude_archived: z.boolean().optional().describe("Exclude archived conversations from listings (default true)"),
+      exclude_muted: z.boolean().optional().describe("Exclude muted conversations from listings (default false)"),
       before: z.string().optional().describe('Return messages before this ISO 8601 datetime (e.g. "2026-03-01T12:00:00.000Z") for cursor-based pagination backward'),
       after: z.string().optional().describe('Return messages after this ISO 8601 datetime (e.g. "2026-03-01T12:00:00.000Z") for incremental sync'),
       include_participants: z.boolean().optional().describe("Include group participants in results. Useful when looking up a contact by ID to see which groups they belong to, or when querying a group to see its members."),
