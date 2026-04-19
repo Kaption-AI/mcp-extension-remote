@@ -1,16 +1,61 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+
+const RESEND_COOLDOWN_SECONDS = 60;
 
 function OTPForm() {
   const searchParams = useSearchParams();
-  const verifyTicket = searchParams.get("ticket") || "";
+  const initialTicket = searchParams.get("ticket") || "";
+  const [ticket, setTicket] = useState(initialTicket);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
 
-  if (!verifyTicket) {
+  // Countdown timer for resend cooldown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  const handleResend = useCallback(async () => {
+    if (resendCooldown > 0 || resending || !ticket) return;
+    setResending(true);
+    setResendMessage("");
+    setError("");
+
+    try {
+      const res = await fetch("/authorize/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ verifyTicket: ticket }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        verifyTicket?: string;
+        error?: string;
+      };
+
+      if (data.ok && data.verifyTicket) {
+        setTicket(data.verifyTicket);
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        setResendMessage("Code sent! Check your WhatsApp.");
+      } else {
+        setError(data.error || "Failed to resend code.");
+      }
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setResending(false);
+    }
+  }, [resendCooldown, resending, ticket]);
+
+  if (!initialTicket) {
     return (
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
         <h1 className="text-xl mb-2 text-neutral-50">Invalid Request</h1>
@@ -30,7 +75,7 @@ function OTPForm() {
       const res = await fetch("/authorize/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verifyTicket, code }),
+        body: JSON.stringify({ verifyTicket: ticket, code }),
       });
       const data = (await res.json()) as { redirectTo?: string; error?: string };
 
@@ -74,6 +119,9 @@ function OTPForm() {
         />
 
         {error && <p className="text-red-500 text-[13px] mt-2">{error}</p>}
+        {resendMessage && (
+          <p className="text-green-400 text-[13px] mt-2">{resendMessage}</p>
+        )}
 
         <button
           type="submit"
@@ -84,12 +132,26 @@ function OTPForm() {
         </button>
       </form>
 
-      <button
-        onClick={() => history.back()}
-        className="inline-block mt-4 text-neutral-400 text-[13px] bg-transparent border-none cursor-pointer hover:text-neutral-50"
-      >
-        &larr; Use a different number
-      </button>
+      <div className="flex items-center justify-between mt-4">
+        <button
+          onClick={() => history.back()}
+          className="text-neutral-400 text-[13px] bg-transparent border-none cursor-pointer hover:text-neutral-50"
+        >
+          &larr; Different number
+        </button>
+
+        <button
+          onClick={handleResend}
+          disabled={resendCooldown > 0 || resending}
+          className="text-[13px] bg-transparent border-none cursor-pointer disabled:opacity-40 disabled:cursor-default text-green-400 hover:text-green-300 disabled:text-neutral-500"
+        >
+          {resending
+            ? "Sending..."
+            : resendCooldown > 0
+              ? `Resend code (${resendCooldown}s)`
+              : "Resend code"}
+        </button>
+      </div>
     </div>
   );
 }

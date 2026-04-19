@@ -274,6 +274,45 @@ export async function incrementRateLimit(
 }
 
 /**
+ * Check resend-specific rate limit (max 3 resends per 10 minutes per account).
+ * Returns true if allowed.
+ */
+export async function checkResendRateLimit(
+  kv: KVNamespace,
+  accountRef: string,
+): Promise<boolean> {
+  const key = `rate:otp-resend:${accountRef}`;
+  const raw = await kv.get(key);
+  if (!raw) return true;
+  const record: RateLimitRecord = JSON.parse(raw);
+  const elapsed = Date.now() - record.windowStart;
+  if (elapsed > 600_000) return true; // 10-minute window
+  return record.count < 3;
+}
+
+/** Increment the resend rate counter. */
+export async function incrementResendRateLimit(
+  kv: KVNamespace,
+  accountRef: string,
+): Promise<void> {
+  const key = `rate:otp-resend:${accountRef}`;
+  const raw = await kv.get(key);
+  let record: RateLimitRecord;
+  if (!raw) {
+    record = { count: 1, windowStart: Date.now() };
+  } else {
+    record = JSON.parse(raw);
+    const elapsed = Date.now() - record.windowStart;
+    if (elapsed > 600_000) {
+      record = { count: 1, windowStart: Date.now() };
+    } else {
+      record.count++;
+    }
+  }
+  await kv.put(key, JSON.stringify(record), { expirationTtl: 600 });
+}
+
+/**
  * [M1] Check IP-based rate limit (max 100 OTP sends per IP per hour).
  * Returns true if allowed.
  */

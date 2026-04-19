@@ -35,6 +35,10 @@ export const ExtVerifyOTPSchema = z.object({
   code: otpCode,
 });
 
+export const ResendOTPSchema = z.object({
+  verifyTicket,
+});
+
 export const RevokeSessionSchema = z.object({
   token: z.string().min(1, "Missing token"),
 });
