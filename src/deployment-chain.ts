@@ -18,6 +18,7 @@ async function sha256(data: string): Promise<string> {
 
 const GENESIS_HASH = "genesis:kaption-mcp-remote";
 
+// mcp.CLOUD_RELAY.7 — tamper-evident hash chain; /transparency endpoints
 export class DeploymentChainDO extends DurableObject<Env> {
   /**
    * Append a new deployment record to the chain.

@@ -36,6 +36,7 @@ interface WsAttachment {
 }
 
 const REQUEST_TIMEOUT_MS = 120_000; // 2 minutes — media downloads from WhatsApp CDN can be slow
+// mcp.CLOUD_RELAY.5 — 16MB cap, JSON-RPC validation, origin restrict, 50 pending, hibernation
 const MAX_MESSAGE_SIZE = 16 * 1024 * 1024; // [H2] 16MB — must accommodate base64-encoded media (images, audio, video)
 const MAX_PENDING_REQUESTS = 50; // [M5]
 
@@ -133,13 +134,14 @@ export class RelayRoom extends DurableObject<Env> {
     // Restore state from hibernation if needed
     this.restoreFromHibernation();
 
+    // mcp.CLOUD_RELAY.8 — relay is unprivileged; every tool needs live extension
     if (!this.extensionWs || !this.authenticated) {
       throw new Error(
         "Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge.",
       );
     }
 
-    // [M5] Cap pending requests
+    // mcp.RATE_LIMITS.3 — 50 in-flight cap; 51st rejects synchronously
     if (this.pendingRequests.size >= MAX_PENDING_REQUESTS) {
       throw new Error("Too many pending requests. Try again shortly.");
     }

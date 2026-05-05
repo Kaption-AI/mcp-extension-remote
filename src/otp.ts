@@ -168,6 +168,7 @@ function constantTimeEqual(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
+// mcp.CLOUD_RELAY.4 — accountRef = HMAC(phone, secret), raw phone never stored
 export async function deriveAccountRef(
   phone: string,
   secret: string,
@@ -232,6 +233,7 @@ export async function readVerifyTicket(
   return { phone: normalized, oauthReqInfo: payload.oauthReqInfo };
 }
 
+// mcp.RATE_LIMITS.4 — OTP send 50/hour, 5 verify attempts per code
 /** Check hourly rate limit (max 50 sends per hour). Returns true if allowed. */
 export async function checkRateLimit(
   kv: KVNamespace,

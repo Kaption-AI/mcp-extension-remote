@@ -61,7 +61,7 @@ outerApp.options("/ws/auth", (c) => {
   });
 });
 
-// [H7] Short-lived token exchange — removes JWT from WebSocket URL
+// mcp.CLOUD_RELAY.3 — JWT→wstoken exchange, 60s single-use KV TTL
 outerApp.post("/ws/auth", async (c) => {
   try {
     const auth = c.req.header("Authorization");
@@ -290,6 +290,8 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     // - /token → token exchange
     // - /register → RFC 7591 dynamic client registration
     // - Everything else → defaultHandler (Next.js)
+    // mcp.CLOUD_RELAY.1 — OAuth 2.1 discovery, register, token endpoints
+    // mcp.AUTH.2 — OAuthProvider validates bearer on every /sse + /mcp request
     const oauthHandler = new OAuthProvider({
       apiHandlers: {
         "/sse": sseHandler as any,
@@ -308,7 +310,7 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
         ): Promise<Response> {
           const reqUrl = new URL(req.url);
 
-          // [M3] For /authorize GET, HMAC-sign the oauthReqInfo before passing to Next.js
+          // mcp.CLOUD_RELAY.2 — OTP phone flow; HMAC-signed oauthReqInfo
           // env.OAUTH_PROVIDER (OAuthHelpers) is available here inside defaultHandler
           let finalReq = req;
           if (reqUrl.pathname === "/authorize" && req.method === "GET") {

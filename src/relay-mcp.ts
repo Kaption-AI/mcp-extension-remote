@@ -15,6 +15,7 @@ export class RelayMCP extends McpAgent<Env> {
   }) as any; // McpServer version compat between agents and @modelcontextprotocol/sdk
 
   async init() {
+    // mcp.CLOUD_RELAY.6 — registers same ten tools; relays to RelayRoom, never executes locally
     for (const tool of TOOLS) {
       // Use registerTool() with explicit config object — server.tool() has
       // ambiguous overloads that misinterpret ZodObject schemas as annotations
@@ -48,6 +49,7 @@ export class RelayMCP extends McpAgent<Env> {
             );
             let result = await this.relayToExtension(accountRef, tool.name, cleanArgs);
 
+            // mcp.TOOLS.6 — strip base64_data from download_media at McpAgent boundary
             // Strip base64_data from download_media responses to avoid polluting
             // the model's context window with large binary payloads.
             if (tool.name === "download_media" && result && typeof result === "object") {
