@@ -47,24 +47,12 @@ export class RelayMCP extends McpAgent<Env> {
             console.log(
               `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)}`,
             );
-            let result = await this.relayToExtension(accountRef, tool.name, cleanArgs);
+            const result = await this.relayToExtension(accountRef, tool.name, cleanArgs);
 
-            // mcp.TOOLS.6 — strip base64_data from download_media at McpAgent boundary
-            // Strip base64_data from download_media responses to avoid polluting
-            // the model's context window with large binary payloads.
-            if (tool.name === "download_media" && result && typeof result === "object") {
-              const obj = result as Record<string, unknown>;
-              if (obj.base64_data) {
-                const sizeBytes = typeof obj.base64_data === "string"
-                  ? Math.round((obj.base64_data as string).length * 3 / 4)
-                  : undefined;
-                const { base64_data: _, ...rest } = obj;
-                result = {
-                  ...rest,
-                  _note: `base64_data stripped (${sizeBytes ? `~${(sizeBytes / 1024).toFixed(0)}KB` : "unknown size"}). The raw media was delivered to the client but excluded from this response to save context.`,
-                };
-              }
-            }
+            // mcp.PRIVACY.3 (2026-05-15) — base64_data passes through intact.
+            // The previous strip-and-replace-with-_note pattern misled callers
+            // into thinking a reference mechanism existed when it did not, and
+            // blocked legitimate workflows that need the bytes.
 
             return {
               content: [
