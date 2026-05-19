@@ -4,9 +4,10 @@
  * by substituting `__BUILD_HASH__` and `__COMMIT_SHA__` placeholders.
  *
  * Modes:
- *   - In CI ($CI=true): Computes BUILD_HASH from the built .open-next/worker.js
- *     (if present) and reads COMMIT_SHA from $GITHUB_SHA or `git rev-parse HEAD`.
- *     Writes a deploy-ready `wrangler.jsonc`.
+ *   - In CI ($CI=true): Reads COMMIT_SHA from $GITHUB_SHA or `git rev-parse HEAD`.
+ *     If .open-next/worker.js exists, computes the SHA-256 BUILD_HASH from it;
+ *     otherwise leaves BUILD_HASH=`pending-build` (CI re-runs this script after
+ *     `build:worker` to finalize it). Writes a deploy-ready `wrangler.jsonc`.
  *
  *   - Local dev ($KAPTIONAI_LOCAL_DEV=1): Writes `wrangler.jsonc` with
  *     placeholder values intact (`local-dev` markers). Sufficient for
@@ -54,15 +55,14 @@ let buildHash;
 let commitSha;
 
 if (isCI) {
-  if (!existsSync(WORKER_BUNDLE)) {
-    console.error(
-      `Error: ${WORKER_BUNDLE} not found. Run \`npm run build:worker\` first.`,
-    );
-    process.exit(1);
+  // Two-pass: pre-build pass has no worker.js yet, post-build pass does.
+  if (existsSync(WORKER_BUNDLE)) {
+    buildHash = createHash("sha256")
+      .update(readFileSync(WORKER_BUNDLE))
+      .digest("hex");
+  } else {
+    buildHash = "pending-build";
   }
-  buildHash = createHash("sha256")
-    .update(readFileSync(WORKER_BUNDLE))
-    .digest("hex");
   commitSha =
     process.env.GITHUB_SHA ??
     execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();

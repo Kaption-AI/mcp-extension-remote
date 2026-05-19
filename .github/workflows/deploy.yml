@@ -35,6 +35,17 @@ jobs:
           cache: npm
       - run: npm ci
 
+      # Render wrangler.jsonc from the gitignored template (first pass:
+      # BUILD_HASH is "pending-build", COMMIT_SHA is final). OpenNext needs
+      # wrangler.jsonc to exist before it can build the worker bundle.
+      # Without this step there is no wrangler.jsonc, which is the deploy
+      # guard rail — dev machines can't `wrangler deploy`.
+      - name: Render wrangler config (pre-build)
+        run: npm run build:config
+        env:
+          CI: "true"
+          GITHUB_SHA: ${{ github.sha }}
+
       - name: Build OpenNext worker
         run: npm run build:worker
         env:
@@ -46,10 +57,10 @@ jobs:
           echo "BUILD_HASH=$BUILD_HASH" >> $GITHUB_ENV
           echo "Build SHA-256: $BUILD_HASH"
 
-      # Generate wrangler.jsonc from the template, substituting BUILD_HASH
-      # and COMMIT_SHA. Without this step there is no wrangler.jsonc, which
-      # is the deploy guard rail — dev machines can't `wrangler deploy`.
-      - name: Render wrangler config
+      # Second pass: now that .open-next/worker.js exists, re-render
+      # wrangler.jsonc with the final BUILD_HASH so the deployed worker's
+      # env vars carry the actual hash (not the pre-build placeholder).
+      - name: Render wrangler config (post-build)
         run: npm run build:config
         env:
           CI: "true"
