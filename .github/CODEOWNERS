@@ -1,0 +1,18 @@
+# CODEOWNERS — every PR requires review from a listed owner.
+# Combined with branch protection on `main`, this enforces:
+#   1. No direct pushes to main (except admin override).
+#   2. Every change reaches production via a reviewed PR + green CI.
+#
+# See: https://docs.github.com/repositories/managing-your-repositorys-settings-and-policies/about-code-owners
+
+# Catch-all: any file in the repo.
+*                       @kshmir
+
+# Deploy chain — extra-sensitive surface. Same owner today; this stanza
+# exists so future co-owners can be added narrowly without touching the
+# catch-all rule.
+/.github/workflows/     @kshmir
+/scripts/build-config.mjs @kshmir
+/scripts/verify-chain.js  @kshmir
+/scripts/wrap-worker.mjs  @kshmir
+/wrangler.template.jsonc @kshmir

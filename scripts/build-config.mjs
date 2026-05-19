@@ -29,22 +29,37 @@ const TEMPLATE = "wrangler.template.jsonc";
 const OUTPUT = "wrangler.jsonc";
 const WORKER_BUNDLE = ".open-next/worker.js";
 
-const isCI = process.env.CI === "true";
+// `CI=true` alone is trivially spoofable. Require GitHub-Actions-specific
+// environment markers that a dev machine cannot fake without actively
+// pretending to be a runner. `GITHUB_ACTIONS` is set to "true" only inside
+// an actions runner; `GITHUB_RUN_ID` and `RUNNER_OS` are also injected by
+// the runner and are not present in normal shells.
+const isGitHubActions =
+  process.env.CI === "true" &&
+  process.env.GITHUB_ACTIONS === "true" &&
+  typeof process.env.GITHUB_RUN_ID === "string" &&
+  process.env.GITHUB_RUN_ID.length > 0 &&
+  typeof process.env.RUNNER_OS === "string" &&
+  process.env.RUNNER_OS.length > 0;
 const isLocalDev = process.env.KAPTIONAI_LOCAL_DEV === "1";
 
-if (!isCI && !isLocalDev) {
+if (!isGitHubActions && !isLocalDev) {
   console.error(
     "\nDeploy guard tripped.\n" +
       "  `wrangler.jsonc` is not present and `scripts/build-config.mjs` refuses to\n" +
-      "  generate it outside CI. All production deploys MUST go through GitHub\n" +
-      "  Actions (.github/workflows/deploy.yml) so the bundle is Sigstore-signed\n" +
-      "  and appended to the deployment transparency chain.\n\n" +
+      "  generate it outside GitHub Actions. All production deploys MUST go through\n" +
+      "  .github/workflows/deploy.yml so the bundle is Sigstore-signed and appended\n" +
+      "  to the deployment transparency chain.\n\n" +
+      "  This guard verifies CI=true AND GITHUB_ACTIONS=true AND GITHUB_RUN_ID AND\n" +
+      "  RUNNER_OS — spoofing all four locally would be intentional bypass.\n\n" +
       "  If you are running `wrangler dev` locally, use:\n" +
       "      npm run dev\n" +
       "  (it sets KAPTIONAI_LOCAL_DEV=1 and writes a dev-only wrangler.jsonc).\n",
   );
   process.exit(1);
 }
+
+const isCI = isGitHubActions;
 
 if (!existsSync(TEMPLATE)) {
   console.error(`Error: ${TEMPLATE} not found.`);

@@ -11,7 +11,8 @@
     "build": "next build",
     "build:config": "node scripts/build-config.mjs",
     "build:worker": "npx @opennextjs/cloudflare build && node scripts/wrap-worker.mjs",
-    "deploy": "test \"$CI\" = 'true' || (echo '❌ Deploy blocked: must run through GitHub Actions CI pipeline (Sigstore signing required)' && exit 1) && npm run build:worker && npm run build:config && npx wrangler deploy",
+    "predeploy": "node -e \"if(!(process.env.CI==='true'&&process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_RUN_ID)){console.error('\\n❌ Deploy blocked: must run through GitHub Actions (.github/workflows/deploy.yml).\\n   This requires CI=true AND GITHUB_ACTIONS=true AND GITHUB_RUN_ID — set by the runner, not spoofable accidentally.\\n   Push to main; CI handles deploy.\\n');process.exit(1)}\"",
+    "deploy": "npm run build:worker && npm run build:config && npx wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -116,7 +116,16 @@ GitHub Actions (push to main)
 
 Daily heartbeat redeploys (6am UTC) ensure the chain stays active even without code changes.
 
-Local deploys are blocked — `npm run deploy` checks for `$CI`.
+### Deploys are gated — do NOT run `wrangler deploy` locally
+
+All production deploys go through GitHub Actions. Multiple layers enforce this:
+
+1. `wrangler.jsonc` is gitignored; `scripts/build-config.mjs` renders it from `wrangler.template.jsonc` and refuses to run unless `GITHUB_ACTIONS=true` + `GITHUB_RUN_ID` are set (or `KAPTIONAI_LOCAL_DEV=1` for dev).
+2. `npm run predeploy` aborts unless those same CI env vars are present.
+3. `main` is branch-protected: requires a reviewed PR + green `test`, `deploy`, and `verify` checks.
+4. CODEOWNERS routes every PR through @kshmir.
+
+To ship a change: open a PR → review + CI green → merge to `main` → Actions builds, signs (Sigstore), deploys, and appends to the transparency chain. `npx wrangler deploy` from a laptop will fail at step 1 because there is no `wrangler.jsonc` to deploy.
 
 ### Verify a Deployment
 
