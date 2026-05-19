@@ -46,6 +46,15 @@ jobs:
           echo "BUILD_HASH=$BUILD_HASH" >> $GITHUB_ENV
           echo "Build SHA-256: $BUILD_HASH"
 
+      # Generate wrangler.jsonc from the template, substituting BUILD_HASH
+      # and COMMIT_SHA. Without this step there is no wrangler.jsonc, which
+      # is the deploy guard rail — dev machines can't `wrangler deploy`.
+      - name: Render wrangler config
+        run: npm run build:config
+        env:
+          CI: "true"
+          GITHUB_SHA: ${{ github.sha }}
+
       # ─── PRE-DEPLOY: Sign the bundle and record in Rekor ───────────
       - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.0

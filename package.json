@@ -7,10 +7,11 @@
   "module": "./src/index.ts",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "KAPTIONAI_LOCAL_DEV=1 node scripts/build-config.mjs && next dev",
     "build": "next build",
+    "build:config": "node scripts/build-config.mjs",
     "build:worker": "npx @opennextjs/cloudflare build && node scripts/wrap-worker.mjs",
-    "deploy": "test \"$CI\" = 'true' || (echo '❌ Deploy blocked: must run through GitHub Actions CI pipeline (Sigstore signing required)' && exit 1) && npm run build:worker && npx wrangler deploy",
+    "deploy": "test \"$CI\" = 'true' || (echo '❌ Deploy blocked: must run through GitHub Actions CI pipeline (Sigstore signing required)' && exit 1) && npm run build:worker && npm run build:config && npx wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest"
   },
