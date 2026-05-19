@@ -35,7 +35,8 @@ const KNOWN_MANUAL_DEPLOYS = new Set([
   "14587bc4-0380-4920-afc5-a1272a4a70ab", // 2026-04-08T10:56 manual wrangler
   "c3d083d9-cbda-46d5-af1d-cae9ffc80cda", // 2026-04-08T10:56 manual wrangler
   "14050aa1-a806-4c8f-8f2b-062070f6b05d", // 2026-04-08T10:48 manual wrangler
-  "ab5855bc-6125-4d49-af4f-cfcc772f69ef", // 2026-05-19T20:10 manual wrangler (overwritten by CI 2m later; triggered the gitignore-wrangler.jsonc guard)
+  "ab5855bc-6125-4d49-af4f-cfcc772f69ef", // 2026-05-19T20:10 manual wrangler — deployment id (per `wrangler deployments list`)
+  "1ae236d6-13d4-4cc7-8e62-62a5f939987a", // 2026-05-19T20:10 manual wrangler — version id (per CF API; same deploy as above; overwritten by CI 2m later; triggered the gitignore-wrangler.jsonc guard)
 ]);
 
 // Find CF versions with no chain entry
