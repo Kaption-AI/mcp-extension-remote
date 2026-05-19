@@ -245,6 +245,99 @@ export const TOOLS: ToolDefinition[] = [
     }),
   },
   {
+    name: "list_contacts",
+    description: [
+      "List WhatsApp contacts from the encrypted DBR3 cache (no network).",
+      "Results are deduplicated by phone number — the same person across multiple labels collapses to one row.",
+      "Saved contacts sort before unsaved, then alphabetically by display name.",
+      "",
+      "Examples:",
+      "  All contacts: {}",
+      '  Search by name: { query: "Maria" }',
+      '  Search by phone: { query: "5491155" }',
+      "  Page 2 of 50: { limit: 50, offset: 50 }",
+    ].join("\n"),
+    inputSchema: z.object({
+      query: z.string().optional().describe("Case-insensitive substring matched against name, pushname, phone, and JID"),
+      limit: z.number().min(1).max(500).optional().describe("Max contacts to return (default 50, max 500)"),
+      offset: z.number().min(0).optional().describe("Skip N contacts for pagination (default 0)"),
+    }),
+  },
+  {
+    name: "get_contact",
+    description: [
+      "Look up a single WhatsApp contact by JID or phone number. Pass either parameter — both work.",
+      "If multiple raw contacts share the same phone (label dupes), the saved variant wins.",
+      "",
+      "Examples:",
+      '  By JID: { jid: "5491155550001@c.us" }',
+      '  By phone with +: { phone: "+5491155550001" }',
+      '  By phone bare: { phone: "5491155550001" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      jid: z.string().optional().describe('Full WhatsApp JID (e.g. "5491155550001@c.us")'),
+      phone: z.string().optional().describe('Phone number — leading "+" and "00" are stripped during matching'),
+    }),
+  },
+  {
+    name: "get_contact_groups",
+    description: [
+      "List the WhatsApp groups a specific contact participates in. Reads from cached chat metadata — no network.",
+      "",
+      "Examples:",
+      '  Groups for contact: { jid: "5491155550001@c.us" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      jid: z.string().describe("Contact JID — must be the full @c.us form (phone alone not accepted here)"),
+    }),
+  },
+  {
+    name: "list_groups",
+    description: [
+      "List all WhatsApp groups the user belongs to. Reads from the cache — no network.",
+      "For a live snapshot of a single group, use `get_group` (it forces a fresh GroupMetadata.update).",
+      "",
+      "Examples:",
+      "  All groups: {}",
+      '  Search by group name: { query: "family" }',
+      "  Top 10: { limit: 10 }",
+    ].join("\n"),
+    inputSchema: z.object({
+      query: z.string().optional().describe("Case-insensitive substring match against group name"),
+      limit: z.number().min(1).max(500).optional().describe("Max groups to return (default 50, max 500)"),
+    }),
+  },
+  {
+    name: "get_group",
+    description: [
+      "Fetch a single group with a LIVE participant list. Forces `Store.GroupMetadata.update()` against the WA backend before reading, so the result reflects current membership including recent joins/leaves.",
+      "Use this when accuracy matters; use `list_groups` for browsing.",
+      "",
+      "Examples:",
+      '  Live group fetch: { jid: "120363421729019499@g.us" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      jid: z.string().describe('Group JID — must end in "@g.us"'),
+    }),
+  },
+  {
+    name: "export_contacts",
+    description: [
+      "Export all WhatsApp contacts as CSV (RFC 4180) or JSON. Deduped, sorted alphabetically by display name.",
+      "Default format is CSV. JSON projects the requested fields. Available fields: jid, phone, name, pushname, is_my_contact, is_business.",
+      "",
+      "Examples:",
+      '  CSV all fields: { format: "csv" }',
+      '  JSON name + phone: { format: "json", fields: ["name", "phone"] }',
+      '  Filtered CSV: { format: "csv", query: "Argentina" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      format: z.enum(["csv", "json"]).optional().describe('Output format. Default "csv"'),
+      query: z.string().optional().describe("Optional case-insensitive substring filter (matches name, pushname, phone, JID)"),
+      fields: z.array(z.string()).optional().describe("Whitelist of fields to include. Defaults to all six: jid, phone, name, pushname, is_my_contact, is_business"),
+    }),
+  },
+  {
     name: "get_api_info",
     description: "Get HTTP REST API connection info for programmatic access without MCP overhead. Returns URL, auth token, and available endpoints.",
     inputSchema: z.object({}),

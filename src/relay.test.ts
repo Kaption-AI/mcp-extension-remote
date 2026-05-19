@@ -39,12 +39,18 @@ describe("Tool registration", () => {
     "manage_reminders",
     "manage_scheduled_messages",
     "manage_lists",
+    "list_contacts",
+    "get_contact",
+    "get_contact_groups",
+    "list_groups",
+    "get_group",
+    "export_contacts",
     "get_api_info",
     "get_analytics",
   ];
 
-  it("exports exactly 11 tools", () => {
-    expect(TOOLS).toHaveLength(11);
+  it("exports exactly 17 tools", () => {
+    expect(TOOLS).toHaveLength(17);
   });
 
   it("exports all expected tool names", () => {
