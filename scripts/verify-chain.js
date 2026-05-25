@@ -18,6 +18,22 @@ const chain = JSON.parse(readFileSync("chain.json", "utf8"));
 const cfDeployments = cf.result?.deployments ?? [];
 const chainEntries = chain.entries ?? [];
 
+// Defensive: bail loudly if the fetcher gave us fewer entries than the
+// server reports. The /transparency endpoint paginates at 100 per response
+// ([L3] cap in deployment-chain.ts); the workflow must paginate to fetch
+// the whole chain. Without this check, a truncated chain.json silently
+// reports unsigned deploys for the newest entries — which is what happened
+// around 2026-05-22 when the chain crossed 100 entries.
+if (typeof chain.total === "number" && chainEntries.length < chain.total) {
+  console.error(
+    `✗ TRUNCATED CHAIN: received ${chainEntries.length} of ${chain.total} entries.`,
+  );
+  console.error(
+    "  The verify workflow must paginate /transparency?offset=N until all entries are fetched.",
+  );
+  process.exit(1);
+}
+
 // Build a set of CF version IDs recorded in the transparency chain
 const attestedVersionIds = new Set(
   chainEntries
