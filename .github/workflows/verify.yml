@@ -24,11 +24,35 @@ jobs:
           echo "CF deployments fetched:"
           python3 -c "import json; d=json.load(open('cf_deployments.json')); print(f\"{len(d.get('result',{}).get('deployments',[]))} versions found\")"
 
-      - name: Fetch transparency chain
+      - name: Fetch transparency chain (paginated)
         run: |
-          curl -sf https://mcp-ext.kaptionai.com/transparency > chain.json
-          echo "Chain fetched:"
-          python3 -c "import json; d=json.load(open('chain.json')); print(f\"{d.get('total',0)} entries\")"
+          # /transparency caps each response at 100 entries ([L3] in
+          # deployment-chain.ts). Loop until we've fetched `total` entries,
+          # then merge into chain.json shaped like a single response.
+          OFFSET=0
+          : > chain_pages.ndjson
+          while true; do
+            PAGE=$(curl -sf "https://mcp-ext.kaptionai.com/transparency?offset=$OFFSET&limit=100")
+            COUNT=$(echo "$PAGE" | python3 -c "import json,sys;print(len(json.load(sys.stdin).get('entries',[])))")
+            TOTAL=$(echo "$PAGE" | python3 -c "import json,sys;print(json.load(sys.stdin).get('total',0))")
+            if [ "$COUNT" = "0" ]; then break; fi
+            echo "$PAGE" >> chain_pages.ndjson
+            OFFSET=$((OFFSET + COUNT))
+            if [ "$OFFSET" -ge "$TOTAL" ]; then break; fi
+          done
+          python3 - <<'PY'
+          import json
+          entries = []
+          total = 0
+          with open("chain_pages.ndjson") as f:
+              for line in f:
+                  page = json.loads(line)
+                  entries.extend(page.get("entries", []))
+                  total = page.get("total", total)
+          with open("chain.json", "w") as f:
+              json.dump({"entries": entries, "total": total}, f)
+          print(f"Chain fetched: {len(entries)} of {total} entries across pages")
+          PY
 
       - name: Verify chain integrity
         run: |
