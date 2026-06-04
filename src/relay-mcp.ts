@@ -6,6 +6,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TOOLS } from "./tools";
+import { scrubInlineMedia } from "./media-scrub";
 import type { Env } from "./types";
 
 export class RelayMCP extends McpAgent<Env> {
@@ -49,21 +50,17 @@ export class RelayMCP extends McpAgent<Env> {
             );
             let result = await this.relayToExtension(accountRef, tool.name, cleanArgs);
 
-            // mcp.TOOLS.6 — strip base64_data from download_media at McpAgent boundary
-            // Strip base64_data from download_media responses to avoid polluting
-            // the model's context window with large binary payloads.
-            if (tool.name === "download_media" && result && typeof result === "object") {
-              const obj = result as Record<string, unknown>;
-              if (obj.base64_data) {
-                const sizeBytes = typeof obj.base64_data === "string"
-                  ? Math.round((obj.base64_data as string).length * 3 / 4)
-                  : undefined;
-                const { base64_data: _, ...rest } = obj;
-                result = {
-                  ...rest,
-                  _note: `base64_data stripped (${sizeBytes ? `~${(sizeBytes / 1024).toFixed(0)}KB` : "unknown size"}). The raw media was delivered to the client but excluded from this response to save context.`,
-                };
-              }
+            // Inline media ONLY for an explicit download_media call.
+            //   download_media (mcp.TOOLS.6 / mcp.CLOUD_RELAY.6): base64_data flows
+            //     through intact (parity with the local hub + WebMCP; kext c42987d5).
+            //     The 16MB inbound cap in relay-room.ts is already sized to carry
+            //     base64 media, so the bytes have crossed it before we get here —
+            //     there is nothing to "save".
+            //   every other tool (mcp.TOOLS.7): scrub any base64/binary blob (e.g.
+            //     thumbnail bodies leaked via conversations.lastMessage / search.text)
+            //     so media never pollutes the model's context window.
+            if (tool.name !== "download_media") {
+              result = scrubInlineMedia(result);
             }
 
             return {
