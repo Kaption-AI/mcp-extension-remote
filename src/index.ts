@@ -197,6 +197,12 @@ outerApp.get("/transparency/gaps", async (c) => {
     );
   }
 
+  // Guard against path/SSRF injection before interpolating into the CF API URL —
+  // Cloudflare account IDs are exactly 32 lowercase hex characters.
+  if (!/^[0-9a-f]{32}$/.test(accountId)) {
+    return c.json({ error: "Invalid account_id (expected 32 hex characters)" }, 400);
+  }
+
   // Fetch CF deployment history
   const cfRes = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/mcp-remote/deployments`,

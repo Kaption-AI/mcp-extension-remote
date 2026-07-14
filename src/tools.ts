@@ -6,10 +6,19 @@
 
 import { z } from "zod";
 
+export interface ToolAnnotations {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: z.ZodType;
+  annotations?: ToolAnnotations;
 }
 
 export const TOOLS: ToolDefinition[] = [
@@ -412,6 +421,36 @@ export const TOOLS: ToolDefinition[] = [
   },
 ];
 
+// mcp.TOOLS — safety annotations advertised to MCP clients (user-in-the-loop hints).
+//   readOnlyHint    : tool does not modify state (pure read).
+//   destructiveHint : may perform destructive/irreversible updates
+//                     (delete, or a scheduled/deferred WhatsApp send).
+//   idempotentHint  : repeating the call with the same args is a no-op.
+//   openWorldHint   : touches the live WhatsApp network vs. the local cache.
+const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+  query: { readOnlyHint: true, openWorldHint: true },
+  summarize_conversation: { readOnlyHint: true, openWorldHint: true },
+  manage_labels: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  manage_notes: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  download_media: { readOnlyHint: true, openWorldHint: true },
+  manage_chat: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  manage_reminders: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  manage_scheduled_messages: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  manage_lists: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  list_contacts: { readOnlyHint: true, openWorldHint: false },
+  get_contact: { readOnlyHint: true, openWorldHint: false },
+  get_contact_groups: { readOnlyHint: true, openWorldHint: false },
+  list_groups: { readOnlyHint: true, openWorldHint: false },
+  get_group: { readOnlyHint: true, openWorldHint: true },
+  export_contacts: { readOnlyHint: true, openWorldHint: false },
+  get_api_info: { readOnlyHint: true, openWorldHint: false },
+  get_analytics: { readOnlyHint: true, openWorldHint: true },
+};
+
+for (const tool of TOOLS) {
+  tool.annotations = TOOL_ANNOTATIONS[tool.name];
+}
+
 /**
  * Get a tool definition by name
  */
@@ -426,11 +465,13 @@ export function getToolsForMCP(): Array<{
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  annotations?: ToolAnnotations;
 }> {
   return TOOLS.map((tool) => ({
     name: tool.name,
     description: tool.description,
     inputSchema: zodToJsonSchema(tool.inputSchema),
+    annotations: tool.annotations,
   }));
 }
 
@@ -457,6 +498,7 @@ export function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
     const result: Record<string, unknown> = {
       type: "object",
       properties,
+      additionalProperties: false,
     };
     if (required.length > 0) {
       result.required = required;

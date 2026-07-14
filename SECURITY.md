@@ -2,6 +2,18 @@
 
 Kaption MCP Cloud Bridge is built and deployed exclusively through GitHub Actions CI. Every deployment is cryptographically signed using [Sigstore](https://sigstore.dev) keyless signing and recorded in a tamper-evident transparency chain.
 
+## Reporting a Vulnerability
+
+Found a security issue in the relay (`@kaptionai/mcp-remote`, live at `mcp-ext.kaptionai.com`)? Please report it privately:
+
+- **Email:** security@kaptionai.com
+- Include a description, reproduction steps, affected endpoint, and impact.
+- Please do **not** open a public GitHub issue for security reports.
+
+We aim to acknowledge within 3 business days and will coordinate disclosure once a fix is deployed. In scope: authentication bypass on `/sse`, `/mcp`, `/ws/*`, or `/transparency/append`; OAuth 2.1 flaws; SSRF; injection; unsafe deserialization; or any unauthenticated path to tool execution or user data. (The relay forwards tool calls to the browser extension and cannot read message contents itself.)
+
+The sections below document the build & deploy integrity model (Sigstore signing + transparency chain).
+
 ## How It Works
 
 1. **Build**: GitHub Actions builds the worker from source

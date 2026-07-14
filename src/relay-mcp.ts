@@ -26,6 +26,7 @@ export class RelayMCP extends McpAgent<Env> {
         {
           description: tool.description,
           inputSchema: tool.inputSchema,
+          annotations: tool.annotations,
         },
         async (args: Record<string, unknown>) => {
           const accountRef = this.getAccountRef();
