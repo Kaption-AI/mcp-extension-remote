@@ -259,6 +259,32 @@ interface WorkerHandler {
   fetch(request: Request, env: any, ctx: any): Promise<Response>;
 }
 
+/**
+ * Security headers for responses served through the Next handler.
+ *
+ * These used to live in next.config.mjs as a `headers()` rule matching every
+ * route, but such a rule is unrepresentable across this stack's two
+ * path-to-regexp versions: Next 15.5's config validator rejects the v8 wildcard
+ * '/*path' ("Unexpected MODIFIER"), while @opennextjs/cloudflare's
+ * routingHandler runs path-to-regexp v8, which rejects the classic '/(.*)'
+ * ("Unexpected ("). The v6 form '/:path*' fails under v8 too. Leaving '/(.*)'
+ * in place made the router throw on EVERY dynamic request, so the whole site
+ * returned 500 while static assets still served.
+ *
+ * Applying them here removes route matching from the equation entirely.
+ */
+export function applySecurityHeaders(headers: Headers): void {
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+      + "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
+      + "connect-src 'self' https://mcp-ext.kaptionai.com",
+  );
+}
+
 export function createFetchHandler(nextHandler: WorkerHandler) {
   return async function fetch(
     request: Request,
@@ -360,6 +386,7 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
           // [L4] Add request ID to response
           const newResponse = new Response(response.body, response);
           newResponse.headers.set("x-request-id", requestId);
+          applySecurityHeaders(newResponse.headers);
           return newResponse;
         },
       } as any,
