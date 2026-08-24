@@ -2,7 +2,15 @@ name: Verify Deployment Integrity
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # every 30 minutes
+    # Every 4 hours, not every 30 minutes. The job itself takes ~15 seconds,
+    # but GitHub bills each job rounded up to a full minute: 712 runs in the
+    # first 23 days of August did 239 minutes of real work and billed 782.
+    # At 6 runs/day that becomes ~180 runs and ~180 billed minutes.
+    #
+    # Better still, this is an HTTP check against Cloudflare and
+    # mcp-ext.kaptionai.com — a Cloudflare Cron Trigger next to the worker it
+    # monitors would cost nothing at all.
+    - cron: '0 */4 * * *'
   workflow_dispatch: {} # allow manual trigger
 
 permissions:
@@ -12,6 +20,7 @@ jobs:
   verify:
     name: Cross-reference CF deploys vs transparency chain
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
