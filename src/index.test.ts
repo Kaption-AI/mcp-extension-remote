@@ -155,3 +155,75 @@ describe("createFetchHandler authorize login hint flow", () => {
     expect(del).toHaveBeenCalledWith("login_hint:1.2.3.4");
   });
 });
+
+describe("createFetchHandler OpenAI plugin discovery", () => {
+  it("publishes RFC 9728 protected-resource metadata", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("unexpected")),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource"),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      resource: "https://mcp.kaptionai.com",
+      authorization_servers: ["https://mcp.kaptionai.com"],
+      scopes_supported: ["kaption:access"],
+    });
+  });
+
+  it("returns the exact configured OpenAI domain challenge token", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("unexpected")),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp-ext.kaptionai.com/.well-known/openai-apps-challenge"),
+      createEnv({ OPENAI_APPS_CHALLENGE_TOKEN: "portal-token-123" }),
+      ctx,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("portal-token-123");
+    expect(response.headers.get("content-type")).toContain("text/plain");
+  });
+
+  it("keeps the domain challenge unavailable until a token is configured", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("unexpected")),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp-ext.kaptionai.com/.well-known/openai-apps-challenge"),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("adds protected-resource discovery to OAuth 401 challenges", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("Unauthorized", { status: 401 })),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp-ext.kaptionai.com/mcp"),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain(
+      'resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource"',
+    );
+  });
+});

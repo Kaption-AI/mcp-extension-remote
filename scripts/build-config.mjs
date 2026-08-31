@@ -19,7 +19,7 @@
  *
  * All deploys MUST go through `.github/workflows/deploy.yml`. The pipeline
  * Sigstore-signs the bundle, records it in Rekor, and appends a hash-linked
- * entry to the public transparency chain at https://mcp-ext.kaptionai.com/transparency.
+ * entry to the public transparency chain at https://mcp.kaptionai.com/transparency.
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";

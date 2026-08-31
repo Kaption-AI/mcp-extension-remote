@@ -48,6 +48,30 @@ const mcpHandler = RelayMCP.serve("/mcp");
 
 const outerApp = new Hono<{ Bindings: Env }>();
 
+const MCP_ORIGIN = "https://mcp.kaptionai.com";
+const PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
+const OPENAI_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
+
+outerApp.get(PROTECTED_RESOURCE_PATH, (c) =>
+  c.json({
+    resource: MCP_ORIGIN,
+    authorization_servers: [MCP_ORIGIN],
+    scopes_supported: ["kaption:access"],
+    resource_documentation: `${MCP_ORIGIN}/`,
+    resource_policy_uri: "https://kaptionai.com/privacy",
+    resource_tos_uri: "https://kaptionai.com/terms",
+  }),
+);
+
+// OpenAI provides the token during portal domain verification. Keeping it in
+// an environment secret lets the well-known endpoint return exactly one token
+// without a deploy or a repository-stored credential.
+outerApp.get(OPENAI_CHALLENGE_PATH, (c) => {
+  const token = c.env.OPENAI_APPS_CHALLENGE_TOKEN?.trim();
+  if (!token) return c.text("Not configured", 404);
+  return c.text(token, 200, { "Cache-Control": "no-store" });
+});
+
 // CORS preflight for /ws/auth — needed for Chrome extension fetch (no host_permissions)
 outerApp.options("/ws/auth", (c) => {
   return new Response(null, {
@@ -297,6 +321,14 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     const requestId =
       request.headers.get("x-request-id") || crypto.randomUUID();
 
+    // Public standards and domain-verification routes bypass OAuth.
+    if (
+      url.pathname === PROTECTED_RESOURCE_PATH ||
+      url.pathname === OPENAI_CHALLENGE_PATH
+    ) {
+      return outerApp.fetch(request, env, ctx);
+    }
+
     // Routes that bypass OAuth entirely
     if (url.pathname === "/ws/ext" || url.pathname === "/ws/auth") {
       return outerApp.fetch(request, env, ctx);
@@ -392,6 +424,19 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       } as any,
     });
 
-    return oauthHandler.fetch(request, env, ctx);
+    const response = await oauthHandler.fetch(request, env, ctx);
+
+    // RFC 9728 discovery hint required by ChatGPT when endpoint-level OAuth
+    // rejects a request before the MCP tool handler can return its own hint.
+    if (response.status === 401) {
+      const challenged = new Response(response.body, response);
+      challenged.headers.set(
+        "WWW-Authenticate",
+        `Bearer resource_metadata="${MCP_ORIGIN}${PROTECTED_RESOURCE_PATH}", scope="kaption:access"`,
+      );
+      return challenged;
+    }
+
+    return response;
   };
 }

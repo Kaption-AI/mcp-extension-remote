@@ -16,6 +16,7 @@ export interface Env {
   EPHEMERAL_STATE_SECRET: string;
   BUILD_HASH: string;
   COMMIT_SHA: string;
+  OPENAI_APPS_CHALLENGE_TOKEN?: string;
 }
 
 export interface OTPRecord {

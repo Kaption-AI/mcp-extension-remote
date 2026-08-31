@@ -13,8 +13,10 @@
   "compatibility_date": "2025-10-26",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Custom domain
+  // Custom domains. mcp.kaptionai.com is canonical; mcp-ext is retained for
+  // existing MCP clients and extension builds.
   "routes": [
+    { "pattern": "mcp.kaptionai.com", "custom_domain": true },
     { "pattern": "mcp-ext.kaptionai.com", "custom_domain": true }
   ],
 
@@ -75,4 +77,5 @@
   // - JWT_SECRET: Shared JWT signing secret (same as rest-api, schedule, metadata workers)
   // - PHONE_REF_SECRET: HMAC secret for durable accountRef derivation
   // - EPHEMERAL_STATE_SECRET: Encryption secret for short-lived UI/session state
+  // - OPENAI_APPS_CHALLENGE_TOKEN: Exact token issued by the OpenAI plugin portal
 }

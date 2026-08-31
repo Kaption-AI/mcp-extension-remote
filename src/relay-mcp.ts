@@ -24,9 +24,18 @@ export class RelayMCP extends McpAgent<Env> {
       this.server.registerTool(
         tool.name,
         {
+          title: tool.title,
           description: tool.description,
           inputSchema: tool.inputSchema,
           annotations: tool.annotations,
+          // The installed MCP SDK predates the top-level securitySchemes
+          // field, so mirror it in _meta for ChatGPT compatibility. Endpoint
+          // authentication is still enforced by OAuthProvider.
+          _meta: {
+            securitySchemes: [{ type: "oauth2", scopes: ["kaption:access"] }],
+            "openai/toolInvocation/invoking": `Running ${tool.title ?? tool.name}…`,
+            "openai/toolInvocation/invoked": `${tool.title ?? tool.name} complete`,
+          },
         },
         async (args: Record<string, unknown>) => {
           const accountRef = this.getAccountRef();

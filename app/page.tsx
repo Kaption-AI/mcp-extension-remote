@@ -9,7 +9,7 @@ const CHROME_URL = "https://chromewebstore.google.com/detail/audio-to-text-in-wh
 const EDGE_URL = "https://microsoftedge.microsoft.com/addons/detail/audio-to-text-in-whatsapp/gdgohknecjblcncbokbhpaebebmeiidk";
 const FIREFOX_URL = "https://addons.mozilla.org/firefox/addon/audio-to-text-for-whatsapp-web/";
 const LOCAL_MCP_DOCS = "https://www.npmjs.com/package/@kaptionai/mcp-extension";
-const TRANSPARENCY_URL = "https://mcp-ext.kaptionai.com/transparency/latest";
+const TRANSPARENCY_URL = "https://mcp.kaptionai.com/transparency/latest";
 
 export default function LandingPage() {
   const [lang, setLangState] = useState("en");

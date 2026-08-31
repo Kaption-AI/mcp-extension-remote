@@ -4,7 +4,7 @@ Kaption MCP Cloud Bridge is built and deployed exclusively through GitHub Action
 
 ## Reporting a Vulnerability
 
-Found a security issue in the relay (`@kaptionai/mcp-remote`, live at `mcp-ext.kaptionai.com`)? Please report it privately:
+Found a security issue in the relay (`@kaptionai/mcp-remote`, live at `mcp.kaptionai.com`)? Please report it privately:
 
 - **Email:** security@kaptionai.com
 - Include a description, reproduction steps, affected endpoint, and impact.
@@ -30,14 +30,14 @@ Local deploys are blocked — `npm run deploy` fails outside CI.
 
 ```bash
 # Latest deployment
-curl -s https://mcp-ext.kaptionai.com/transparency/latest | jq .
+curl -s https://mcp.kaptionai.com/transparency/latest | jq .
 
 # Verify chain integrity (all hashes link correctly)
-curl -s https://mcp-ext.kaptionai.com/transparency/verify | jq .
+curl -s https://mcp.kaptionai.com/transparency/verify | jq .
 # → { "valid": true, "entries": N }
 
 # Full history
-curl -s https://mcp-ext.kaptionai.com/transparency | jq .
+curl -s https://mcp.kaptionai.com/transparency | jq .
 ```
 
 ### 2. Verify the Sigstore signature
@@ -49,7 +49,7 @@ Download the signed artifact from the GitHub Actions run and verify with `cosign
 brew install cosign  # or: go install github.com/sigstore/cosign/v2/cmd/cosign@latest
 
 # Get the latest commit SHA
-COMMIT=$(curl -s https://mcp-ext.kaptionai.com/transparency/latest | jq -r '.event.commitSha')
+COMMIT=$(curl -s https://mcp.kaptionai.com/transparency/latest | jq -r '.event.commitSha')
 
 # Download the artifact (requires GitHub CLI)
 RUN_ID=$(gh -R Kaption-AI/mcp-extension-remote run list --commit $COMMIT --json databaseId -q '.[0].databaseId')

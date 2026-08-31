@@ -11,7 +11,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp-ext.kaptionai.com/mcp"
+      "url": "https://mcp.kaptionai.com/mcp"
     }
   ]
 }

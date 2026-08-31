@@ -2,7 +2,7 @@
 
 Cloud MCP relay for WhatsApp — lets AI assistants (Claude, ChatGPT, Cursor, etc.) interact with your WhatsApp conversations through the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-**Live at:** [mcp-ext.kaptionai.com](https://mcp-ext.kaptionai.com)
+**Live at:** [mcp.kaptionai.com](https://mcp.kaptionai.com)
 
 The relay **cannot read your messages**. It forwards MCP tool calls between the AI client and the Kaption browser extension, which processes everything locally in your browser. The code is open source — verify it yourself.
 
@@ -15,7 +15,7 @@ AI Client (Claude/ChatGPT/Cursor)
     ▼
 ┌─────────────────────────────────────┐
 │  Cloudflare Worker                  │
-│  mcp-ext.kaptionai.com             │
+│  mcp.kaptionai.com                 │
 │                                     │
 │  ┌────────────┐  ┌──────────────┐  │
 │  │ OAuthProv  │  │ Next.js      │  │
@@ -131,13 +131,13 @@ To ship a change: open a PR → review + CI green → merge to `main` → Action
 
 ```bash
 # 1. Check the transparency chain
-curl -s https://mcp-ext.kaptionai.com/transparency/latest | jq .
+curl -s https://mcp.kaptionai.com/transparency/latest | jq .
 
 # 2. Verify chain integrity
-curl -s https://mcp-ext.kaptionai.com/transparency/verify | jq .
+curl -s https://mcp.kaptionai.com/transparency/verify | jq .
 
 # 3. Verify Sigstore signature (requires cosign)
-COMMIT=$(curl -s https://mcp-ext.kaptionai.com/transparency/latest | jq -r '.event.commitSha')
+COMMIT=$(curl -s https://mcp.kaptionai.com/transparency/latest | jq -r '.event.commitSha')
 cosign verify-blob \
   --bundle worker.js.sigstore.json \
   --certificate-identity-regexp "https://github.com/Kaption-AI/mcp-extension-remote/.*" \

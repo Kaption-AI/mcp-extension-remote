@@ -16,6 +16,7 @@ export interface ToolAnnotations {
 
 export interface ToolDefinition {
   name: string;
+  title?: string;
   description: string;
   inputSchema: z.ZodType;
   annotations?: ToolAnnotations;
@@ -421,33 +422,57 @@ export const TOOLS: ToolDefinition[] = [
   },
 ];
 
-// mcp.TOOLS — safety annotations advertised to MCP clients (user-in-the-loop hints).
+// mcp.TOOLS — human-readable titles and safety annotations advertised to MCP
+// clients. These values are also snapshotted by the OpenAI plugin review flow.
+const TOOL_TITLES: Record<string, string> = {
+  query: "Search WhatsApp",
+  summarize_conversation: "Summarize conversation",
+  manage_labels: "Manage business labels",
+  manage_notes: "Manage contact notes",
+  download_media: "Download message media",
+  manage_chat: "Manage chat",
+  manage_reminders: "Manage reminders",
+  manage_scheduled_messages: "Manage scheduled messages",
+  manage_lists: "Manage chat lists",
+  list_contacts: "List contacts",
+  get_contact: "Get contact",
+  get_contact_groups: "List contact groups",
+  list_groups: "List groups",
+  get_group: "Get group",
+  export_contacts: "Export contacts",
+  get_api_info: "Get local API information",
+  get_analytics: "Analyze WhatsApp activity",
+};
+
+// Safety annotations use OpenAI's review definitions:
 //   readOnlyHint    : tool does not modify state (pure read).
 //   destructiveHint : may perform destructive/irreversible updates
 //                     (delete, or a scheduled/deferred WhatsApp send).
 //   idempotentHint  : repeating the call with the same args is a no-op.
-//   openWorldHint   : touches the live WhatsApp network vs. the local cache.
+//   openWorldHint   : can change state visible to an external recipient or the
+//                     public internet. Reading remote/private data is false.
 const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  query: { readOnlyHint: true, openWorldHint: true },
-  summarize_conversation: { readOnlyHint: true, openWorldHint: true },
-  manage_labels: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-  manage_notes: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-  download_media: { readOnlyHint: true, openWorldHint: true },
-  manage_chat: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-  manage_reminders: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  query: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  summarize_conversation: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  manage_labels: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  manage_notes: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  download_media: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  manage_chat: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  manage_reminders: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   manage_scheduled_messages: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-  manage_lists: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-  list_contacts: { readOnlyHint: true, openWorldHint: false },
-  get_contact: { readOnlyHint: true, openWorldHint: false },
-  get_contact_groups: { readOnlyHint: true, openWorldHint: false },
-  list_groups: { readOnlyHint: true, openWorldHint: false },
-  get_group: { readOnlyHint: true, openWorldHint: true },
-  export_contacts: { readOnlyHint: true, openWorldHint: false },
-  get_api_info: { readOnlyHint: true, openWorldHint: false },
-  get_analytics: { readOnlyHint: true, openWorldHint: true },
+  manage_lists: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  list_contacts: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_contact: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_contact_groups: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  list_groups: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_group: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  export_contacts: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_api_info: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_analytics: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };
 
 for (const tool of TOOLS) {
+  tool.title = TOOL_TITLES[tool.name];
   tool.annotations = TOOL_ANNOTATIONS[tool.name];
 }
 
@@ -463,12 +488,14 @@ export function getToolByName(name: string): ToolDefinition | undefined {
  */
 export function getToolsForMCP(): Array<{
   name: string;
+  title?: string;
   description: string;
   inputSchema: Record<string, unknown>;
   annotations?: ToolAnnotations;
 }> {
   return TOOLS.map((tool) => ({
     name: tool.name,
+    title: tool.title,
     description: tool.description,
     inputSchema: zodToJsonSchema(tool.inputSchema),
     annotations: tool.annotations,
