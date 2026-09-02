@@ -790,6 +790,7 @@ describe("OAuth redirect URI allowlist (comprehensive)", () => {
     "https://cursor.com/callback",
     "https://www.cursor.com/callback",
     "https://kaptionai.com/callback",
+    "https://mcp.kaptionai.com/callback",
     "https://mcp-ext.kaptionai.com/callback",
     "https://windsurf.com/oauth",
     "https://ide.windsurf.com/callback",

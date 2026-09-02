@@ -173,7 +173,7 @@ jobs:
           fi
 
           VERSION=$(node -p "require('./package.json').version")
-          curl -sf -X POST https://mcp-ext.kaptionai.com/transparency/append \
+          curl -sf -X POST https://mcp.kaptionai.com/transparency/append \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{

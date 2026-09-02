@@ -32,7 +32,7 @@ jobs:
           OFFSET=0
           : > chain_pages.ndjson
           while true; do
-            PAGE=$(curl -sf "https://mcp-ext.kaptionai.com/transparency?offset=$OFFSET&limit=100")
+            PAGE=$(curl -sf "https://mcp.kaptionai.com/transparency?offset=$OFFSET&limit=100")
             COUNT=$(echo "$PAGE" | python3 -c "import json,sys;print(len(json.load(sys.stdin).get('entries',[])))")
             TOTAL=$(echo "$PAGE" | python3 -c "import json,sys;print(json.load(sys.stdin).get('total',0))")
             if [ "$COUNT" = "0" ]; then break; fi
@@ -56,7 +56,7 @@ jobs:
 
       - name: Verify chain integrity
         run: |
-          RESULT=$(curl -sf https://mcp-ext.kaptionai.com/transparency/verify)
+          RESULT=$(curl -sf https://mcp.kaptionai.com/transparency/verify)
           echo "$RESULT"
           VALID=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('valid', False))")
           if [ "$VALID" != "True" ]; then
@@ -81,7 +81,7 @@ jobs:
             curl -sf -X POST "$SLACK_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
               -d '{
-                "text": "🚨 *DEPLOYMENT INTEGRITY ALERT* — mcp-ext.kaptionai.com\nA Cloudflare deployment version exists with no matching Rekor attestation in the transparency chain.\nInvestigate: https://github.com/Kaption-AI/mcp-extension-remote/actions"
+                "text": "🚨 *DEPLOYMENT INTEGRITY ALERT* — mcp.kaptionai.com\nA Cloudflare deployment version exists with no matching Rekor attestation in the transparency chain.\nInvestigate: https://github.com/Kaption-AI/mcp-extension-remote/actions"
               }'
             echo "Slack alert sent."
           else

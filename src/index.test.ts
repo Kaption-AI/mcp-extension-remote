@@ -119,7 +119,7 @@ describe("createFetchHandler authorize login hint flow", () => {
     const { ctx, flush } = createExecutionContext();
 
     await handler(
-      new Request("https://mcp-ext.kaptionai.com/authorize", {
+      new Request("https://mcp.kaptionai.com/authorize", {
         headers: { "cf-connecting-ip": "1.2.3.4" },
       }),
       env,
@@ -155,7 +155,7 @@ describe("createFetchHandler authorize login hint flow", () => {
     const { ctx, flush } = createExecutionContext();
 
     await handler(
-      new Request("https://mcp-ext.kaptionai.com/authorize", {
+      new Request("https://mcp.kaptionai.com/authorize", {
         headers: { "cf-connecting-ip": "1.2.3.4" },
       }),
       env,
@@ -177,7 +177,7 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     const { ctx } = createExecutionContext();
 
     const response = await handler(
-      new Request("https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource"),
+      new Request("https://mcp.kaptionai.com/.well-known/oauth-protected-resource"),
       createEnv(),
       ctx,
     );
@@ -197,7 +197,7 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     const { ctx } = createExecutionContext();
 
     const response = await handler(
-      new Request("https://mcp-ext.kaptionai.com/.well-known/openai-apps-challenge"),
+      new Request("https://mcp.kaptionai.com/.well-known/openai-apps-challenge"),
       createEnv({ OPENAI_APPS_CHALLENGE_TOKEN: "portal-token-123" }),
       ctx,
     );
@@ -214,7 +214,7 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     const { ctx } = createExecutionContext();
 
     const response = await handler(
-      new Request("https://mcp-ext.kaptionai.com/.well-known/openai-apps-challenge"),
+      new Request("https://mcp.kaptionai.com/.well-known/openai-apps-challenge"),
       createEnv(),
       ctx,
     );
@@ -229,14 +229,14 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     const { ctx } = createExecutionContext();
 
     const response = await handler(
-      new Request("https://mcp-ext.kaptionai.com/mcp"),
+      new Request("https://mcp.kaptionai.com/mcp"),
       createEnv(),
       ctx,
     );
 
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toContain(
-      'resource_metadata="https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource/mcp"',
+      'resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp"',
     );
   });
 });

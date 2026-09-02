@@ -243,6 +243,10 @@ describe("isAllowedRedirectUri", () => {
   });
 
   it("allows kaptionai.com", () => {
+    expect(isAllowedRedirectUri("https://mcp.kaptionai.com/callback")).toBe(true);
+  });
+
+  it("keeps the legacy Kaption MCP hostname compatible", () => {
     expect(isAllowedRedirectUri("https://mcp-ext.kaptionai.com/callback")).toBe(true);
   });
 
