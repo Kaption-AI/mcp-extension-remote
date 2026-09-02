@@ -239,6 +239,15 @@ scripts/
 | `OPENAI_REVIEW_PASSWORD_SHA256` | Lowercase SHA-256 hex digest of the high-entropy reviewer password |
 | `OPENAI_REVIEW_PHONE` | Phone number used as the dedicated review username and to derive the synthetic account's opaque reference |
 
+The three `OPENAI_*` values are also configured as GitHub Actions repository
+secrets. Add all three together, then run the manual **Test, Build & Deploy**
+workflow. CI writes them to an ephemeral mode-`0600` file and passes that file
+to `wrangler deploy --secrets-file`, so the review configuration ships in the
+same signed, attested Worker version as the code. The workflow fails closed if
+only part of the three-value set is present and deletes the temporary file
+immediately after deployment. Existing Worker secrets not listed in that file
+are preserved.
+
 ## Related Projects
 
 - **[Kaption Extension](https://kaptionai.com/extension)** — Chrome/Edge/Firefox browser extension (the other side of the relay)

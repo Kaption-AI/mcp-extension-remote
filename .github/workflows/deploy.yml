@@ -3,6 +3,7 @@ name: Test, Build & Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
   schedule:
     - cron: '0 6 * * *' # daily heartbeat at 6am UTC
 
@@ -100,13 +101,29 @@ jobs:
             .open-next/build-manifest.json
             .open-next/build-manifest.sigstore.json
 
+      # OpenAI issues its domain challenge token only after a draft exists.
+      # Keep all review values out of git and deploy them atomically in the
+      # same signed Worker version as the code. An empty file preserves any
+      # values already configured on the Worker; a partial set fails closed.
+      - name: Prepare optional OpenAI review secrets
+        env:
+          OPENAI_APPS_CHALLENGE_TOKEN: ${{ secrets.OPENAI_APPS_CHALLENGE_TOKEN }}
+          OPENAI_REVIEW_PHONE: ${{ secrets.OPENAI_REVIEW_PHONE }}
+          OPENAI_REVIEW_PASSWORD_SHA256: ${{ secrets.OPENAI_REVIEW_PASSWORD_SHA256 }}
+        run: node scripts/create-openai-review-secrets.mjs /tmp/openai-review-secrets.json
+
       # ─── DEPLOY ────────────────────────────────────────────────────
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+          wranglerVersion: "4.128.0"
+          command: deploy --secrets-file /tmp/openai-review-secrets.json
+
+      - name: Remove temporary review secrets file
+        if: always()
+        run: rm -f /tmp/openai-review-secrets.json
 
       # ─── POST-DEPLOY: Fetch CF version, attest, record ────────────
       - name: Post-deploy attestation
