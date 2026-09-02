@@ -5,9 +5,9 @@
  *
  * Modes:
  *   - In CI ($CI=true): Reads COMMIT_SHA from $GITHUB_SHA or `git rev-parse HEAD`.
- *     If .open-next/worker.js exists, computes the SHA-256 BUILD_HASH from it;
- *     otherwise leaves BUILD_HASH=`pending-build` (CI re-runs this script after
- *     `build:worker` to finalize it). Writes a deploy-ready `wrangler.jsonc`.
+ *     If .open-next/worker.js exists, requires the SHA-256 BUILD_HASH produced
+ *     by `create-build-manifest.mjs`; otherwise leaves BUILD_HASH=`pending-build`
+ *     for the pre-build pass. Writes a deploy-ready `wrangler.jsonc`.
  *
  *   - Local dev ($KAPTIONAI_LOCAL_DEV=1): Writes `wrangler.jsonc` with
  *     placeholder values intact (`local-dev` markers). Sufficient for
@@ -22,7 +22,6 @@
  * entry to the public transparency chain at https://mcp.kaptionai.com/transparency.
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 
 const TEMPLATE = "wrangler.template.jsonc";
@@ -70,11 +69,14 @@ let buildHash;
 let commitSha;
 
 if (isCI) {
-  // Two-pass: pre-build pass has no worker.js yet, post-build pass does.
+  // Two-pass: pre-build has no bundle and uses a placeholder. Post-build must
+  // receive the full OpenNext manifest hash computed by the workflow.
   if (existsSync(WORKER_BUNDLE)) {
-    buildHash = createHash("sha256")
-      .update(readFileSync(WORKER_BUNDLE))
-      .digest("hex");
+    buildHash = process.env.BUILD_HASH?.trim();
+    if (!buildHash || !/^[a-f0-9]{64}$/.test(buildHash)) {
+      console.error("Error: a valid BUILD_HASH from create-build-manifest.mjs is required post-build.");
+      process.exit(1);
+    }
   } else {
     buildHash = "pending-build";
   }

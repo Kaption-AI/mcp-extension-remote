@@ -51,9 +51,9 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Compute build hash
+      - name: Compute full build manifest and hash
         run: |
-          BUILD_HASH=$(shasum -a 256 .open-next/worker.js | cut -d' ' -f1)
+          BUILD_HASH=$(node scripts/create-build-manifest.mjs .open-next .open-next/build-manifest.json)
           echo "BUILD_HASH=$BUILD_HASH" >> $GITHUB_ENV
           echo "Build SHA-256: $BUILD_HASH"
 
@@ -65,6 +65,7 @@ jobs:
         env:
           CI: "true"
           GITHUB_SHA: ${{ github.sha }}
+          BUILD_HASH: ${{ env.BUILD_HASH }}
 
       # ─── PRE-DEPLOY: Sign the bundle and record in Rekor ───────────
       - name: Install cosign
@@ -74,13 +75,13 @@ jobs:
         id: pre_sign
         run: |
           cosign sign-blob \
-            --bundle .open-next/worker.js.sigstore.json \
+            --bundle .open-next/build-manifest.sigstore.json \
             --yes \
-            .open-next/worker.js
+            .open-next/build-manifest.json
 
           PRE_REKOR_INDEX=$(python3 -c "
           import json, sys
-          b = json.load(open('.open-next/worker.js.sigstore.json'))
+          b = json.load(open('.open-next/build-manifest.sigstore.json'))
           entries = b.get('verificationMaterial', {}).get('tlogEntries', [{}])
           print(entries[0].get('logIndex', 'unknown'))
           " 2>/dev/null || echo "unknown")
@@ -95,7 +96,9 @@ jobs:
           name: signed-worker-${{ github.sha }}
           path: |
             .open-next/worker.js
-            .open-next/worker.js.sigstore.json
+            .open-next/next-handler.js
+            .open-next/build-manifest.json
+            .open-next/build-manifest.sigstore.json
 
       # ─── DEPLOY ────────────────────────────────────────────────────
       - name: Deploy to Cloudflare
@@ -126,7 +129,7 @@ jobs:
           echo "CF version: $CF_VERSION"
 
           # Re-hash to confirm nothing changed
-          POST_HASH=$(shasum -a 256 .open-next/worker.js | cut -d' ' -f1)
+          POST_HASH=$(node scripts/create-build-manifest.mjs .open-next .open-next/build-manifest.json)
           if [ "$POST_HASH" != "${{ env.BUILD_HASH }}" ]; then
             echo "::error::BUILD HASH MISMATCH! Pre=${{ env.BUILD_HASH }} Post=$POST_HASH"
             exit 1

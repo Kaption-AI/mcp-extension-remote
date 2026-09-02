@@ -114,8 +114,8 @@ GitHub Actions (push to main)
     │
     ├─ 1. Run tests
     ├─ 2. Build worker (OpenNext + wrap)
-    ├─ 3. SHA-256 hash the bundle
-    ├─ 4. Pre-deploy: Sigstore sign → Rekor log
+    ├─ 3. SHA-256 manifest every generated code and asset file
+    ├─ 4. Pre-deploy: Sigstore sign the manifest → Rekor log
     ├─ 5. Deploy to Cloudflare
     ├─ 6. Post-deploy: verify hash unchanged, sign attestation → Rekor
     └─ 7. Append to transparency chain (hash-linked)
@@ -146,10 +146,10 @@ curl -s https://mcp.kaptionai.com/transparency/verify | jq .
 # 3. Verify Sigstore signature (requires cosign)
 COMMIT=$(curl -s https://mcp.kaptionai.com/transparency/latest | jq -r '.event.commitSha')
 cosign verify-blob \
-  --bundle worker.js.sigstore.json \
+  --bundle build-manifest.sigstore.json \
   --certificate-identity-regexp "https://github.com/Kaption-AI/mcp-extension-remote/.*" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  worker.js
+  build-manifest.json
 ```
 
 ## API Endpoints

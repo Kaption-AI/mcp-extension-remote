@@ -57,15 +57,16 @@ gh -R Kaption-AI/mcp-extension-remote run download $RUN_ID -n "signed-worker-$CO
 
 # Verify the signature
 cosign verify-blob \
-  --bundle /tmp/verify/worker.js.sigstore.json \
+  --bundle /tmp/verify/build-manifest.sigstore.json \
   --certificate-identity-regexp "https://github.com/Kaption-AI/mcp-extension-remote/.*" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  /tmp/verify/worker.js
+  /tmp/verify/build-manifest.json
 # → Verified OK
 ```
 
 ### 3. What the signature proves
 
+- The manifest covers every generated OpenNext code, cache, and asset file
 - The worker was built from the exact commit shown in the transparency chain
 - It was built by GitHub Actions (not a developer's machine)
 - The workflow file (`deploy.yml`) in the `Kaption-AI/mcp-extension-remote` repo produced it
