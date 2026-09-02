@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { TOOLS, zodToJsonSchema } from "./tools";
+import { CLOUD_TOOLS, TOOLS, zodToJsonSchema } from "./tools";
 import {
   validateJwt,
   extractPhoneFromJwt,
@@ -51,6 +51,11 @@ describe("Tool registration", () => {
 
   it("exports exactly 17 tools", () => {
     expect(TOOLS).toHaveLength(17);
+  });
+
+  it("keeps local API credentials off the public cloud tool surface", () => {
+    expect(CLOUD_TOOLS).toHaveLength(16);
+    expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 
   it("exports all expected tool names", () => {

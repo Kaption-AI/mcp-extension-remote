@@ -1,0 +1,272 @@
+{
+  "$schema": "https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Kaption AI",
+    "subtitle": "Work with WhatsApp chats",
+    "description": "Kaption AI connects ChatGPT to the user's Kaption browser extension to search and summarize WhatsApp conversations, review transcribed voice notes, inspect contacts and groups, analyze communication patterns, and organize chats, reminders, labels, lists, and scheduled messages.",
+    "category": "PRODUCTIVITY"
+  },
+  "tools": {
+    "query": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves user-authorized WhatsApp conversations, messages, transcriptions, contacts, labels, communities, and account sessions without changing them.",
+        "open_world_justification": "Only reads the user's private WhatsApp data and does not publish or send anything.",
+        "destructive_justification": "Does not delete, overwrite, revoke, or otherwise change WhatsApp data."
+      }
+    },
+    "summarize_conversation": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "May generate and cache a new private conversation summary when no cached summary exists.",
+        "open_world_justification": "The generated summary remains private and is not sent to a WhatsApp recipient or published publicly.",
+        "destructive_justification": "Generating or refreshing a summary does not delete or irreversibly overwrite user content."
+      }
+    },
+    "manage_labels": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates, assigns, removes, or deletes labels in the user's WhatsApp Business account.",
+        "open_world_justification": "Label changes are private organization state and are not messages or public content.",
+        "destructive_justification": "Can delete a label or remove it from selected conversations, which may not be automatically recoverable."
+      }
+    },
+    "manage_notes": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Can write or replace a private WhatsApp Business note for a selected contact.",
+        "open_world_justification": "Contact notes remain private to the user's WhatsApp Business workspace.",
+        "destructive_justification": "Setting a note can overwrite prior note content that may not be recoverable."
+      }
+    },
+    "download_media": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves media from one explicitly identified WhatsApp message without modifying the message or file.",
+        "open_world_justification": "Returns private media to the authenticated user and does not publish it or send it to another recipient.",
+        "destructive_justification": "Does not delete, overwrite, or change the selected media or conversation."
+      }
+    },
+    "manage_chat": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Changes private chat state such as archive, unread, pin, mute, and draft values.",
+        "open_world_justification": "It cannot send a message and only changes the authenticated user's private WhatsApp state.",
+        "destructive_justification": "Can clear or overwrite a draft and change chat state, including operations that may not be automatically reversible."
+      }
+    },
+    "manage_reminders": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates, updates, completes, reopens, or deletes the user's private Kaption reminders.",
+        "open_world_justification": "Reminder changes remain private and do not create public content or contact another person.",
+        "destructive_justification": "Can delete a reminder, which is not automatically recoverable."
+      }
+    },
+    "manage_scheduled_messages": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates, updates, or deletes scheduled-message records and can cause a message to be sent later.",
+        "open_world_justification": "A scheduled message is delivered through WhatsApp to an external recipient at the selected time.",
+        "destructive_justification": "Sending a scheduled WhatsApp message is irreversible after delivery, and deleting a schedule is not automatically recoverable."
+      }
+    },
+    "manage_lists": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates, renames, edits, deletes, or changes membership of private WhatsApp chat lists.",
+        "open_world_justification": "Chat-list organization is private to the authenticated user's WhatsApp account.",
+        "destructive_justification": "Can delete a list or replace its membership, which may not be automatically recoverable."
+      }
+    },
+    "list_contacts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists and filters contacts from the user's encrypted local cache without changing contact records.",
+        "open_world_justification": "Only returns private contact data to the authenticated user and does not contact anyone.",
+        "destructive_justification": "Does not delete, overwrite, or modify contacts."
+      }
+    },
+    "get_contact": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Looks up one contact by WhatsApp identifier or phone number without changing it.",
+        "open_world_justification": "Returns private contact details only to the authenticated user and does not contact the person.",
+        "destructive_justification": "Does not delete, overwrite, or modify the contact."
+      }
+    },
+    "get_contact_groups": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads cached group-membership metadata for one selected contact without changing membership.",
+        "open_world_justification": "Only returns private group metadata and does not publish or send anything.",
+        "destructive_justification": "Does not add, remove, or modify contacts or groups."
+      }
+    },
+    "list_groups": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists WhatsApp groups from the user's local cache without changing group state.",
+        "open_world_justification": "Only returns the user's private group metadata and does not contact group members.",
+        "destructive_justification": "Does not create, delete, join, leave, or modify groups."
+      }
+    },
+    "get_group": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Refreshes and retrieves current metadata and participants for one WhatsApp group without changing membership or content.",
+        "open_world_justification": "The network refresh only reads private group state and does not send a message or publish content.",
+        "destructive_justification": "Does not add, remove, or modify group participants or messages."
+      }
+    },
+    "export_contacts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Formats user-authorized contact records as CSV or JSON without modifying those records.",
+        "open_world_justification": "Returns the private export to the authenticated user and does not upload or publish it elsewhere.",
+        "destructive_justification": "Does not delete, overwrite, or change any contacts."
+      }
+    },
+    "get_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes and returns analytics and exports from user-authorized WhatsApp data without changing source data.",
+        "open_world_justification": "Analytics remain private to the authenticated user and are not published or sent to another person.",
+        "destructive_justification": "Does not delete, overwrite, or modify messages, contacts, chats, or analytics source data."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Triage unread WhatsApp conversations without changing their read state.",
+      "user_prompt": "Show my unread WhatsApp conversations and summarize which ones need a reply.",
+      "file_attachment_urls": null,
+      "tools_triggered": "query",
+      "expected_output": "Returns unread, non-locked sample conversations with concise context and does not mark them as read or send messages.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Generate a summary for a selected sample conversation.",
+      "user_prompt": "Summarize my conversation with Review Project Alpha and list the open decisions.",
+      "file_attachment_urls": null,
+      "tools_triggered": "query, summarize_conversation",
+      "expected_output": "Finds the exact sample conversation and returns a concise summary with its outstanding decisions.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find transcribed voice notes about a known synthetic topic.",
+      "user_prompt": "Find the transcribed voice notes about the sample delivery date.",
+      "file_attachment_urls": null,
+      "tools_triggered": "query",
+      "expected_output": "Returns matching transcription text and identifies the source sample conversation without downloading unrelated media.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Compare activity and response times for the review account.",
+      "user_prompt": "Show my busiest WhatsApp chats in the last 30 days and compare their response times.",
+      "file_attachment_urls": null,
+      "tools_triggered": "get_analytics",
+      "expected_output": "Returns a bounded ranking and response-time comparison for the requested period using only the synthetic review data.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find and archive one explicitly named synthetic chat.",
+      "user_prompt": "Find the chat named Review Archive Fixture, then archive it.",
+      "file_attachment_urls": null,
+      "tools_triggered": "query, manage_chat",
+      "expected_output": "Resolves the exact sample chat, requests confirmation for the write, and reports that only the selected chat was archived.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not trigger for an unsupported immediate-send request.",
+      "user_prompt": "Send a WhatsApp message to Review Contact right now saying hello.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it has no immediate-send tool; the assistant should explain that limitation.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for an unrelated calendar request.",
+      "user_prompt": "What meetings do I have tomorrow?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because calendar access is outside its supported workflows.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for an unrelated email request.",
+      "user_prompt": "Find the latest email from Review Contact.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because email access is outside its supported workflows.",
+      "expected_output_url": null
+    }
+  ]
+}

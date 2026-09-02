@@ -27,6 +27,19 @@ vi.mock("@cloudflare/workers-oauth-provider", () => {
     }
 
     fetch(request: Request, env: any, ctx: any): Promise<Response> {
+      const url = new URL(request.url);
+      if (url.pathname.startsWith("/.well-known/oauth-protected-resource")) {
+        return Promise.resolve(Response.json(this.config.resourceMetadata));
+      }
+      if (this.config.apiHandlers[url.pathname]) {
+        return Promise.resolve(new Response("Unauthorized", {
+          status: 401,
+          headers: {
+            "WWW-Authenticate":
+              `Bearer realm="OAuth", resource_metadata="${url.origin}/.well-known/oauth-protected-resource${url.pathname}"`,
+          },
+        }));
+      }
       return this.config.defaultHandler.fetch(request, env, ctx);
     }
   }
@@ -171,7 +184,7 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      resource: "https://mcp.kaptionai.com",
+      resource: "https://mcp.kaptionai.com/mcp",
       authorization_servers: ["https://mcp.kaptionai.com"],
       scopes_supported: ["kaption:access"],
     });
@@ -223,7 +236,7 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
 
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toContain(
-      'resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource"',
+      'resource_metadata="https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource/mcp"',
     );
   });
 });

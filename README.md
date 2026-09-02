@@ -67,6 +67,7 @@ AI Client (Claude/ChatGPT/Cursor)
 | `/authorize` | GET | — | Next.js OTP form (HMAC-signed oauthReqInfo) |
 | `/authorize/send-otp` | POST | — | Next.js API route → rest-api |
 | `/authorize/verify` | GET/POST | — | Next.js OTP verify → OAuthProvider completeAuthorization |
+| `/authorize/reviewer-login` | POST | Static review credentials | OpenAI review-only OAuth completion for a synthetic account |
 | `/register` | POST | — | OAuthProvider (RFC 7591 dynamic client registration) |
 | `/token` | POST | — | OAuthProvider (token exchange) |
 | `/sse` | GET | OAuth token | RelayMCP DO (SSE transport) |
@@ -81,7 +82,7 @@ AI Client (Claude/ChatGPT/Cursor)
 
 ## MCP Tools
 
-10 tools forwarded to the extension (relay does not execute them):
+16 public tools are forwarded to the extension (the relay does not execute them):
 
 | Tool | Description |
 |------|-------------|
@@ -94,7 +95,13 @@ AI Client (Claude/ChatGPT/Cursor)
 | `manage_reminders` | Create/list/complete/delete personal reminders |
 | `manage_scheduled_messages` | Schedule messages for future delivery |
 | `manage_lists` | Manage personal chat lists (custom categories) |
-| `get_api_info` | Get REST API connection info |
+| `list_contacts`, `get_contact`, `get_contact_groups` | Read contacts and their group memberships |
+| `list_groups`, `get_group` | Read cached or live group metadata |
+| `export_contacts` | Export contacts as CSV or JSON |
+| `get_analytics` | Analyze WhatsApp activity, rankings, response times, and exports |
+
+`get_api_info` is local-only and is deliberately excluded from the cloud
+surface because it returns private REST connection credentials.
 
 ## Deployment Security
 
@@ -228,6 +235,10 @@ scripts/
 | `JWT_SECRET` | Shared JWT signing secret (same as rest-api, schedule, metadata workers) |
 | `PHONE_REF_SECRET` | HMAC secret used to derive opaque durable account references from phone numbers |
 | `EPHEMERAL_STATE_SECRET` | Encryption secret for short-lived login hints, verify tickets, and encrypted session phone payloads |
+| `OPENAI_APPS_CHALLENGE_TOKEN` | Exact domain-verification token issued by the OpenAI plugin portal |
+| `OPENAI_REVIEW_USERNAME` | Dedicated OpenAI reviewer username; reviewer access remains disabled when absent |
+| `OPENAI_REVIEW_PASSWORD_SHA256` | Lowercase SHA-256 hex digest of the high-entropy reviewer password |
+| `OPENAI_REVIEW_PHONE` | Phone number of the dedicated synthetic review account, used only to derive its opaque account reference |
 
 ## Related Projects
 

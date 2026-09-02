@@ -17,6 +17,9 @@ export interface Env {
   BUILD_HASH: string;
   COMMIT_SHA: string;
   OPENAI_APPS_CHALLENGE_TOKEN?: string;
+  OPENAI_REVIEW_USERNAME?: string;
+  OPENAI_REVIEW_PASSWORD_SHA256?: string;
+  OPENAI_REVIEW_PHONE?: string;
 }
 
 export interface OTPRecord {

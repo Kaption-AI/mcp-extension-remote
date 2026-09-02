@@ -26,6 +26,12 @@ export const VerifyOTPSchema = z.object({
   code: otpCode,
 });
 
+export const ReviewerLoginSchema = z.object({
+  username: z.string().min(1, "Username is required").max(128),
+  password: z.string().min(1, "Password is required").max(256),
+  oauthReqInfo: z.string().min(1, "Missing OAuth state"),
+});
+
 export const ExtSendOTPSchema = z.object({
   phone,
 });

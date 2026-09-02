@@ -78,4 +78,7 @@
   // - PHONE_REF_SECRET: HMAC secret for durable accountRef derivation
   // - EPHEMERAL_STATE_SECRET: Encryption secret for short-lived UI/session state
   // - OPENAI_APPS_CHALLENGE_TOKEN: Exact token issued by the OpenAI plugin portal
+  // - OPENAI_REVIEW_USERNAME: Dedicated OpenAI reviewer username
+  // - OPENAI_REVIEW_PASSWORD_SHA256: SHA-256 hex digest of reviewer password
+  // - OPENAI_REVIEW_PHONE: Dedicated synthetic review account phone number
 }

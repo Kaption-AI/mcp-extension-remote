@@ -5,7 +5,7 @@
 
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { TOOLS } from "./tools";
+import { CLOUD_TOOLS } from "./tools";
 import { scrubInlineMedia } from "./media-scrub";
 import type { Env } from "./types";
 
@@ -17,7 +17,7 @@ export class RelayMCP extends McpAgent<Env> {
 
   async init() {
     // mcp.CLOUD_RELAY.6 — registers same ten tools; relays to RelayRoom, never executes locally
-    for (const tool of TOOLS) {
+    for (const tool of CLOUD_TOOLS) {
       // Use registerTool() with explicit config object — server.tool() has
       // ambiguous overloads that misinterpret ZodObject schemas as annotations
       // (because ZodObject has _def so isZodRawShapeCompat returns false).

@@ -453,7 +453,7 @@ const TOOL_TITLES: Record<string, string> = {
 //                     public internet. Reading remote/private data is false.
 const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   query: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  summarize_conversation: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  summarize_conversation: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   manage_labels: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   manage_notes: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   download_media: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -475,6 +475,15 @@ for (const tool of TOOLS) {
   tool.title = TOOL_TITLES[tool.name];
   tool.annotations = TOOL_ANNOTATIONS[tool.name];
 }
+
+/**
+ * Public cloud tool surface. `get_api_info` is local-only because it returns
+ * the extension's private REST connection token and is never safe or useful
+ * to relay to a hosted MCP client.
+ */
+export const CLOUD_TOOLS: ToolDefinition[] = TOOLS.filter(
+  (tool) => tool.name !== "get_api_info",
+);
 
 /**
  * Get a tool definition by name

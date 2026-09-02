@@ -5,6 +5,7 @@ import {
   ExtSendOTPSchema,
   ExtVerifyOTPSchema,
   RevokeSessionSchema,
+  ReviewerLoginSchema,
   isAllowedRedirectUri,
 } from "./schemas";
 
@@ -73,6 +74,25 @@ describe("SendOTPSchema", () => {
   it("rejects missing oauthReqInfo", async () => {
     const result = await SendOTPSchema.safeParseAsync({ phone: "5491155551234" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("ReviewerLoginSchema", () => {
+  it("accepts bounded static reviewer credentials and signed OAuth state", async () => {
+    const result = await ReviewerLoginSchema.safeParseAsync({
+      username: "openai-review",
+      password: "high-entropy-password",
+      oauthReqInfo: "signed-state",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing credentials or OAuth state", async () => {
+    expect((await ReviewerLoginSchema.safeParseAsync({})).success).toBe(false);
+    expect((await ReviewerLoginSchema.safeParseAsync({
+      username: "openai-review",
+      password: "password",
+    })).success).toBe(false);
   });
 });
 
