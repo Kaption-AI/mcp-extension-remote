@@ -1,7 +1,7 @@
 /**
  * POST /authorize/reviewer-login — no-MFA access for OpenAI's review team.
  *
- * This path is disabled unless all three OPENAI_REVIEW_* secrets are present.
+ * This path is disabled unless both OPENAI_REVIEW_* secrets are present.
  * It grants access only to a dedicated synthetic-data WhatsApp account whose
  * Kaption extension is connected to the normal production relay.
  */
@@ -40,10 +40,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
-  const username = env.OPENAI_REVIEW_USERNAME?.trim();
   const passwordHash = env.OPENAI_REVIEW_PASSWORD_SHA256?.trim().toLowerCase();
   const phone = env.OPENAI_REVIEW_PHONE?.trim();
-  if (!username || !passwordHash || !phone || !/^[a-f0-9]{64}$/.test(passwordHash)) {
+  if (!passwordHash || !phone || !/^[a-f0-9]{64}$/.test(passwordHash)) {
     return Response.json({ error: "Reviewer access is not configured" }, { status: 404 });
   }
 
@@ -74,11 +73,11 @@ export async function POST(request: Request): Promise<Response> {
     expirationTtl: RATE_WINDOW_SECONDS,
   });
 
-  const submittedUsernameHash = await sha256Hex(parsed.data.username);
-  const configuredUsernameHash = await sha256Hex(username);
+  const submittedPhoneHash = await sha256Hex(parsed.data.phone);
+  const configuredPhoneHash = await sha256Hex(phone.replace(/\D/g, ""));
   const submittedPasswordHash = await sha256Hex(parsed.data.password);
   if (
-    !constantTimeEqual(submittedUsernameHash, configuredUsernameHash) ||
+    !constantTimeEqual(submittedPhoneHash, configuredPhoneHash) ||
     !constantTimeEqual(submittedPasswordHash, passwordHash)
   ) {
     return Response.json({ error: "Invalid reviewer credentials" }, { status: 401 });

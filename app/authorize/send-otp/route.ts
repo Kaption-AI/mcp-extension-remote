@@ -47,6 +47,20 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid phone number format" }, { status: 400 });
   }
 
+  // The dedicated synthetic review account uses a static password because
+  // OpenAI's reviewers cannot be required to complete SMS or OTP challenges.
+  // Ordinary users never see a reviewer-specific control: only the exact
+  // configured phone switches the existing form into password mode.
+  const reviewPhone = env.OPENAI_REVIEW_PHONE?.replace(/\D/g, "");
+  const reviewPasswordHash = env.OPENAI_REVIEW_PASSWORD_SHA256?.trim();
+  if (
+    reviewPhone &&
+    /^[a-fA-F0-9]{64}$/.test(reviewPasswordHash || "") &&
+    phone === reviewPhone
+  ) {
+    return Response.json({ ok: true, reviewPasswordRequired: true });
+  }
+
   // [M1] IP-based rate limiting
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {

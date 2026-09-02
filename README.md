@@ -67,7 +67,7 @@ AI Client (Claude/ChatGPT/Cursor)
 | `/authorize` | GET | — | Next.js OTP form (HMAC-signed oauthReqInfo) |
 | `/authorize/send-otp` | POST | — | Next.js API route → rest-api |
 | `/authorize/verify` | GET/POST | — | Next.js OTP verify → OAuthProvider completeAuthorization |
-| `/authorize/reviewer-login` | POST | Static review credentials | OpenAI review-only OAuth completion for a synthetic account |
+| `/authorize/reviewer-login` | POST | Static review credentials | Password completion for the configured synthetic review phone |
 | `/register` | POST | — | OAuthProvider (RFC 7591 dynamic client registration) |
 | `/token` | POST | — | OAuthProvider (token exchange) |
 | `/sse` | GET | OAuth token | RelayMCP DO (SSE transport) |
@@ -236,9 +236,8 @@ scripts/
 | `PHONE_REF_SECRET` | HMAC secret used to derive opaque durable account references from phone numbers |
 | `EPHEMERAL_STATE_SECRET` | Encryption secret for short-lived login hints, verify tickets, and encrypted session phone payloads |
 | `OPENAI_APPS_CHALLENGE_TOKEN` | Exact domain-verification token issued by the OpenAI plugin portal |
-| `OPENAI_REVIEW_USERNAME` | Dedicated OpenAI reviewer username; reviewer access remains disabled when absent |
 | `OPENAI_REVIEW_PASSWORD_SHA256` | Lowercase SHA-256 hex digest of the high-entropy reviewer password |
-| `OPENAI_REVIEW_PHONE` | Phone number of the dedicated synthetic review account, used only to derive its opaque account reference |
+| `OPENAI_REVIEW_PHONE` | Phone number used as the dedicated review username and to derive the synthetic account's opaque reference |
 
 ## Related Projects
 

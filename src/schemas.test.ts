@@ -80,7 +80,7 @@ describe("SendOTPSchema", () => {
 describe("ReviewerLoginSchema", () => {
   it("accepts bounded static reviewer credentials and signed OAuth state", async () => {
     const result = await ReviewerLoginSchema.safeParseAsync({
-      username: "openai-review",
+      phone: "15555550123",
       password: "high-entropy-password",
       oauthReqInfo: "signed-state",
     });
@@ -90,7 +90,7 @@ describe("ReviewerLoginSchema", () => {
   it("rejects missing credentials or OAuth state", async () => {
     expect((await ReviewerLoginSchema.safeParseAsync({})).success).toBe(false);
     expect((await ReviewerLoginSchema.safeParseAsync({
-      username: "openai-review",
+      phone: "15555550123",
       password: "password",
     })).success).toBe(false);
   });

@@ -8,10 +8,8 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
   const [phone, setPhone] = useState(loginHint);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [reviewUsername, setReviewUsername] = useState("");
   const [reviewPassword, setReviewPassword] = useState("");
-  const [reviewError, setReviewError] = useState("");
-  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewMode, setReviewMode] = useState(false);
 
   if (!oauthReqInfo) {
     return (
@@ -25,34 +23,6 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
     );
   }
 
-  async function handleReviewerSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setReviewLoading(true);
-    setReviewError("");
-
-    try {
-      const res = await fetch("/authorize/reviewer-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: reviewUsername,
-          password: reviewPassword,
-          oauthReqInfo,
-        }),
-      });
-      const data = (await res.json()) as { redirectTo?: string; error?: string };
-      if (res.ok && data.redirectTo) {
-        window.location.assign(data.redirectTo);
-        return;
-      }
-      setReviewError(data.error || "Reviewer sign-in failed");
-    } catch {
-      setReviewError("Network error. Try again.");
-    } finally {
-      setReviewLoading(false);
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -61,14 +31,31 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
     const normalized = phone.replace(/[\s\-\+\(\)]/g, "");
 
     try {
-      const res = await fetch("/authorize/send-otp", {
+      const res = await fetch(
+        reviewMode ? "/authorize/reviewer-login" : "/authorize/send-otp",
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: normalized, oauthReqInfo }),
+        body: JSON.stringify({
+          phone: normalized,
+          oauthReqInfo,
+          ...(reviewMode ? { password: reviewPassword } : {}),
+        }),
       });
-      const data = (await res.json()) as { ok?: boolean; verifyTicket?: string; error?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        verifyTicket?: string;
+        reviewPasswordRequired?: boolean;
+        redirectTo?: string;
+        error?: string;
+      };
 
-      if (data.ok && data.verifyTicket) {
+      if (res.ok && data.redirectTo) {
+        window.location.assign(data.redirectTo);
+      } else if (data.ok && data.reviewPasswordRequired) {
+        setReviewMode(true);
+        setLoading(false);
+      } else if (data.ok && data.verifyTicket) {
         router.push(
           `/authorize/verify?ticket=${encodeURIComponent(data.verifyTicket)}`,
         );
@@ -101,7 +88,11 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
           type="tel"
           id="phone"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => {
+            setPhone(e.target.value);
+            setReviewMode(false);
+            setReviewPassword("");
+          }}
           placeholder="1234567890"
           required
           autoComplete="tel"
@@ -111,6 +102,24 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
           Enter your full number without + or spaces
         </p>
 
+        {reviewMode && (
+          <>
+            <label htmlFor="review-password" className="block text-[13px] text-neutral-400 mb-1.5 mt-4">
+              Review account password
+            </label>
+            <input
+              id="review-password"
+              type="password"
+              value={reviewPassword}
+              onChange={(e) => setReviewPassword(e.target.value)}
+              required
+              autoFocus
+              autoComplete="current-password"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-base outline-none focus:border-green-500"
+            />
+          </>
+        )}
+
         {error && <p className="text-red-500 text-[13px] mt-2">{error}</p>}
 
         <button
@@ -118,49 +127,11 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
           disabled={loading}
           className="w-full py-3 rounded-lg border-none bg-green-500 text-neutral-950 font-semibold text-sm cursor-pointer mt-4 hover:bg-green-600 disabled:opacity-50 disabled:cursor-wait"
         >
-          {loading ? "Sending..." : "Send Verification Code"}
+          {loading
+            ? (reviewMode ? "Signing in..." : "Sending...")
+            : (reviewMode ? "Sign In" : "Send Verification Code")}
         </button>
       </form>
-
-      <details className="mt-6 border-t border-neutral-800 pt-5">
-        <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300">
-          OpenAI reviewer access
-        </summary>
-        <form onSubmit={handleReviewerSubmit} className="mt-4">
-          <label htmlFor="review-username" className="block text-[13px] text-neutral-400 mb-1.5">
-            Reviewer username
-          </label>
-          <input
-            id="review-username"
-            type="text"
-            value={reviewUsername}
-            onChange={(e) => setReviewUsername(e.target.value)}
-            required
-            autoComplete="username"
-            className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-base outline-none focus:border-green-500"
-          />
-          <label htmlFor="review-password" className="block text-[13px] text-neutral-400 mb-1.5 mt-3">
-            Reviewer password
-          </label>
-          <input
-            id="review-password"
-            type="password"
-            value={reviewPassword}
-            onChange={(e) => setReviewPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-base outline-none focus:border-green-500"
-          />
-          {reviewError && <p className="text-red-500 text-[13px] mt-2">{reviewError}</p>}
-          <button
-            type="submit"
-            disabled={reviewLoading}
-            className="w-full py-2.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-100 font-semibold text-sm cursor-pointer mt-4 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-wait"
-          >
-            {reviewLoading ? "Signing in..." : "Reviewer Sign In"}
-          </button>
-        </form>
-      </details>
     </div>
   );
 }

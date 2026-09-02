@@ -22,6 +22,11 @@ export interface ToolDefinition {
   annotations?: ToolAnnotations;
 }
 
+/** Stable structured-output envelope used by every public cloud tool. */
+export const PUBLIC_TOOL_OUTPUT_SCHEMA = z.object({
+  result: z.unknown().describe("The JSON-compatible result returned by the Kaption extension"),
+});
+
 export const TOOLS: ToolDefinition[] = [
   {
     name: "query",

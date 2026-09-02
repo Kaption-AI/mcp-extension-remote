@@ -5,7 +5,7 @@
 
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CLOUD_TOOLS } from "./tools";
+import { CLOUD_TOOLS, PUBLIC_TOOL_OUTPUT_SCHEMA } from "./tools";
 import { scrubInlineMedia } from "./media-scrub";
 import type { Env } from "./types";
 
@@ -27,6 +27,7 @@ export class RelayMCP extends McpAgent<Env> {
           title: tool.title,
           description: tool.description,
           inputSchema: tool.inputSchema,
+          outputSchema: PUBLIC_TOOL_OUTPUT_SCHEMA,
           annotations: tool.annotations,
           // The installed MCP SDK predates the top-level securitySchemes
           // field, so mirror it in _meta for ChatGPT compatibility. Endpoint
@@ -80,6 +81,7 @@ export class RelayMCP extends McpAgent<Env> {
                   text: typeof result === "string" ? result : JSON.stringify(result, null, 2),
                 },
               ],
+              structuredContent: { result },
             };
           } catch (err: any) {
             return {
