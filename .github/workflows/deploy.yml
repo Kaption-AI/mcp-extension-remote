@@ -114,12 +114,12 @@ jobs:
 
       # ─── DEPLOY ────────────────────────────────────────────────────
       - name: Deploy to Cloudflare
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.128.0"
-          command: deploy --secrets-file /tmp/openai-review-secrets.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          npx --yes --package wrangler@4.128.0 wrangler deploy
+          --secrets-file /tmp/openai-review-secrets.json
 
       - name: Remove temporary review secrets file
         if: always()
