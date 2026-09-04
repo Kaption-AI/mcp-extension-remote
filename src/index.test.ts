@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { encryptLoginHint } from "./otp";
-import { createFetchHandler } from "./index";
+import { applySecurityHeaders, createFetchHandler, getMcpOrigin } from "./index";
 import type { Env } from "./types";
 
 vi.mock("./relay-mcp", () => ({
@@ -170,7 +170,7 @@ describe("createFetchHandler authorize login hint flow", () => {
 });
 
 describe("createFetchHandler OpenAI plugin discovery", () => {
-  it("publishes RFC 9728 protected-resource metadata", async () => {
+  it("publishes canonical RFC 9728 protected-resource metadata", async () => {
     const handler = createFetchHandler({
       fetch: vi.fn(async () => new Response("unexpected")),
     } as any);
@@ -188,6 +188,32 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
       authorization_servers: ["https://mcp.kaptionai.com"],
       scopes_supported: ["kaption:access"],
     });
+  });
+
+  it("keeps RFC 9728 metadata on the legacy mcp-ext hostname", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("unexpected")),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource"),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      resource: "https://mcp-ext.kaptionai.com/mcp",
+      authorization_servers: ["https://mcp-ext.kaptionai.com"],
+      scopes_supported: ["kaption:access"],
+    });
+  });
+
+  it("never trusts an unknown request host as an OAuth issuer", () => {
+    expect(getMcpOrigin(new URL("https://attacker.example/mcp"))).toBe(
+      "https://mcp.kaptionai.com",
+    );
   });
 
   it("returns the exact configured OpenAI domain challenge token", async () => {
@@ -238,5 +264,32 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     expect(response.headers.get("www-authenticate")).toContain(
       'resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp"',
     );
+  });
+
+  it("keeps legacy-host 401 challenges and metadata on the same origin", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("Unauthorized", { status: 401 })),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp-ext.kaptionai.com/mcp"),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain(
+      'resource_metadata="https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource/mcp"',
+    );
+  });
+
+  it("allows browser connections to both production MCP domains", () => {
+    const headers = new Headers();
+    applySecurityHeaders(headers);
+    const csp = headers.get("content-security-policy") ?? "";
+
+    expect(csp).toContain("https://mcp.kaptionai.com");
+    expect(csp).toContain("https://mcp-ext.kaptionai.com");
   });
 });
