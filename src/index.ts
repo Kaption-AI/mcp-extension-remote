@@ -49,8 +49,20 @@ const mcpHandler = RelayMCP.serve("/mcp");
 const outerApp = new Hono<{ Bindings: Env }>();
 
 const MCP_ORIGIN = "https://mcp.kaptionai.com";
+const LEGACY_MCP_ORIGIN = "https://mcp-ext.kaptionai.com";
+const MCP_ORIGINS = new Set([MCP_ORIGIN, LEGACY_MCP_ORIGIN]);
 const OPENAI_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
-const MCP_RESOURCE = `${MCP_ORIGIN}/mcp`;
+
+/**
+ * Keep OAuth discovery bound to the hostname the client actually selected.
+ * Both production domains reach the same worker, but RFC 9728 clients compare
+ * the advertised protected resource with the URL they connected to. Unknown
+ * worker/dev hosts deliberately fall back to the canonical production origin
+ * rather than becoming attacker-controlled OAuth issuers through Host spoofing.
+ */
+export function getMcpOrigin(requestUrl: URL): string {
+  return MCP_ORIGINS.has(requestUrl.origin) ? requestUrl.origin : MCP_ORIGIN;
+}
 
 // OpenAI provides the token during portal domain verification. Keeping it in
 // an environment secret lets the well-known endpoint return exactly one token
@@ -294,7 +306,7 @@ export function applySecurityHeaders(headers: Headers): void {
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
       + "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
-      + "connect-src 'self' https://mcp.kaptionai.com",
+      + "connect-src 'self' https://mcp.kaptionai.com https://mcp-ext.kaptionai.com",
   );
 }
 
@@ -305,6 +317,7 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     ctx: ExecutionContext,
   ): Promise<Response> {
     const url = new URL(request.url);
+    const mcpOrigin = getMcpOrigin(url);
 
     // [L4] Propagate request ID
     const requestId =
@@ -352,13 +365,14 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       // Advertise registration endpoint in /.well-known/oauth-authorization-server
       // so MCP clients (Claude Code, Cursor, etc.) can auto-register
       clientRegistrationEndpoint: "/register",
-      // Pin OAuth grants and access-token audiences to the canonical MCP URL.
-      // The provider also serves RFC 9728 metadata and advertises it in 401
-      // challenges for both the origin-level and path-specific well-known URL.
+      // Pin OAuth grants and access-token audiences to the trusted MCP hostname
+      // the client selected. The provider also serves RFC 9728 metadata and
+      // advertises it in 401 challenges for both the origin-level and
+      // path-specific well-known URL.
       scopesSupported: ["kaption:access"],
       resourceMetadata: {
-        resource: MCP_RESOURCE,
-        authorization_servers: [MCP_ORIGIN],
+        resource: `${mcpOrigin}/mcp`,
+        authorization_servers: [mcpOrigin],
         scopes_supported: ["kaption:access"],
         bearer_methods_supported: ["header"],
         resource_name: "Kaption AI",
