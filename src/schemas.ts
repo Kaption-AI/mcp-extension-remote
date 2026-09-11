@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { CONNECTION_LIFETIMES } from "./connection-lifetime-options";
 
 /** Phone number: digits only, 8-15 chars after normalization */
 const phone = z
@@ -24,6 +25,8 @@ export const SendOTPSchema = z.object({
 export const VerifyOTPSchema = z.object({
   verifyTicket,
   code: otpCode,
+  // mcp.CLOUD_RELAY.9 — how long this AI app stays connected; absent = default
+  connectionLifetime: z.enum(CONNECTION_LIFETIMES).optional(),
 });
 
 export const ReviewerLoginSchema = z.object({

@@ -19,8 +19,14 @@
  * - [L4] x-request-id propagation
  */
 
-import OAuthProvider from "@cloudflare/workers-oauth-provider";
+import OAuthProvider, { getOAuthApi, type OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
+import {
+  connectionLifetimeCallback,
+  disconnect,
+  handleTokenRequest,
+  listConnections,
+} from "./connection-lifetime";
 import { RelayMCP } from "./relay-mcp";
 import { RelayRoom } from "./relay-room";
 import { DeploymentChainDO } from "./deployment-chain";
@@ -105,7 +111,7 @@ outerApp.post("/ws/auth", async (c) => {
       return c.text("Invalid JWT", 401);
     }
 
-    // Generate single-use token, store in KV with 30s TTL
+    // Generate single-use token, store in KV with a 60 s TTL
     const token = crypto.randomUUID();
     await c.env.OAUTH_KV.put(`ws-auth:${token}`, accountRef, { expirationTtl: 60 });
 
@@ -176,6 +182,60 @@ outerApp.get("/ws/ext", async (c) => {
   const roomId = c.env.RELAY_ROOM.idFromName(accountRefHint);
   const room = c.env.RELAY_ROOM.get(roomId);
   return room.fetch(c.req.raw);
+});
+
+// mcp.CLOUD_RELAY.12 — the extension's "Connected apps" list: the AI apps
+// connected to this WhatsApp account, and a way to disconnect one. The
+// extension calls these from its service worker with its Kaption JWT.
+const CONNECTIONS_CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization",
+  "Access-Control-Max-Age": "86400",
+};
+
+async function accountFromBearer(authorization: string | undefined, env: Env): Promise<string | null> {
+  if (!authorization?.startsWith("Bearer ")) return null;
+  const phone = await validateJwt(env.JWT_SECRET, authorization.slice(7));
+  if (!phone) return null;
+  return deriveAccountRef(phone, env.PHONE_REF_SECRET);
+}
+
+// getOAuthApi needs the provider's options but never serves pages itself.
+const HELPERS_ONLY_HANDLER = { fetch: async () => new Response("Not found", { status: 404 }) };
+
+function oauthApi(env: Env) {
+  return getOAuthApi(buildOAuthOptions(MCP_ORIGIN, HELPERS_ONLY_HANDLER), env);
+}
+
+outerApp.options("/ext/connections", () => new Response(null, { status: 204, headers: CONNECTIONS_CORS }));
+outerApp.options("/ext/connections/:grantId", () => new Response(null, { status: 204, headers: CONNECTIONS_CORS }));
+
+outerApp.get("/ext/connections", async (c) => {
+  const userId = await accountFromBearer(c.req.header("Authorization"), c.env);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401, CONNECTIONS_CORS);
+  try {
+    const connections = await listConnections(oauthApi(c.env), c.env.OAUTH_KV, userId);
+    return c.json({ connections }, 200, { ...CONNECTIONS_CORS, "Cache-Control": "no-store" });
+  } catch (e: any) {
+    console.error("[connections] list failed:", e?.message || e);
+    return c.json({ error: "Could not load connections" }, 500, CONNECTIONS_CORS);
+  }
+});
+
+outerApp.delete("/ext/connections/:grantId", async (c) => {
+  const userId = await accountFromBearer(c.req.header("Authorization"), c.env);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401, CONNECTIONS_CORS);
+  const grantId = c.req.param("grantId");
+  if (!/^[^\s:/]{1,256}$/.test(grantId)) return c.json({ error: "Invalid connection id" }, 400, CONNECTIONS_CORS);
+  try {
+    // revokeGrant is scoped to this account's own grants.
+    await disconnect(oauthApi(c.env), c.env.OAUTH_KV, userId, grantId);
+    return c.json({ ok: true }, 200, CONNECTIONS_CORS);
+  } catch (e: any) {
+    console.error("[connections] disconnect failed:", e?.message || e);
+    return c.json({ error: "Could not disconnect" }, 500, CONNECTIONS_CORS);
+  }
 });
 
 // Transparency endpoints
@@ -310,6 +370,47 @@ export function applySecurityHeaders(headers: Headers): void {
   );
 }
 
+/**
+ * OAuthProvider options — shared by the Worker and by the helpers that list
+ * and revoke connections, because getOAuthApi needs the very same options.
+ */
+export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): OAuthProviderOptions<Env> {
+  return {
+    apiHandlers: {
+      "/sse": sseHandler as any,
+      "/mcp": mcpHandler as any,
+    },
+    authorizeEndpoint: "/authorize",
+    tokenEndpoint: "/token",
+    // Advertise registration endpoint in /.well-known/oauth-authorization-server
+    // so MCP clients (Claude Code, Cursor, etc.) can auto-register
+    clientRegistrationEndpoint: "/register",
+    // Pin OAuth grants and access-token audiences to the trusted MCP hostname
+    // the client selected. The provider also serves RFC 9728 metadata and
+    // advertises it in 401 challenges for both the origin-level and
+    // path-specific well-known URL.
+    scopesSupported: ["kaption:access"],
+    resourceMetadata: {
+      resource: `${mcpOrigin}/mcp`,
+      authorization_servers: [mcpOrigin],
+      scopes_supported: ["kaption:access"],
+      bearer_methods_supported: ["header"],
+      resource_name: "Kaption AI",
+    },
+    // mcp.CLOUD_RELAY.9/10 — each connection lasts as long as the person chose
+    // on the consent page. The library enforces only the fixed one-year choice
+    // (a per-connection refreshTokenTTL set at the first token exchange);
+    // "90 days without use" and "until I disconnect it" are open-ended here and
+    // policed by connection-lifetime.ts. The library's own defaults — a refresh
+    // token dying 30 days after connecting however much it was used, and a
+    // client registration dying at 90 — are what forced people to reconnect.
+    refreshTokenTTL: undefined,
+    clientRegistrationTTL: undefined,
+    tokenExchangeCallback: connectionLifetimeCallback,
+    defaultHandler: defaultHandler as any,
+  } as OAuthProviderOptions<Env>;
+}
+
 export function createFetchHandler(nextHandler: WorkerHandler) {
   return async function fetch(
     request: Request,
@@ -335,6 +436,9 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     if (url.pathname.startsWith("/transparency")) {
       return outerApp.fetch(request, env, ctx);
     }
+    if (url.pathname === "/ext/connections" || url.pathname.startsWith("/ext/connections/")) {
+      return outerApp.fetch(request, env, ctx);
+    }
     // Store phone hint by IP for pre-filling the authorize form.
     // The /sse?phone=X request comes from the CLI; /authorize opens in the
     // browser on the same machine → same IP.  Short TTL, harmless if stale.
@@ -355,85 +459,75 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     // - Everything else → defaultHandler (Next.js)
     // mcp.CLOUD_RELAY.1 — OAuth 2.1 discovery, register, token endpoints
     // mcp.AUTH.2 — OAuthProvider validates bearer on every /sse + /mcp request
-    const oauthHandler = new OAuthProvider({
-      apiHandlers: {
-        "/sse": sseHandler as any,
-        "/mcp": mcpHandler as any,
-      },
-      authorizeEndpoint: "/authorize",
-      tokenEndpoint: "/token",
-      // Advertise registration endpoint in /.well-known/oauth-authorization-server
-      // so MCP clients (Claude Code, Cursor, etc.) can auto-register
-      clientRegistrationEndpoint: "/register",
-      // Pin OAuth grants and access-token audiences to the trusted MCP hostname
-      // the client selected. The provider also serves RFC 9728 metadata and
-      // advertises it in 401 challenges for both the origin-level and
-      // path-specific well-known URL.
-      scopesSupported: ["kaption:access"],
-      resourceMetadata: {
-        resource: `${mcpOrigin}/mcp`,
-        authorization_servers: [mcpOrigin],
-        scopes_supported: ["kaption:access"],
-        bearer_methods_supported: ["header"],
-        resource_name: "Kaption AI",
-      },
-      defaultHandler: {
-        async fetch(
-          req: Request,
-          oauthEnv: Env,
-          c: ExecutionContext,
-        ): Promise<Response> {
-          const reqUrl = new URL(req.url);
+    const oauthOptions = buildOAuthOptions(mcpOrigin, {
+      async fetch(
+        req: Request,
+        oauthEnv: Env,
+        c: ExecutionContext,
+      ): Promise<Response> {
+        const reqUrl = new URL(req.url);
 
-          // mcp.CLOUD_RELAY.2 — OTP phone flow; HMAC-signed oauthReqInfo
-          // env.OAUTH_PROVIDER (OAuthHelpers) is available here inside defaultHandler
-          let finalReq = req;
-          if (reqUrl.pathname === "/authorize" && req.method === "GET") {
-            try {
-              const oauthReqInfo =
-                await oauthEnv.OAUTH_PROVIDER.parseAuthRequest(req);
-              if (!oauthReqInfo.clientId) {
-                return new Response("Invalid authorization request", {
-                  status: 400,
-                });
-              }
-              const encoded = btoa(JSON.stringify(oauthReqInfo));
-              const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
-              const newUrl = new URL(req.url);
-              newUrl.searchParams.set("_oauthReqInfo", signed);
-
-              // Look up phone hint stored by /sse?phone= (same IP)
-              const ip = req.headers.get("cf-connecting-ip") || "unknown";
-              const encryptedHint = await env.OAUTH_KV.get(`login_hint:${ip}`);
-              if (encryptedHint) {
-                c.waitUntil(env.OAUTH_KV.delete(`login_hint:${ip}`));
-                const phoneHint = await decryptLoginHint(
-                  encryptedHint,
-                  env.EPHEMERAL_STATE_SECRET,
-                );
-                if (phoneHint) {
-                  newUrl.searchParams.set("_loginHint", phoneHint);
-                }
-              }
-
-              finalReq = new Request(newUrl.toString(), req);
-            } catch {
-              return new Response(
-                "Invalid authorization request. Register your MCP client first via POST /register.",
-                { status: 400 },
-              );
+        // mcp.CLOUD_RELAY.2 — OTP phone flow; HMAC-signed oauthReqInfo
+        // env.OAUTH_PROVIDER (OAuthHelpers) is available here inside defaultHandler
+        let finalReq = req;
+        if (reqUrl.pathname === "/authorize" && req.method === "GET") {
+          try {
+            const oauthReqInfo =
+              await oauthEnv.OAUTH_PROVIDER.parseAuthRequest(req);
+            if (!oauthReqInfo.clientId) {
+              return new Response("Invalid authorization request", {
+                status: 400,
+              });
             }
-          }
+            const encoded = btoa(JSON.stringify(oauthReqInfo));
+            const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
+            const newUrl = new URL(req.url);
+            newUrl.searchParams.set("_oauthReqInfo", signed);
 
-          const response = await nextHandler.fetch(finalReq, oauthEnv, c);
-          // [L4] Add request ID to response
-          const newResponse = new Response(response.body, response);
-          newResponse.headers.set("x-request-id", requestId);
-          applySecurityHeaders(newResponse.headers);
-          return newResponse;
-        },
-      } as any,
+            // Look up phone hint stored by /sse?phone= (same IP)
+            const ip = req.headers.get("cf-connecting-ip") || "unknown";
+            const encryptedHint = await env.OAUTH_KV.get(`login_hint:${ip}`);
+            if (encryptedHint) {
+              c.waitUntil(env.OAUTH_KV.delete(`login_hint:${ip}`));
+              const phoneHint = await decryptLoginHint(
+                encryptedHint,
+                env.EPHEMERAL_STATE_SECRET,
+              );
+              if (phoneHint) {
+                newUrl.searchParams.set("_loginHint", phoneHint);
+              }
+            }
+
+            finalReq = new Request(newUrl.toString(), req);
+          } catch {
+            return new Response(
+              "Invalid authorization request. Register your MCP client first via POST /register.",
+              { status: 400 },
+            );
+          }
+        }
+
+        const response = await nextHandler.fetch(finalReq, oauthEnv, c);
+        // [L4] Add request ID to response
+        const newResponse = new Response(response.body, response);
+        newResponse.headers.set("x-request-id", requestId);
+        applySecurityHeaders(newResponse.headers);
+        return newResponse;
+      },
     });
+    const oauthHandler = new OAuthProvider(oauthOptions);
+
+    // mcp.CLOUD_RELAY.10/11 — connection lifetimes are enforced around the
+    // token endpoint (connection-lifetime.ts).
+    if (url.pathname === "/token" && request.method === "POST") {
+      return handleTokenRequest(
+        request,
+        env,
+        ctx,
+        (req) => oauthHandler.fetch(req, env, ctx),
+        () => getOAuthApi(oauthOptions, env),
+      );
+    }
 
     return oauthHandler.fetch(request, env, ctx);
   };

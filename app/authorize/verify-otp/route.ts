@@ -15,6 +15,7 @@ import {
   verifyOTP,
 } from "@/src/otp";
 import type { Env } from "@/src/types";
+import { DEFAULT_CONNECTION_LIFETIME } from "@/src/connection-lifetime-options";
 
 export async function POST(request: Request): Promise<Response> {
   // [M7] Validate Content-Type
@@ -39,6 +40,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const { verifyTicket, code } = parsed.data;
+  // mcp.CLOUD_RELAY.9 — the lifetime picked on the consent page
+  const connectionLifetime = parsed.data.connectionLifetime ?? DEFAULT_CONNECTION_LIFETIME;
   const ticket = await readVerifyTicket(verifyTicket, env.EPHEMERAL_STATE_SECRET);
   if (!ticket) {
     return Response.json({ error: "Verification session expired. Request a new code." }, { status: 400 });
@@ -78,11 +81,16 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
+      // `metadata.lifetime` is readable without decrypting the grant (the
+      // relay's idle check and the connections list use it); `props` carries
+      // it into the token-exchange callback that sets the library lifetime.
       metadata: {
         label: `WhatsApp ${accountRef.slice(0, 13)}`,
+        lifetime: connectionLifetime,
       },
       props: {
         accountRef,
+        connectionLifetime,
       },
       request: oauthReq,
       scope: oauthReq.scope,

@@ -44,7 +44,7 @@ vi.mock("@cloudflare/workers-oauth-provider", () => {
     }
   }
 
-  return { default: MockOAuthProvider };
+  return { default: MockOAuthProvider, getOAuthApi: vi.fn() };
 });
 
 const TEST_PHONE = "5491155551234";

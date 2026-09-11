@@ -2,8 +2,31 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback, Suspense } from "react";
+import {
+  DEFAULT_CONNECTION_LIFETIME,
+  type ConnectionLifetime,
+} from "@/src/connection-lifetime-options";
 
 const RESEND_COOLDOWN_SECONDS = 60;
+
+// mcp.CLOUD_RELAY.9 — how long the AI app stays connected; the person picks.
+const LIFETIME_CHOICES: { id: ConnectionLifetime; title: string; detail: string }[] = [
+  {
+    id: "inactive-90d",
+    title: "While I use it",
+    detail: "Disconnects after 90 days without use",
+  },
+  {
+    id: "fixed-1y",
+    title: "For 1 year",
+    detail: "Disconnects one year from today",
+  },
+  {
+    id: "until-revoked",
+    title: "Until I disconnect it",
+    detail: "Stays connected until you disconnect it in the Kaption extension",
+  },
+];
 
 function OTPForm() {
   const searchParams = useSearchParams();
@@ -15,6 +38,7 @@ function OTPForm() {
   const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
+  const [lifetime, setLifetime] = useState<ConnectionLifetime>(DEFAULT_CONNECTION_LIFETIME);
 
   // Countdown timer for resend cooldown
   useEffect(() => {
@@ -75,7 +99,7 @@ function OTPForm() {
       const res = await fetch("/authorize/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verifyTicket: ticket, code }),
+        body: JSON.stringify({ verifyTicket: ticket, code, connectionLifetime: lifetime }),
       });
       const data = (await res.json()) as { redirectTo?: string; error?: string };
 
@@ -117,6 +141,45 @@ function OTPForm() {
           inputMode="numeric"
           className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-2xl tracking-[8px] text-center outline-none focus:border-green-500"
         />
+
+        <fieldset className="mt-5">
+          <legend className="block text-[13px] text-neutral-400 mb-1.5">
+            Stay connected
+          </legend>
+          <div className="flex flex-col gap-2">
+            {LIFETIME_CHOICES.map((choice) => (
+              <label
+                key={choice.id}
+                className={`flex items-start gap-3 rounded-lg border px-3.5 py-2.5 cursor-pointer ${
+                  lifetime === choice.id
+                    ? "border-green-500 bg-neutral-950"
+                    : "border-neutral-700 bg-neutral-950/50 hover:border-neutral-600"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="connectionLifetime"
+                  value={choice.id}
+                  checked={lifetime === choice.id}
+                  onChange={() => setLifetime(choice.id)}
+                  className="mt-1 accent-green-500"
+                />
+                <span>
+                  <span className="block text-sm text-neutral-50">
+                    {choice.title}
+                    {choice.id === DEFAULT_CONNECTION_LIFETIME && (
+                      <span className="ml-2 text-[11px] text-green-400">Recommended</span>
+                    )}
+                  </span>
+                  <span className="block text-xs text-neutral-500 mt-0.5">{choice.detail}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-neutral-500 mt-2">
+            You can disconnect any AI app from the Kaption extension at any time.
+          </p>
+        </fieldset>
 
         {error && <p className="text-red-500 text-[13px] mt-2">{error}</p>}
         {resendMessage && (

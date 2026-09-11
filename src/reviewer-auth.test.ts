@@ -113,7 +113,9 @@ describe("OpenAI reviewer authentication", () => {
     expect(state.completeAuthorization).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "acct_15555550123",
-        props: { accountRef: "acct_15555550123" },
+        // mcp.CLOUD_RELAY.9 — no consent page on this path, so the default lifetime
+        metadata: { label: "OpenAI plugin review", lifetime: "inactive-90d" },
+        props: { accountRef: "acct_15555550123", connectionLifetime: "inactive-90d" },
         scope: ["kaption:access"],
       }),
     );

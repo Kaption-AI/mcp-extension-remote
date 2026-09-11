@@ -11,6 +11,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ReviewerLoginSchema } from "@/src/schemas";
 import { deriveAccountRef, hmacVerify } from "@/src/otp";
 import type { Env } from "@/src/types";
+import { DEFAULT_CONNECTION_LIFETIME } from "@/src/connection-lifetime-options";
 
 const RATE_WINDOW_SECONDS = 15 * 60;
 const MAX_ATTEMPTS = 10;
@@ -108,8 +109,9 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
-      metadata: { label: "OpenAI plugin review" },
-      props: { accountRef },
+      // mcp.CLOUD_RELAY.9 — no consent page in this path, so the default lifetime
+      metadata: { label: "OpenAI plugin review", lifetime: DEFAULT_CONNECTION_LIFETIME },
+      props: { accountRef, connectionLifetime: DEFAULT_CONNECTION_LIFETIME },
       request: oauthRequest,
       scope: oauthRequest.scope,
       userId: accountRef,
