@@ -499,10 +499,16 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
             }
 
             finalReq = new Request(newUrl.toString(), req);
-          } catch {
+          } catch (error) {
+            // People see this page inside Claude or ChatGPT, so it says what to
+            // do; the library's reason goes to the logs (wrangler tail).
+            console.warn(
+              "[authorize] sign-in request rejected:",
+              error instanceof Error ? error.message : error,
+            );
             return new Response(
-              "Invalid authorization request. Register your MCP client first via POST /register.",
-              { status: 400 },
+              "Kaption couldn't start signing in to this app. Remove Kaption from the app's connectors, add it again, and try once more.",
+              { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } },
             );
           }
         }
@@ -517,18 +523,30 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     });
     const oauthHandler = new OAuthProvider(oauthOptions);
 
+    // The library caches its helpers on `env.OAUTH_PROVIDER` the first time a
+    // request reaches the default handler, and the Worker's env object is
+    // shared by every request an isolate serves. Our options differ by hostname
+    // (each advertises its own resource), so helpers cached by a request on one
+    // hostname rejected the other's sign-ins whenever the app sent its RFC 8707
+    // `resource` — Claude and ChatGPT do — as invalid_target, shown as the
+    // "Invalid authorization request" page, depending on which hostname the
+    // isolate happened to serve first. Each request gets its own env, with
+    // helpers built from its own options.
+    const requestEnv: Env = { ...env };
+    requestEnv.OAUTH_PROVIDER = getOAuthApi(oauthOptions, requestEnv);
+
     // mcp.CLOUD_RELAY.10/11 — connection lifetimes are enforced around the
     // token endpoint (connection-lifetime.ts).
     if (url.pathname === "/token" && request.method === "POST") {
       return handleTokenRequest(
         request,
-        env,
+        requestEnv,
         ctx,
-        (req) => oauthHandler.fetch(req, env, ctx),
-        () => getOAuthApi(oauthOptions, env),
+        (req) => oauthHandler.fetch(req, requestEnv, ctx),
+        () => requestEnv.OAUTH_PROVIDER,
       );
     }
 
-    return oauthHandler.fetch(request, env, ctx);
+    return oauthHandler.fetch(request, requestEnv, ctx);
   };
 }

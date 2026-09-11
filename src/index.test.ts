@@ -44,7 +44,11 @@ vi.mock("@cloudflare/workers-oauth-provider", () => {
     }
   }
 
-  return { default: MockOAuthProvider, getOAuthApi: vi.fn() };
+  // Per-request helpers: hand back the helpers each test's env carries.
+  return {
+    default: MockOAuthProvider,
+    getOAuthApi: vi.fn((_options: unknown, env: { OAUTH_PROVIDER?: unknown }) => env.OAUTH_PROVIDER),
+  };
 });
 
 const TEST_PHONE = "5491155551234";

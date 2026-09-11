@@ -127,15 +127,18 @@ function createRelay() {
   } as unknown as Env;
   const handler = createFetchHandler(NEXT);
   const { ctx, settle } = createContext();
-  const relay: Target & { kv: FakeKV; env: Env } = {
+  // One env object for every call, as in a Worker isolate.
+  const callAt = async (origin: string, path: string, init?: RequestInit) => {
+    const response = await handler(new Request(`${origin}${path}`, init), env, ctx);
+    await settle();
+    return response;
+  };
+  const relay: Target & { kv: FakeKV; env: Env; callAt: typeof callAt } = {
     kv,
     env,
+    callAt,
     helpers: getOAuthApi(buildOAuthOptions(ORIGIN, NEXT), env),
-    async call(path, init) {
-      const response = await handler(new Request(`${ORIGIN}${path}`, init), env, ctx);
-      await settle();
-      return response;
-    },
+    call: (path, init) => callAt(ORIGIN, path, init),
   };
   return relay;
 }
@@ -436,6 +439,33 @@ describe("Connected apps — /ext/connections (mcp.CLOUD_RELAY.12)", () => {
     const preflight = await relay.call("/ext/connections/some-id", { method: "OPTIONS" });
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-methods")).toContain("DELETE");
+  });
+});
+
+describe("signing in on either hostname", () => {
+  it("accepts each hostname's own resource, whichever hostname the isolate served first", async () => {
+    const relay = createRelay();
+    const clientId = await register(relay);
+    const challenge = await pkceChallenge(CODE_VERIFIER);
+    const authorize = (origin: string) =>
+      relay.callAt(
+        origin,
+        `/authorize?${new URLSearchParams({
+          response_type: "code",
+          client_id: clientId,
+          redirect_uri: REDIRECT_URI,
+          scope: "kaption:access",
+          state: "state",
+          code_challenge: challenge,
+          code_challenge_method: "S256",
+          resource: `${origin}/mcp`, // RFC 8707 — Claude and ChatGPT send it
+        })}`,
+      );
+
+    for (const origin of ["https://mcp-ext.kaptionai.com", "https://mcp.kaptionai.com", "https://mcp-ext.kaptionai.com"]) {
+      const response = await authorize(origin);
+      expect({ origin, body: await response.text() }).toEqual({ origin, body: "next" }); // reached the sign-in page
+    }
   });
 });
 
