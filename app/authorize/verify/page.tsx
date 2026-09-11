@@ -4,12 +4,14 @@ import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback, Suspense } from "react";
 import {
   DEFAULT_CONNECTION_LIFETIME,
+  parseConnectionLifetime,
   type ConnectionLifetime,
 } from "@/src/connection-lifetime-options";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
-// mcp.CLOUD_RELAY.9 — how long the AI app stays connected; the person picks.
+// mcp.CLOUD_RELAY.9 — how long the AI app stays connected; the person picks
+// from a dropdown, and the choice's meaning shows under it.
 const LIFETIME_CHOICES: { id: ConnectionLifetime; title: string; detail: string }[] = [
   {
     id: "inactive-90d",
@@ -24,7 +26,7 @@ const LIFETIME_CHOICES: { id: ConnectionLifetime; title: string; detail: string 
   {
     id: "until-revoked",
     title: "Until I disconnect it",
-    detail: "Stays connected until you disconnect it in the Kaption extension",
+    detail: "Stays connected until you disconnect it",
   },
 ];
 
@@ -90,6 +92,9 @@ function OTPForm() {
     );
   }
 
+  const selectedChoice =
+    LIFETIME_CHOICES.find((choice) => choice.id === lifetime) ?? LIFETIME_CHOICES[0];
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -142,44 +147,48 @@ function OTPForm() {
           className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-2xl tracking-[8px] text-center outline-none focus:border-green-500"
         />
 
-        <fieldset className="mt-5">
-          <legend className="block text-[13px] text-neutral-400 mb-1.5">
-            Stay connected
-          </legend>
-          <div className="flex flex-col gap-2">
+        <label
+          htmlFor="connectionLifetime"
+          className="block text-[13px] text-neutral-400 mt-5 mb-1.5"
+        >
+          Stay connected
+        </label>
+        <div className="relative">
+          <select
+            id="connectionLifetime"
+            value={lifetime}
+            onChange={(e) => setLifetime(parseConnectionLifetime(e.target.value))}
+            aria-describedby="connectionLifetimeDetail"
+            style={{ colorScheme: "dark" }}
+            className="w-full appearance-none px-3.5 py-2.5 pr-10 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-sm outline-none cursor-pointer focus:border-green-500"
+          >
             {LIFETIME_CHOICES.map((choice) => (
-              <label
-                key={choice.id}
-                className={`flex items-start gap-3 rounded-lg border px-3.5 py-2.5 cursor-pointer ${
-                  lifetime === choice.id
-                    ? "border-green-500 bg-neutral-950"
-                    : "border-neutral-700 bg-neutral-950/50 hover:border-neutral-600"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="connectionLifetime"
-                  value={choice.id}
-                  checked={lifetime === choice.id}
-                  onChange={() => setLifetime(choice.id)}
-                  className="mt-1 accent-green-500"
-                />
-                <span>
-                  <span className="block text-sm text-neutral-50">
-                    {choice.title}
-                    {choice.id === DEFAULT_CONNECTION_LIFETIME && (
-                      <span className="ml-2 text-[11px] text-green-400">Recommended</span>
-                    )}
-                  </span>
-                  <span className="block text-xs text-neutral-500 mt-0.5">{choice.detail}</span>
-                </span>
-              </label>
+              <option key={choice.id} value={choice.id}>
+                {choice.id === DEFAULT_CONNECTION_LIFETIME
+                  ? `${choice.title} (recommended)`
+                  : choice.title}
+              </option>
             ))}
-          </div>
-          <p className="text-xs text-neutral-500 mt-2">
-            You can disconnect any AI app from the Kaption extension at any time.
-          </p>
-        </fieldset>
+          </select>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
+        <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2">
+          {selectedChoice.detail}
+        </p>
+        <p className="text-xs text-neutral-500 mt-1">
+          You can disconnect any AI app from the Kaption extension at any time.
+        </p>
 
         {error && <p className="text-red-500 text-[13px] mt-2">{error}</p>}
         {resendMessage && (
