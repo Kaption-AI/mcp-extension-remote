@@ -277,18 +277,18 @@ export class RelayRoom extends DurableObject<Env> {
   /**
    * [H6] Validate the auth token sent in the first WebSocket message (legacy).
    */
-  private async handleAuthHandshake(token: string): Promise<void> {
+  private async handleAuthHandshake(token: string, ws: WebSocket | null = this.extensionWs): Promise<void> {
     const session = await validateExtensionSession(
       this.env.OAUTH_KV,
       token,
       this.env.EPHEMERAL_STATE_SECRET,
     );
     if (!session) {
-      this.extensionWs?.send(
+      ws?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired token" }),
       );
-      this.extensionWs?.close(4001, "Authentication failed");
-      this.extensionWs = null;
+      ws?.close(4001, "Authentication failed");
+      if (this.extensionWs === ws) this.extensionWs = null;
       return;
     }
 
@@ -297,13 +297,16 @@ export class RelayRoom extends DurableObject<Env> {
     console.log(
       `[RelayRoom] Legacy auth OK, account=${sanitizeAccountRefForLog(session.accountRef)}`,
     );
-    if (this.extensionWs) {
-      this.setWsAttachment(this.extensionWs, {
+    // mcp.CLOUD_RELAY.13 — the socket that sent this handshake, even if another spoke while it was checked.
+    this.extensionWs = ws;
+    if (ws) {
+      this.setWsAttachment(ws, {
         authenticated: true,
         accountRef: session.accountRef,
       });
     }
-    this.extensionWs?.send(
+    this.closeOtherSockets(ws);
+    ws?.send(
       JSON.stringify(
         session.phone
           ? { type: "auth_ok", phone: session.phone }
@@ -316,27 +319,27 @@ export class RelayRoom extends DurableObject<Env> {
    * Validate a Kaption JWT sent in the auth handshake.
    * Calls the internal API to verify the JWT and extract the phone number.
    */
-  private async handleJwtAuth(jwt: string): Promise<void> {
+  private async handleJwtAuth(jwt: string, ws: WebSocket | null = this.extensionWs): Promise<void> {
     const phone = await validateJwt(
       this.env.JWT_SECRET,
       jwt,
     );
     if (!phone) {
-      this.extensionWs?.send(
+      ws?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired JWT" }),
       );
-      this.extensionWs?.close(4001, "JWT authentication failed");
-      this.extensionWs = null;
+      ws?.close(4001, "JWT authentication failed");
+      if (this.extensionWs === ws) this.extensionWs = null;
       return;
     }
 
     const accountRef = await deriveAccountRef(phone, this.env.PHONE_REF_SECRET);
     if (!accountRef) {
-      this.extensionWs?.send(
+      ws?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired JWT" }),
       );
-      this.extensionWs?.close(4001, "JWT authentication failed");
-      this.extensionWs = null;
+      ws?.close(4001, "JWT authentication failed");
+      if (this.extensionWs === ws) this.extensionWs = null;
       return;
     }
 
@@ -345,10 +348,13 @@ export class RelayRoom extends DurableObject<Env> {
     console.log(
       `[RelayRoom] JWT auth OK, account=${sanitizeAccountRefForLog(accountRef)}`,
     );
-    if (this.extensionWs) {
-      this.setWsAttachment(this.extensionWs, { authenticated: true, accountRef });
+    // mcp.CLOUD_RELAY.13 — the socket that sent this handshake, even if another spoke while it was checked.
+    this.extensionWs = ws;
+    if (ws) {
+      this.setWsAttachment(ws, { authenticated: true, accountRef });
     }
-    this.extensionWs?.send(JSON.stringify({ type: "auth_ok", phone }));
+    this.closeOtherSockets(ws);
+    ws?.send(JSON.stringify({ type: "auth_ok", phone }));
   }
 
   /**
@@ -410,12 +416,41 @@ export class RelayRoom extends DurableObject<Env> {
    * Durable Object WebSocket hibernation handler.
    */
   async webSocketMessage(ws: WebSocket, message: string): Promise<void> {
-    // Restore auth state from attachment after hibernation
-    this.restoreFromHibernation();
-    if (!this.extensionWs) {
-      this.extensionWs = ws;
-    }
+    // mcp.CLOUD_RELAY.13 — the socket that spoke is the one to answer, with its own auth state. After hibernation
+    // the room may still hold older sockets from the extension's earlier attempts; answering one of those (the
+    // first, or an old authenticated one) sent auth_ok nowhere, so the extension timed out and retried for ever.
+    this.extensionWs = ws;
+    const attachment = this.readWsAttachment(ws);
+    this.authenticated = attachment?.authenticated === true;
+    this.accountRef = attachment?.accountRef ?? null;
     this.handleExtensionMessage(message);
+  }
+
+  private readWsAttachment(ws: WebSocket): WsAttachment | null {
+    try {
+      return ((ws as any).deserializeAttachment?.() as WsAttachment | null) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** mcp.CLOUD_RELAY.13 — once a socket authenticates, the room's older sockets are gone for good. */
+  private closeOtherSockets(current: WebSocket | null): void {
+    if (!current) return;
+    let sockets: WebSocket[] = [];
+    try {
+      sockets = this.ctx.getWebSockets();
+    } catch {
+      return;
+    }
+    for (const socket of sockets) {
+      if (socket === current) continue;
+      try {
+        socket.close(4000, "Replaced by a newer connection");
+      } catch {
+        // already closed
+      }
+    }
   }
 
   /**
