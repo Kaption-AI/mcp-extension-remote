@@ -47,14 +47,15 @@ describe("Tool registration", () => {
     "export_contacts",
     "get_api_info",
     "get_analytics",
+    "call_recordings",
   ];
 
-  it("exports exactly 17 tools", () => {
-    expect(TOOLS).toHaveLength(17);
+  it("exports exactly 18 tools", () => {
+    expect(TOOLS).toHaveLength(18);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(16);
+    expect(CLOUD_TOOLS).toHaveLength(17);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 

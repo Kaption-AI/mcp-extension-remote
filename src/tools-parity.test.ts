@@ -69,6 +69,7 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       manage_scheduled_messages: { action: "list" },
       manage_lists: { action: "list" },
       get_api_info: {},
+      call_recordings: { action: "search", search: "budget", limit: 5 },
     };
 
     for (const [name, input] of Object.entries(sampleInputs)) {

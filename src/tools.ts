@@ -425,6 +425,36 @@ export const TOOLS: ToolDefinition[] = [
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
+  {
+    name: "call_recordings",
+    description: [
+      "Read WhatsApp call recordings made by the Kaption extension and their transcripts, with every word timed.",
+      "Each recording names its conversation (the other person, or the group for a group call), so it links to query, get_contact and get_group.",
+      "Recordings of locked chats are never returned.",
+      "",
+      "Actions:",
+      "  list   - Recordings, newest first (optional conversation_id, date_from, date_to, limit)",
+      "  get    - One recording and its transcript: turns by speaker (\"you\" or \"contact\") with start/end seconds (requires id; include_words adds each word's timing)",
+      "  search - Recordings whose name or transcript matches the search text, with the matching lines (requires search; same filters as list)",
+      "",
+      "Examples:",
+      "  Recent calls: { action: \"list\", limit: 10 }",
+      "  Calls with one person: { action: \"list\", conversation_id: \"5491157390064@c.us\" }",
+      "  Read a transcript: { action: \"get\", id: \"1790000000000-a1b2c3d4\" }",
+      "  What was said about the budget: { action: \"search\", search: \"budget\" }",
+    ].join("\n"),
+    inputSchema: z.object({
+      action: z.enum(["list", "get", "search"]).describe("Call recordings action to perform"),
+      id: z.string().optional().describe("Recording ID (required for get)"),
+      search: z.string().optional().describe("Text to find in names and transcripts (required for search)"),
+      conversation_id: z.string().optional().describe("Only recordings of this conversation (a contact or group ID)"),
+      date_from: z.string().optional().describe("Only recordings started on or after this date (ISO 8601)"),
+      date_to: z.string().optional().describe("Only recordings started on or before this date (ISO 8601)"),
+      limit: z.number().min(1).max(100).optional().describe("Max recordings to return (default 20, max 100)"),
+      include_words: z.boolean().optional().describe("For get: include each word with its start and end in seconds (default false)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
 ];
 
 // mcp.TOOLS — human-readable titles and safety annotations advertised to MCP
@@ -447,6 +477,7 @@ const TOOL_TITLES: Record<string, string> = {
   export_contacts: "Export contacts",
   get_api_info: "Get local API information",
   get_analytics: "Analyze WhatsApp activity",
+  call_recordings: "Read call recordings",
 };
 
 // Safety annotations use OpenAI's review definitions:
@@ -474,6 +505,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   export_contacts: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_api_info: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_analytics: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  call_recordings: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };
 
 for (const tool of TOOLS) {
