@@ -33,7 +33,12 @@ interface PendingRequest {
 interface WsAttachment {
   authenticated: boolean;
   accountRef: string | null;
+  /** mcp.CLOUD_RELAY.14 — the account whose room this is, set by the Worker; a handshake must be for it. */
+  room?: string | null;
 }
+
+/** mcp.CLOUD_RELAY.14 — set by the Worker (index.ts) on the upgrade it forwards to the room. */
+export const ROOM_ACCOUNT_HEADER = "X-Kaption-Room-Account";
 
 const REQUEST_TIMEOUT_MS = 120_000; // 2 minutes — media downloads from WhatsApp CDN can be slow
 // mcp.CLOUD_RELAY.5 — 16MB cap, JSON-RPC validation, origin restrict, 50 pending, hibernation
@@ -101,7 +106,7 @@ export class RelayRoom extends DurableObject<Env> {
     this.authenticated = false;
     this.accountRef = null;
     // Persist initial (unauthenticated) state in WS attachment for hibernation
-    this.setWsAttachment(server, { authenticated: false, accountRef: null });
+    this.setWsAttachment(server, { authenticated: false, accountRef: null, room: request.headers.get(ROOM_ACCOUNT_HEADER) });
 
     server.addEventListener("message", (event) => {
       this.handleExtensionMessage(event.data as string);
@@ -283,7 +288,7 @@ export class RelayRoom extends DurableObject<Env> {
       token,
       this.env.EPHEMERAL_STATE_SECRET,
     );
-    if (!session) {
+    if (!session || session.accountRef !== this.roomOf(ws)) {
       ws?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired token" }),
       );
@@ -303,6 +308,7 @@ export class RelayRoom extends DurableObject<Env> {
       this.setWsAttachment(ws, {
         authenticated: true,
         accountRef: session.accountRef,
+        room: this.roomOf(ws),
       });
     }
     this.closeOtherSockets(ws);
@@ -333,7 +339,9 @@ export class RelayRoom extends DurableObject<Env> {
       return;
     }
 
-    const accountRef = await deriveAccountRef(phone, this.env.PHONE_REF_SECRET);
+    const derived = await deriveAccountRef(phone, this.env.PHONE_REF_SECRET);
+    // mcp.CLOUD_RELAY.14 — a valid session for ANOTHER account is refused: the room is not its to answer.
+    const accountRef = derived && derived === this.roomOf(ws) ? derived : null;
     if (!accountRef) {
       ws?.send(
         JSON.stringify({ type: "auth_error", error: "Invalid or expired JWT" }),
@@ -351,7 +359,7 @@ export class RelayRoom extends DurableObject<Env> {
     // mcp.CLOUD_RELAY.13 — the socket that sent this handshake, even if another spoke while it was checked.
     this.extensionWs = ws;
     if (ws) {
-      this.setWsAttachment(ws, { authenticated: true, accountRef });
+      this.setWsAttachment(ws, { authenticated: true, accountRef, room: this.roomOf(ws) });
     }
     this.closeOtherSockets(ws);
     ws?.send(JSON.stringify({ type: "auth_ok", phone }));
@@ -424,6 +432,12 @@ export class RelayRoom extends DurableObject<Env> {
     this.authenticated = attachment?.authenticated === true;
     this.accountRef = attachment?.accountRef ?? null;
     this.handleExtensionMessage(message);
+  }
+
+  /** mcp.CLOUD_RELAY.14 — the account this socket's room belongs to (null: unknown, and nothing authenticates). */
+  private roomOf(ws: WebSocket | null): string | null {
+    const room = ws ? this.readWsAttachment(ws)?.room : null;
+    return typeof room === "string" && room ? room : null;
   }
 
   private readWsAttachment(ws: WebSocket): WsAttachment | null {

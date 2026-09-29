@@ -36,9 +36,9 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("mcp.CLOUD_RELAY.13 the socket that speaks is the one answered", () => {
   it("auth_ok reaches the new socket, not an old authenticated one, and the old ones are closed", async () => {
-    const stale = socket({ authenticated: true, accountRef: "acct_test" });
-    const unauthOld = socket({ authenticated: false, accountRef: null });
-    const fresh = socket({ authenticated: false, accountRef: null });
+    const stale = socket({ authenticated: true, accountRef: "acct_test", room: "acct_test" });
+    const unauthOld = socket({ authenticated: false, accountRef: null, room: "acct_test" });
+    const fresh = socket({ authenticated: false, accountRef: null, room: "acct_test" });
     const r = room([stale, unauthOld, fresh]);
     await r.webSocketMessage(fresh as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
     await flush();
@@ -47,7 +47,7 @@ describe("mcp.CLOUD_RELAY.13 the socket that speaks is the one answered", () => 
     expect(stale.closed).toEqual({ code: 4000, reason: "Replaced by a newer connection" });
     expect(unauthOld.closed?.code).toBe(4000);
     expect(fresh.closed).toBeNull();
-    expect(fresh.attachment).toEqual({ authenticated: true, accountRef: "acct_test" });
+    expect(fresh.attachment).toEqual({ authenticated: true, accountRef: "acct_test", room: "acct_test" });
   });
 
   it("a message from a socket that never authenticated is refused on that socket, whatever else is in the room", async () => {
@@ -61,5 +61,25 @@ describe("mcp.CLOUD_RELAY.13 the socket that speaks is the one answered", () => 
       expect.objectContaining({ error: expect.objectContaining({ message: "Not authenticated. Send auth message first." }) }),
       expect.objectContaining({ error: expect.objectContaining({ message: "Not authenticated. Send auth message first." }) }),
     ]);
+  });
+});
+
+describe("mcp.CLOUD_RELAY.14 a room only authenticates its own account", () => {
+  it("a valid session for another account is refused in this room, and the socket closed", async () => {
+    const fresh = socket({ authenticated: false, accountRef: null, room: "acct_victim" });
+    const r = room([fresh]);
+    await r.webSocketMessage(fresh as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
+    await flush();
+    expect(fresh.sent.map((m) => JSON.parse(m))).toEqual([{ type: "auth_error", error: "Invalid or expired JWT" }]);
+    expect(fresh.closed?.code).toBe(4001);
+    expect(fresh.attachment).toMatchObject({ authenticated: false });
+  });
+
+  it("a room that doesn't know whose it is authenticates nobody", async () => {
+    const fresh = socket({ authenticated: false, accountRef: null });
+    const r = room([fresh]);
+    await r.webSocketMessage(fresh as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
+    await flush();
+    expect(fresh.closed?.code).toBe(4001);
   });
 });

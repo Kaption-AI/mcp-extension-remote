@@ -28,13 +28,12 @@ import {
   listConnections,
 } from "./connection-lifetime";
 import { RelayMCP } from "./relay-mcp";
-import { RelayRoom } from "./relay-room";
+import { RelayRoom, ROOM_ACCOUNT_HEADER } from "./relay-room";
 import { DeploymentChainDO } from "./deployment-chain";
 import {
   decryptLoginHint,
   deriveAccountRef,
   encryptLoginHint,
-  extractPhoneFromJwt,
   hmacSign,
   validateExtensionSession,
   validateJwt,
@@ -160,9 +159,10 @@ outerApp.get("/ws/ext", async (c) => {
   }
 
   if (!accountRefHint && jwt) {
-    const jwtPhone = extractPhoneFromJwt(jwt);
+    // mcp.CLOUD_RELAY.14 — the JWT's signature is checked here too, not only its payload read.
+    const jwtPhone = await validateJwt(c.env.JWT_SECRET, jwt);
     if (!jwtPhone) {
-      return c.json({ error: "invalid_request", error_description: "Invalid JWT: cannot extract phone" }, 400);
+      return c.json({ error: "invalid_token", error_description: "Invalid JWT" }, 401);
     }
     accountRefHint = await deriveAccountRef(jwtPhone, c.env.PHONE_REF_SECRET);
   }
@@ -187,7 +187,11 @@ outerApp.get("/ws/ext", async (c) => {
   // to properly handle WebSocket upgrade across DO boundary
   const roomId = c.env.RELAY_ROOM.idFromName(accountRefHint);
   const room = c.env.RELAY_ROOM.get(roomId);
-  return room.fetch(c.req.raw);
+  // mcp.CLOUD_RELAY.14 — the room learns whose it is from us, never from the client (any value it sent is replaced):
+  // the handshake then only counts for that account.
+  const forwarded = new Request(c.req.raw);
+  forwarded.headers.set(ROOM_ACCOUNT_HEADER, accountRefHint);
+  return room.fetch(forwarded);
 });
 
 // mcp.CLOUD_RELAY.12 — the extension's "Connected apps" list: the AI apps
