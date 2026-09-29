@@ -94,7 +94,7 @@ AI Client (Claude/ChatGPT/Cursor)
 | `download_media` | Download image/video/audio/document from a message |
 | `manage_chat` | Archive, pin, mute, mark read/unread, set/clear draft |
 | `manage_reminders` | Create/list/complete/delete personal reminders |
-| `manage_scheduled_messages` | Schedule messages for future delivery |
+| `manage_scheduled_messages` | Schedule messages for future delivery — from Kaption's number (bot, default) or from your own number on this computer (`mode: "local"`, also to groups) |
 | `manage_lists` | Manage personal chat lists (custom categories) |
 | `list_contacts`, `get_contact`, `get_contact_groups` | Read contacts and their group memberships |
 | `list_groups`, `get_group` | Read cached or live group metadata |

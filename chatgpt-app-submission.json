@@ -100,7 +100,7 @@
       },
       "justifications": {
         "read_only_justification": "Creates, updates, or deletes scheduled-message records and can cause a message to be sent later.",
-        "open_world_justification": "A scheduled message is delivered through WhatsApp to an external recipient at the selected time.",
+        "open_world_justification": "A scheduled message is delivered through WhatsApp to an external recipient (a person, or a group in local mode) at the selected time, from Kaption's number or, in local mode, from the user's own number.",
         "destructive_justification": "Sending a scheduled WhatsApp message is irreversible after delivery, and deleting a schedule is not automatically recoverable."
       }
     },

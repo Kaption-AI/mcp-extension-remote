@@ -66,7 +66,7 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       download_media: { message_id: "msg-1", conversation_id: "abc@c.us" },
       manage_chat: { action: "archive", conversation_id: "abc@c.us" },
       manage_reminders: { action: "list" },
-      manage_scheduled_messages: { action: "list" },
+      manage_scheduled_messages: { action: "create", mode: "local", message: "hi", datetime: "2026-10-01T09:00:00Z", conversation_id: "120363000000000000@g.us" },
       manage_lists: { action: "list" },
       get_api_info: {},
       call_recordings: { action: "search", search: "budget", limit: 5 },

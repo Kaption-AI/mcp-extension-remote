@@ -524,6 +524,30 @@ describe("manage_scheduled_messages tool schema", () => {
     const result = tool.inputSchema.safeParse({ action: "invalid" });
     expect(result.success).toBe(false);
   });
+
+  // kext mcp.TOOLS.13 — the relay keeps `mode` (a schema without it would drop it before the extension sees it)
+  it("keeps mode bot or local and the local-only actions", () => {
+    const parsed = tool.inputSchema.safeParse({
+      action: "create",
+      mode: "local",
+      conversation_id: "120363000000000000@g.us",
+      message: "Standup moved to 10",
+      datetime: "2026-03-15T10:00:00Z",
+    });
+    expect(parsed.success && parsed.data).toMatchObject({ mode: "local", conversation_id: "120363000000000000@g.us" });
+    expect(tool.inputSchema.safeParse({ action: "list", mode: "bot" }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ action: "list", mode: "cloud" }).success).toBe(false);
+    for (const action of ["cancel", "remove", "send_now"]) {
+      expect(tool.inputSchema.safeParse({ action, mode: "local", id: "abc" }).success).toBe(true);
+    }
+  });
+
+  it("says who sends in each mode and stays a destructive write tool", () => {
+    expect(tool.description).toMatch(/sent from Kaption's WhatsApp number/);
+    expect(tool.description).toMatch(/sent from the user's own WhatsApp number/);
+    expect(tool.description).toMatch(/The only mode that can send to groups/);
+    expect(tool.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+  });
 });
 
 // ─── manage_lists tool schema ───────────────────────────────────────
