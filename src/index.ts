@@ -40,6 +40,12 @@ import {
   validateJwt,
 } from "./otp";
 import type { Env } from "./types";
+import {
+  connectDeps,
+  pollConnectPairing,
+  startAllowed,
+  startConnectPairing,
+} from "./connect-code";
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
 export { RelayMCP, RelayRoom, DeploymentChainDO };
@@ -207,6 +213,51 @@ const HELPERS_ONLY_HANDLER = { fetch: async () => new Response("Not found", { st
 function oauthApi(env: Env) {
   return getOAuthApi(buildOAuthOptions(MCP_ORIGIN, HELPERS_ONLY_HANDLER), env);
 }
+
+// mcp.CONNECT_CODE.1-2 — "Add to Claude": the extension asks for a connect code. Its JWT names the phone (and keeps
+// strangers from spending our API calls); the proof is the WhatsApp handshake the extension then sends.
+const CONNECT_CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
+
+outerApp.options("/ext/connect-code/start", () => new Response(null, { status: 204, headers: CONNECT_CORS }));
+outerApp.options("/ext/connect-code/status", () => new Response(null, { status: 204, headers: CONNECT_CORS }));
+
+outerApp.post("/ext/connect-code/start", async (c) => {
+  const auth = c.req.header("Authorization");
+  const phone = auth?.startsWith("Bearer ") ? await validateJwt(c.env.JWT_SECRET, auth.slice(7)) : null;
+  if (!phone) return c.json({ error: "invalid_token" }, 401, CONNECT_CORS);
+  const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
+  if (!accountRef || !(await startAllowed(c.env.OAUTH_KV, accountRef))) {
+    return c.json({ error: "rate_limited" }, 429, CONNECT_CORS);
+  }
+  try {
+    const started = await startConnectPairing(connectDeps(c.env), phone);
+    if (!started) return c.json({ error: "handshake_unavailable" }, 502, CONNECT_CORS);
+    return c.json(started, 200, CONNECT_CORS);
+  } catch (e: any) {
+    console.error("[connect-code] start failed:", e?.message || e);
+    return c.json({ error: "server_error" }, 500, CONNECT_CORS);
+  }
+});
+
+outerApp.post("/ext/connect-code/status", async (c) => {
+  const auth = c.req.header("Authorization");
+  const phone = auth?.startsWith("Bearer ") ? await validateJwt(c.env.JWT_SECRET, auth.slice(7)) : null;
+  if (!phone) return c.json({ error: "invalid_token" }, 401, CONNECT_CORS);
+  let body: { pairId?: unknown } = {};
+  try { body = await c.req.json(); } catch { body = {}; }
+  try {
+    const status = await pollConnectPairing(connectDeps(c.env), String(body.pairId ?? ""), phone);
+    return c.json(status, 200, CONNECT_CORS);
+  } catch (e: any) {
+    console.error("[connect-code] status failed:", e?.message || e);
+    return c.json({ status: "error" }, 500, CONNECT_CORS);
+  }
+});
 
 outerApp.options("/ext/connections", () => new Response(null, { status: 204, headers: CONNECTIONS_CORS }));
 outerApp.options("/ext/connections/:grantId", () => new Response(null, { status: 204, headers: CONNECTIONS_CORS }));
@@ -483,6 +534,9 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       return outerApp.fetch(request, env, ctx);
     }
     if (url.pathname === "/ext/connections" || url.pathname.startsWith("/ext/connections/")) {
+      return outerApp.fetch(request, env, ctx);
+    }
+    if (url.pathname.startsWith("/ext/connect-code/")) {
       return outerApp.fetch(request, env, ctx);
     }
     // Store phone hint by IP for pre-filling the authorize form.

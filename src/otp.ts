@@ -155,6 +155,16 @@ async function decryptExpiringState<T>(
   return envelope.data;
 }
 
+/** mcp.CONNECT_CODE — seal a small record with an expiry (AES-GCM), for KV values and cookies. */
+export function sealState<T>(data: T, ttlSeconds: number, secret: string): Promise<string> {
+  return encryptExpiringState(data, ttlSeconds, secret);
+}
+
+/** mcp.CONNECT_CODE — the record, or null when tampered with or expired. */
+export function openState<T>(token: string, secret: string): Promise<T | null> {
+  return decryptExpiringState<T>(token, secret);
+}
+
 /**
  * [C1] Constant-time string comparison to prevent timing attacks.
  * Always compares all bytes regardless of match.
