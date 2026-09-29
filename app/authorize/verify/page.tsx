@@ -4,31 +4,13 @@ import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback, Suspense } from "react";
 import {
   DEFAULT_CONNECTION_LIFETIME,
+  LIFETIME_CHOICES,
   parseConnectionLifetime,
   type ConnectionLifetime,
 } from "@/src/connection-lifetime-options";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
-// mcp.CLOUD_RELAY.9 — how long the AI app stays connected; the person picks
-// from a dropdown, and the choice's meaning shows under it.
-const LIFETIME_CHOICES: { id: ConnectionLifetime; title: string; detail: string }[] = [
-  {
-    id: "inactive-90d",
-    title: "While I use it",
-    detail: "Disconnects after 90 days without use",
-  },
-  {
-    id: "fixed-1y",
-    title: "For 1 year",
-    detail: "Disconnects one year from today",
-  },
-  {
-    id: "until-revoked",
-    title: "Until I disconnect it",
-    detail: "Stays connected until you disconnect it",
-  },
-];
 
 function OTPForm() {
   const searchParams = useSearchParams();
