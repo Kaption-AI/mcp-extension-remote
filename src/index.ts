@@ -97,18 +97,18 @@ outerApp.post("/ws/auth", async (c) => {
   try {
     const auth = c.req.header("Authorization");
     if (!auth?.startsWith("Bearer ")) {
-      return c.text("Unauthorized", 401);
+      return c.json({ error: "invalid_request", error_description: "Missing bearer token" }, 401);
     }
     const jwt = auth.slice(7);
 
     // Validate JWT and extract phone → accountRef
     const phone = await validateJwt(c.env.JWT_SECRET, jwt);
     if (!phone) {
-      return c.text("Invalid JWT", 401);
+      return c.json({ error: "invalid_token", error_description: "Invalid JWT" }, 401);
     }
     const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
     if (!accountRef) {
-      return c.text("Invalid JWT", 401);
+      return c.json({ error: "invalid_token", error_description: "Invalid JWT" }, 401);
     }
 
     // Generate single-use token, store in KV with a 60 s TTL
@@ -118,7 +118,7 @@ outerApp.post("/ws/auth", async (c) => {
     return c.json({ token }, 200, { "Access-Control-Allow-Origin": "*" });
   } catch (e: any) {
     console.error("[ws/auth] Token exchange error:", e?.message || e);
-    return c.text("Internal error: " + (e?.message || "unknown"), 500);
+    return c.json({ error: "server_error", error_description: "Internal error" }, 500);
   }
 });
 
@@ -126,7 +126,7 @@ outerApp.post("/ws/auth", async (c) => {
 outerApp.get("/ws/ext", async (c) => {
   const upgradeHeader = c.req.header("Upgrade");
   if (upgradeHeader !== "websocket") {
-    return c.text("Expected WebSocket upgrade", 426);
+    return c.json({ error: "invalid_request", error_description: "Expected WebSocket upgrade" }, 426);
   }
 
   const url = new URL(c.req.url);
@@ -142,7 +142,7 @@ outerApp.get("/ws/ext", async (c) => {
   if (wstoken) {
     const ref = await c.env.OAUTH_KV.get(`ws-auth:${wstoken}`);
     if (!ref) {
-      return c.text("Invalid or expired wstoken", 401);
+      return c.json({ error: "invalid_token", error_description: "Invalid or expired wstoken" }, 401);
     }
     accountRefHint = ref;
     // Single-use: delete immediately
@@ -156,7 +156,7 @@ outerApp.get("/ws/ext", async (c) => {
   if (!accountRefHint && jwt) {
     const jwtPhone = extractPhoneFromJwt(jwt);
     if (!jwtPhone) {
-      return c.text("Invalid JWT: cannot extract phone", 400);
+      return c.json({ error: "invalid_request", error_description: "Invalid JWT: cannot extract phone" }, 400);
     }
     accountRefHint = await deriveAccountRef(jwtPhone, c.env.PHONE_REF_SECRET);
   }
@@ -168,13 +168,13 @@ outerApp.get("/ws/ext", async (c) => {
       c.env.EPHEMERAL_STATE_SECRET,
     );
     if (!session) {
-      return c.text("Invalid or expired token", 401);
+      return c.json({ error: "invalid_token", error_description: "Invalid or expired token" }, 401);
     }
     accountRefHint = session.accountRef;
   }
 
   if (!accountRefHint) {
-    return c.text("Missing phone, token, jwt, or wstoken parameter", 400);
+    return c.json({ error: "invalid_request", error_description: "Missing phone, token, jwt, or wstoken parameter" }, 400);
   }
 
   // Route to the RelayRoom for this account reference via fetch (not RPC)
@@ -337,6 +337,52 @@ outerApp.post("/transparency/append", async (c) => {
   const result = await chain.appendDeployment(event as any);
   return c.json(result);
 });
+
+// ─── Bearer challenges as JSON ────────────────────────────────────────
+
+/**
+ * The OAuth library answers a request without a token with an empty 401 body
+ * and a bad token with `{error, error_description}`. Some MCP clients and
+ * registries read the body rather than the header, so every Bearer 401 gets
+ * an RFC 6750-style JSON body that also names the RFC 9728 metadata URL.
+ * The status and every header — above all `WWW-Authenticate` — pass through
+ * untouched; only the body and Content-Type change.
+ */
+export async function toJsonBearerChallenge(response: Response, requestUrl: URL): Promise<Response> {
+  if (response.status !== 401) return response;
+  const challenge = response.headers.get("WWW-Authenticate");
+  if (!challenge || !/^Bearer\b/i.test(challenge)) return response;
+
+  const resourceMetadata =
+    /resource_metadata="([^"]+)"/.exec(challenge)?.[1]
+    ?? `${getMcpOrigin(requestUrl)}/.well-known/oauth-protected-resource${requestUrl.pathname}`;
+  const challengeError = /\berror="([^"]+)"/.exec(challenge)?.[1];
+
+  let upstream: { error?: unknown; error_description?: unknown } = {};
+  try {
+    const text = await response.text();
+    if (text) upstream = JSON.parse(text);
+  } catch {
+    // Not JSON — fall back to what the challenge says.
+  }
+
+  const error =
+    typeof upstream.error === "string" ? upstream.error : challengeError ?? "invalid_request";
+  const errorDescription =
+    typeof upstream.error_description === "string" && upstream.error_description
+      ? upstream.error_description
+      : error === "invalid_token"
+        ? "The access token is invalid or expired"
+        : "Missing bearer token. Authorize via OAuth using the resource metadata URL.";
+
+  const headers = new Headers(response.headers);
+  headers.set("Content-Type", "application/json");
+  headers.delete("Content-Length");
+  return new Response(
+    JSON.stringify({ error, error_description: errorDescription, resource_metadata: resourceMetadata }),
+    { status: 401, statusText: response.statusText, headers },
+  );
+}
 
 // ─── Factory: create the composed fetch handler ───────────────────────
 
@@ -547,6 +593,6 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
       );
     }
 
-    return oauthHandler.fetch(request, requestEnv, ctx);
+    return toJsonBearerChallenge(await oauthHandler.fetch(request, requestEnv, ctx), url);
   };
 }

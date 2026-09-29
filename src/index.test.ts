@@ -32,13 +32,31 @@ vi.mock("@cloudflare/workers-oauth-provider", () => {
         return Promise.resolve(Response.json(this.config.resourceMetadata));
       }
       if (this.config.apiHandlers[url.pathname]) {
-        return Promise.resolve(new Response("Unauthorized", {
-          status: 401,
-          headers: {
-            "WWW-Authenticate":
-              `Bearer realm="OAuth", resource_metadata="${url.origin}/.well-known/oauth-protected-resource${url.pathname}"`,
+        // Mirrors @cloudflare/workers-oauth-provider 0.10: no token → empty
+        // body; a bad token → {error, error_description} with error= in the
+        // challenge.
+        const metadata = `${url.origin}/.well-known/oauth-protected-resource${url.pathname}`;
+        const auth = request.headers.get("Authorization");
+        if (!auth?.startsWith("Bearer ")) {
+          return Promise.resolve(new Response(null, {
+            status: 401,
+            headers: {
+              "Cache-Control": "no-store",
+              "WWW-Authenticate": `Bearer realm="OAuth", resource_metadata="${metadata}", scope="kaption:access"`,
+            },
+          }));
+        }
+        return Promise.resolve(new Response(
+          JSON.stringify({ error: "invalid_token", error_description: "Invalid access token" }),
+          {
+            status: 401,
+            headers: {
+              "Content-Type": "application/json",
+              "WWW-Authenticate":
+                `Bearer realm="OAuth", resource_metadata="${metadata}", error="invalid_token", scope="kaption:access"`,
+            },
           },
-        }));
+        ));
       }
       return this.config.defaultHandler.fetch(request, env, ctx);
     }
@@ -270,6 +288,83 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     );
   });
 
+  it("answers a tokenless MCP initialize with a JSON invalid_request body and the unchanged challenge", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("unexpected")),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+      }),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("www-authenticate")).toBe(
+      'Bearer realm="OAuth", resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp", scope="kaption:access"',
+    );
+    expect(await response.json()).toEqual({
+      error: "invalid_request",
+      error_description: expect.any(String),
+      resource_metadata: "https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp",
+    });
+  });
+
+  it("answers a bad token on tools/list with a JSON invalid_token body and the unchanged challenge", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("unexpected")),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/mcp", {
+        method: "POST",
+        headers: { Authorization: "Bearer not-a-real-token", "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
+      }),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("www-authenticate")).toBe(
+      'Bearer realm="OAuth", resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp", error="invalid_token", scope="kaption:access"',
+    );
+    expect(await response.json()).toEqual({
+      error: "invalid_token",
+      error_description: "Invalid access token",
+      resource_metadata: "https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp",
+    });
+  });
+
+  it("returns JSON errors from the extension token exchange", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response("unexpected")),
+    } as any);
+    const { ctx } = createExecutionContext();
+
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/ws/auth", { method: "POST" }),
+      createEnv(),
+      ctx,
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(await response.json()).toEqual({
+      error: "invalid_request",
+      error_description: "Missing bearer token",
+    });
+  });
+
   it("keeps legacy-host 401 challenges and metadata on the same origin", async () => {
     const handler = createFetchHandler({
       fetch: vi.fn(async () => new Response("Unauthorized", { status: 401 })),
@@ -285,6 +380,9 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toContain(
       'resource_metadata="https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource/mcp"',
+    );
+    expect(((await response.json()) as { resource_metadata: string }).resource_metadata).toBe(
+      "https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource/mcp",
     );
   });
 
