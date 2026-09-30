@@ -8,20 +8,25 @@ import {
   parseConnectionLifetime,
   type ConnectionLifetime,
 } from "@/src/connection-lifetime-options";
+import { useI18n } from "../../LanguageProvider";
+import { translateError } from "../../i18n";
+
+type ErrorState = { error?: string; errorKey?: string; errorParams?: Record<string, string> } | null;
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
 
 function OTPForm() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const initialTicket = searchParams.get("ticket") || "";
   const [ticket, setTicket] = useState(initialTicket);
   const [code, setCode] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ErrorState>(null);
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const [resending, setResending] = useState(false);
-  const [resendMessage, setResendMessage] = useState("");
+  const [resendMessage, setResendMessage] = useState(false);
   const [lifetime, setLifetime] = useState<ConnectionLifetime>(DEFAULT_CONNECTION_LIFETIME);
 
   // Countdown timer for resend cooldown
@@ -34,8 +39,8 @@ function OTPForm() {
   const handleResend = useCallback(async () => {
     if (resendCooldown > 0 || resending || !ticket) return;
     setResending(true);
-    setResendMessage("");
-    setError("");
+    setResendMessage(false);
+    setError(null);
 
     try {
       const res = await fetch("/authorize/resend-otp", {
@@ -47,17 +52,19 @@ function OTPForm() {
         ok?: boolean;
         verifyTicket?: string;
         error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string>;
       };
 
       if (data.ok && data.verifyTicket) {
         setTicket(data.verifyTicket);
         setResendCooldown(RESEND_COOLDOWN_SECONDS);
-        setResendMessage("Code sent! Check your WhatsApp.");
+        setResendMessage(true);
       } else {
-        setError(data.error || "Failed to resend code.");
+        setError((data.error || data.errorKey) ? data : { errorKey: "verify.resend_failed" });
       }
     } catch {
-      setError("Network error. Try again.");
+      setError({ errorKey: "common.network_error" });
     } finally {
       setResending(false);
     }
@@ -66,9 +73,9 @@ function OTPForm() {
   if (!initialTicket) {
     return (
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
-        <h1 className="text-xl mb-2 text-neutral-50">Invalid Request</h1>
+        <h1 className="text-xl mb-2 text-neutral-50">{t("common.invalid_request")}</h1>
         <p className="text-sm text-neutral-400">
-          Missing verification session. Go back and try again.
+          {t("verify.missing_ticket")}
         </p>
       </div>
     );
@@ -80,7 +87,7 @@ function OTPForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    setError(null);
 
     try {
       const res = await fetch("/authorize/verify-otp", {
@@ -88,25 +95,30 @@ function OTPForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ verifyTicket: ticket, code, connectionLifetime: lifetime }),
       });
-      const data = (await res.json()) as { redirectTo?: string; error?: string };
+      const data = (await res.json()) as {
+        redirectTo?: string;
+        error?: string;
+        errorKey?: string;
+        errorParams?: Record<string, string>;
+      };
 
       if (data.redirectTo) {
         window.location.href = data.redirectTo;
       } else {
-        setError(data.error || "Verification failed");
+        setError((data.error || data.errorKey) ? data : { errorKey: "common.verification_failed" });
         setLoading(false);
       }
     } catch {
-      setError("Network error. Try again.");
+      setError({ errorKey: "common.network_error" });
       setLoading(false);
     }
   }
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
-      <h1 className="text-xl mb-2 text-neutral-50">Enter Verification Code</h1>
+      <h1 className="text-xl mb-2 text-neutral-50">{t("verify.title")}</h1>
       <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
-        We sent a 6-digit code to your WhatsApp number.
+        {t("verify.intro")}
       </p>
 
       <form onSubmit={handleSubmit}>
@@ -114,7 +126,7 @@ function OTPForm() {
           htmlFor="code"
           className="block text-[13px] text-neutral-400 mb-1.5"
         >
-          Verification Code
+          {t("common.verification_code")}
         </label>
         <input
           type="text"
@@ -133,7 +145,7 @@ function OTPForm() {
           htmlFor="connectionLifetime"
           className="block text-[13px] text-neutral-400 mt-5 mb-1.5"
         >
-          Stay connected
+          {t("lifetime.label")}
         </label>
         <div className="relative">
           <select
@@ -147,8 +159,8 @@ function OTPForm() {
             {LIFETIME_CHOICES.map((choice) => (
               <option key={choice.id} value={choice.id}>
                 {choice.id === DEFAULT_CONNECTION_LIFETIME
-                  ? `${choice.title} (recommended)`
-                  : choice.title}
+                  ? t("lifetime.recommended", { title: t(`lifetime.${choice.id}.title`) })
+                  : t(`lifetime.${choice.id}.title`)}
               </option>
             ))}
           </select>
@@ -166,15 +178,19 @@ function OTPForm() {
           </svg>
         </div>
         <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2">
-          {selectedChoice.detail}
+          {t(`lifetime.${selectedChoice.id}.detail`)}
         </p>
         <p className="text-xs text-neutral-500 mt-1">
-          You can disconnect any AI app from the Kaption extension at any time.
+          {t("verify.disconnect_note")}
         </p>
 
-        {error && <p className="text-red-500 text-[13px] mt-2">{error}</p>}
+        {error && (
+          <p className="text-red-500 text-[13px] mt-2">
+            {translateError(t, error, "common.verification_failed")}
+          </p>
+        )}
         {resendMessage && (
-          <p className="text-green-400 text-[13px] mt-2">{resendMessage}</p>
+          <p className="text-green-400 text-[13px] mt-2">{t("verify.code_sent")}</p>
         )}
 
         <button
@@ -182,7 +198,7 @@ function OTPForm() {
           disabled={loading}
           className="w-full py-3 rounded-lg border-none bg-green-500 text-neutral-950 font-semibold text-sm cursor-pointer mt-4 hover:bg-green-600 disabled:opacity-50 disabled:cursor-wait"
         >
-          {loading ? "Verifying..." : "Verify"}
+          {loading ? t("common.verifying") : t("common.verify")}
         </button>
       </form>
 
@@ -191,7 +207,7 @@ function OTPForm() {
           onClick={() => history.back()}
           className="text-neutral-400 text-[13px] bg-transparent border-none cursor-pointer hover:text-neutral-50"
         >
-          &larr; Different number
+          &larr; {t("verify.different_number")}
         </button>
 
         <button
@@ -200,12 +216,21 @@ function OTPForm() {
           className="text-[13px] bg-transparent border-none cursor-pointer disabled:opacity-40 disabled:cursor-default text-green-400 hover:text-green-300 disabled:text-neutral-500"
         >
           {resending
-            ? "Sending..."
+            ? t("common.sending")
             : resendCooldown > 0
-              ? `Resend code (${resendCooldown}s)`
-              : "Resend code"}
+              ? t("verify.resend_in", { seconds: resendCooldown })
+              : t("verify.resend")}
         </button>
       </div>
+    </div>
+  );
+}
+
+function LoadingCard() {
+  const { t } = useI18n();
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
+      <p className="text-neutral-400">{t("common.loading")}</p>
     </div>
   );
 }
@@ -214,11 +239,7 @@ export default function VerifyPage() {
   return (
     <div className="flex items-center justify-center min-h-screen p-5">
       <Suspense
-        fallback={
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
-            <p className="text-neutral-400">Loading...</p>
-          </div>
-        }
+        fallback={<LoadingCard />}
       >
         <OTPForm />
       </Suspense>

@@ -45,6 +45,7 @@ import {
   startAllowed,
   startConnectPairing,
 } from "./connect-code";
+import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
 export { RelayMCP, RelayRoom, DeploymentChainDO };
@@ -439,6 +440,22 @@ export async function toJsonBearerChallenge(response: Response, requestUrl: URL)
   );
 }
 
+/**
+ * mcp.CONNECT_CODE.8 — `?lang=<code>` on a page (the extension opens /connect with its UI language): the render gets it
+ * as x-kaption-lang (the root layout's <html lang> and server text can't see the query), and the answer sets the
+ * kaption_lang cookie (path /, SameSite=Lax, a year) so the sign-in page Claude or ChatGPT opens later speaks it too.
+ * Done here rather than in Next middleware, which the OpenNext bundle can't load.
+ */
+export function withPageLanguage(req: Request): { request: Request; cookie: string | null } {
+  if (req.method !== "GET") return { request: req, cookie: null };
+  const url = new URL(req.url);
+  const lang = normalizeLanguage(url.searchParams.get("lang"));
+  if (!lang) return { request: req, cookie: null };
+  const headers = new Headers(req.headers);
+  headers.set(LANG_HEADER, lang);
+  return { request: new Request(req, { headers }), cookie: languageCookie(lang, url.protocol === "https:") };
+}
+
 // ─── Factory: create the composed fetch handler ───────────────────────
 
 interface WorkerHandler {
@@ -610,18 +627,26 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
               "[authorize] sign-in request rejected:",
               error instanceof Error ? error.message : error,
             );
-            return new Response(
-              "Kaption couldn't start signing in to this app. Remove Kaption from the app's connectors, add it again, and try once more.",
-              { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } },
-            );
+            // mcp.CONNECT_CODE.8 — in the language /connect remembered, else the browser's.
+            const { lang } = resolveLanguage({
+              cookie: readCookie(req.headers.get("cookie"), LANG_COOKIE),
+              acceptLanguage: req.headers.get("accept-language"),
+            });
+            return new Response(getT(lang)("err.authorize_start"), {
+              status: 400,
+              headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Language": lang },
+            });
           }
         }
 
-        const response = await nextHandler.fetch(finalReq, oauthEnv, c);
+        // mcp.CONNECT_CODE.8 — a page opened with ?lang= (the extension opens /connect so) keeps that language.
+        const pageLang = withPageLanguage(finalReq);
+        const response = await nextHandler.fetch(pageLang.request, oauthEnv, c);
         // [L4] Add request ID to response
         const newResponse = new Response(response.body, response);
         newResponse.headers.set("x-request-id", requestId);
         applySecurityHeaders(newResponse.headers);
+        if (pageLang.cookie) newResponse.headers.append("Set-Cookie", pageLang.cookie);
         return newResponse;
       },
     });

@@ -21,27 +21,28 @@ import {
 import { deriveAccountRef, hmacVerify, sanitizeAccountRefForLog } from "@/src/otp";
 import { parseConnectionLifetime } from "@/src/connection-lifetime-options";
 import type { Env } from "@/src/types";
+import { jsonError } from "@/app/i18n";
 
 const EXPIRED = "This code doesn't work any more. Get a new one in Kaption → AI assistants, then paste it here.";
 
 export async function POST(request: Request): Promise<Response> {
   if (!request.headers.get("content-type")?.includes("application/json")) {
-    return Response.json({ error: "Invalid content type" }, { status: 400 });
+    return jsonError("Invalid content type", { status: 400 });
   }
   const { env } = getCloudflareContext() as unknown as { env: Env };
   let body: { code?: unknown; remembered?: unknown; oauthReqInfo?: unknown; connectionLifetime?: unknown };
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    return jsonError("Invalid JSON body", { status: 400 });
   }
   if (typeof body.oauthReqInfo !== "string" || !body.oauthReqInfo) {
-    return Response.json({ error: "Invalid OAuth state" }, { status: 400 });
+    return jsonError("Invalid OAuth state", { status: 400 });
   }
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (!(await redeemAllowed(env.OAUTH_KV, ip))) {
-    return Response.json({ error: "Too many tries. Wait a few minutes and try again." }, { status: 429 });
+    return jsonError("Too many tries. Wait a few minutes and try again.", { status: 429 });
   }
 
   const jar = await cookies();
@@ -49,10 +50,10 @@ export async function POST(request: Request): Promise<Response> {
   const input = remembered ? jar.get(CONNECT_COOKIE)?.value : body.code;
   if (!normalizeConnectCode(input)) {
     if (!remembered) await countFailedRedeem(env.OAUTH_KV, ip);
-    return Response.json(
-      { error: remembered ? EXPIRED : "That doesn't look like a Kaption code. It has 8 letters and numbers, like ABCD-2345.", forget: remembered },
-      { status: 400 },
-    );
+    return jsonError(remembered ? EXPIRED : "That doesn't look like a Kaption code. It has 8 letters and numbers, like ABCD-2345.", {
+      status: 400,
+      extra: { forget: remembered },
+    });
   }
 
   // [M3] The request is ours before the code is spent.
@@ -64,18 +65,18 @@ export async function POST(request: Request): Promise<Response> {
     oauthReq = null;
   }
   if (!oauthReq?.clientId) {
-    return Response.json({ error: "Invalid or tampered OAuth state" }, { status: 400 });
+    return jsonError("Invalid or tampered OAuth state", { status: 400 });
   }
 
   const phone = await redeemConnectCode(connectDeps(env), input);
   if (remembered) jar.delete(CONNECT_COOKIE);
   if (!phone) {
     await countFailedRedeem(env.OAUTH_KV, ip);
-    return Response.json({ error: EXPIRED, forget: remembered }, { status: 400 });
+    return jsonError(EXPIRED, { status: 400, extra: { forget: remembered } });
   }
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return Response.json({ error: EXPIRED }, { status: 400 });
+    return jsonError(EXPIRED, { status: 400 });
   }
 
   const connectionLifetime = parseConnectionLifetime(body.connectionLifetime);
@@ -91,6 +92,6 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     // [H1] Never leak internal error details
     console.error(`[connect-code] OAuth completion failed for ${sanitizeAccountRefForLog(accountRef)}`);
-    return Response.json({ error: "Authorization failed. Please try again." }, { status: 500 });
+    return jsonError("Authorization failed. Please try again.", { status: 500 });
   }
 }

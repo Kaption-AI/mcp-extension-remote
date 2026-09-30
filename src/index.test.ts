@@ -395,3 +395,58 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     expect(csp).toContain("https://mcp-ext.kaptionai.com");
   });
 });
+
+describe("mcp.CONNECT_CODE.8 page language", () => {
+  function pageHandler() {
+    let forwarded: Request | null = null;
+    const handler = createFetchHandler({
+      fetch: vi.fn(async (request: Request) => {
+        forwarded = request;
+        return new Response("<html></html>", { headers: { "Content-Type": "text/html" } });
+      }),
+    } as any);
+    return { handler, forwarded: () => forwarded as Request | null };
+  }
+
+  it("/connect?lang= renders in that language and remembers it in kaption_lang for a year", async () => {
+    const { handler, forwarded } = pageHandler();
+    const { ctx } = createExecutionContext();
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/connect?app=claude&lang=zh_TW"),
+      createEnv(),
+      ctx,
+    );
+    expect(forwarded()?.headers.get("x-kaption-lang")).toBe("zh-TW");
+    expect(response.headers.get("set-cookie")).toBe(
+      "kaption_lang=zh-TW; Path=/; Max-Age=31536000; SameSite=Lax; Secure",
+    );
+  });
+
+  it("without a usable lang nothing is set", async () => {
+    for (const url of ["https://mcp.kaptionai.com/connect?app=claude", "https://mcp.kaptionai.com/connect?lang=xx"]) {
+      const { handler, forwarded } = pageHandler();
+      const { ctx } = createExecutionContext();
+      const response = await handler(new Request(url), createEnv(), ctx);
+      expect(forwarded()?.headers.get("x-kaption-lang")).toBeNull();
+      expect(response.headers.get("set-cookie")).toBeNull();
+    }
+  });
+
+  it("a sign-in request the library rejects says so in the remembered language", async () => {
+    const { handler } = pageHandler();
+    const { ctx } = createExecutionContext();
+    const env = createEnv({
+      OAUTH_PROVIDER: { parseAuthRequest: vi.fn(async () => { throw new Error("invalid_target"); }) } as any,
+    });
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/authorize?client_id=x", {
+        headers: { cookie: "kaption_lang=es", "accept-language": "de" },
+      }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-language")).toBe("es");
+    expect(await response.text()).toMatch(/^Kaption no /);
+  });
+});

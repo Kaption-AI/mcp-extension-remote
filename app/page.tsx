@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { LANGUAGES, detectLanguage, getT, type TFunc } from "./i18n";
+import { LANGUAGES, type TFunc } from "./i18n";
+import { useI18n } from "./LanguageProvider";
 
 const EXTENSION_URL = "https://kaptionai.com/extension";
 const GITHUB_URL = "https://github.com/Kaption-AI/mcp-extension-remote";
@@ -12,21 +12,12 @@ const LOCAL_MCP_DOCS = "https://www.npmjs.com/package/@kaptionai/mcp-extension";
 const TRANSPARENCY_URL = "https://mcp.kaptionai.com/transparency/latest";
 
 export default function LandingPage() {
-  const [lang, setLangState] = useState("en");
-  const t = getT(lang);
-
-  useEffect(() => {
-    setLangState(detectLanguage());
-  }, []);
-
-  const setLang = useCallback((code: string) => {
-    setLangState(code);
-    try { localStorage.setItem("language", code); } catch {}
-  }, []);
+  // mcp.CONNECT_CODE.8 — the picker also sets kaption_lang, so the sign-in pages follow it.
+  const { lang, t, setLang } = useI18n();
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header lang={lang} setLang={setLang} />
+      <Header lang={lang} setLang={setLang} t={t} />
       <main className="flex-1">
         <Hero t={t} />
         <PrivacyBanner t={t} />
@@ -40,7 +31,7 @@ export default function LandingPage() {
   );
 }
 
-function Header({ lang, setLang }: { lang: string; setLang: (code: string) => void }) {
+function Header({ lang, setLang, t }: { lang: string; setLang: (code: string) => void; t: TFunc }) {
   return (
     <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between">
@@ -52,7 +43,7 @@ function Header({ lang, setLang }: { lang: string; setLang: (code: string) => vo
           value={lang}
           onChange={(e) => setLang(e.target.value)}
           className="bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm rounded-lg px-2 py-1.5 outline-none focus:border-green-500 cursor-pointer"
-          aria-label="Language"
+          aria-label={t("language")}
         >
           {LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>{l.label}</option>
