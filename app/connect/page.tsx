@@ -6,26 +6,30 @@
  * and the page shows the one thing left to do: add the connector in the app. Nothing here signs anyone in.
  */
 import { useEffect, useState } from "react";
+import { rich, useI18n } from "../LanguageProvider";
+import { translateError } from "../i18n";
 
 const APPS = {
   claude: {
     name: "Claude",
     open: "https://claude.ai/settings/connectors",
-    steps: ["Open Claude's connectors", "Add custom connector, name it Kaption, paste the address", "Click Connect, then Connect again on Kaption's page"],
+    steps: ["connect.claude_step1", "connect.claude_step2", "connect.claude_step3"],
   },
   chatgpt: {
     name: "ChatGPT",
     open: "https://chatgpt.com/#settings/Connectors",
-    steps: ["Open ChatGPT's Apps & Connectors", "Create a connector, name it Kaption, paste the address", "Click Connect, then Connect again on Kaption's page"],
+    steps: ["connect.chatgpt_step1", "connect.chatgpt_step2", "connect.chatgpt_step3"],
   },
 } as const;
 
 type AppId = keyof typeof APPS;
 
 export default function ConnectPage() {
+  const { t } = useI18n();
   const [state, setState] = useState<"working" | "ready" | "failed">("working");
   const [masked, setMasked] = useState("");
-  const [error, setError] = useState("");
+  // A translation key and its values (or a server's message), so the text follows a language change.
+  const [error, setError] = useState<{ key?: string; params?: Record<string, string>; text?: string }>({});
   const [copied, setCopied] = useState(false);
   const [appId, setAppId] = useState<AppId>("claude");
   const [server, setServer] = useState("https://mcp.kaptionai.com/mcp");
@@ -40,7 +44,7 @@ export default function ConnectPage() {
     window.history.replaceState(null, "", url.pathname + url.search);
     if (!code) {
       setState("failed");
-      setError("This link has no code. Open Kaption in WhatsApp and click Add to Claude again.");
+      setError({ key: "connect.no_code", params: { app: APPS[requested === "chatgpt" ? "chatgpt" : "claude"].name } });
       return;
     }
     void fetch("/connect/remember", {
@@ -49,22 +53,23 @@ export default function ConnectPage() {
       body: JSON.stringify({ code }),
     })
       .then(async (res) => {
-        const data = (await res.json()) as { masked?: string; error?: string };
+        const data = (await res.json()) as { masked?: string; error?: string; errorKey?: string; errorParams?: Record<string, string> };
         if (res.ok && data.masked) {
           setMasked(data.masked);
           setState("ready");
         } else {
-          setError(data.error || "This code doesn't work any more. Get a new one in Kaption.");
+          setError(data.errorKey ? { key: data.errorKey, params: data.errorParams } : data.error ? { text: data.error } : { key: "connect.expired" });
           setState("failed");
         }
       })
       .catch(() => {
-        setError("Network error. Reload this page to try again.");
+        setError({ key: "connect.network_error" });
         setState("failed");
       });
   }, []);
 
   const app = APPS[appId];
+  const errorText = translateError(t, { errorKey: error.key, errorParams: error.params, error: error.text }, "connect.expired");
 
   const copy = async () => {
     try {
@@ -79,16 +84,15 @@ export default function ConnectPage() {
   return (
     <div className="flex items-center justify-center min-h-screen p-5">
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[440px] w-full" data-testid="connect-page">
-        <h1 className="text-xl mb-2 text-neutral-50">Connect {app.name} to your WhatsApp</h1>
-        {state === "working" && <p className="text-sm text-neutral-400">Getting things ready…</p>}
-        {state === "failed" && <p className="text-sm text-red-400" role="alert">{error}</p>}
+        <h1 className="text-xl mb-2 text-neutral-50">{t("connect.title", { app: app.name })}</h1>
+        {state === "working" && <p className="text-sm text-neutral-400">{t("connect.working")}</p>}
+        {state === "failed" && <p className="text-sm text-red-400" role="alert">{errorText}</p>}
         {state === "ready" && (
           <>
             <p className="text-sm text-neutral-400 mb-5 leading-relaxed">
-              For Kaption on WhatsApp <span className="text-neutral-50 font-medium">{masked}</span>. Kaption&apos;s sign-in
-              page will already know it&apos;s you: no number to type.
+              {rich(t("connect.ready"), { masked: <span className="text-neutral-50 font-medium">{masked}</span> })}
             </p>
-            <label htmlFor="serverUrl" className="block text-[13px] text-neutral-400 mb-1.5">Connector address</label>
+            <label htmlFor="serverUrl" className="block text-[13px] text-neutral-400 mb-1.5">{t("connect.address_label")}</label>
             <div className="flex gap-2">
               <input
                 id="serverUrl"
@@ -102,11 +106,11 @@ export default function ConnectPage() {
                 onClick={() => { void copy(); }}
                 className="px-4 rounded-lg bg-neutral-800 text-neutral-50 text-sm font-semibold hover:bg-neutral-700"
               >
-                {copied ? "Copied" : "Copy"}
+                {copied ? t("connect.copied") : t("connect.copy")}
               </button>
             </div>
             <ol className="mt-5 flex flex-col gap-2 text-sm text-neutral-300 list-decimal pl-5">
-              {app.steps.map((step) => <li key={step}>{step}</li>)}
+              {app.steps.map((step) => <li key={step}>{t(step)}</li>)}
             </ol>
             <a
               href={app.open}
@@ -115,11 +119,10 @@ export default function ConnectPage() {
               onClick={() => { void copy(); }}
               className="block text-center w-full py-3 rounded-lg bg-green-500 text-neutral-950 font-semibold text-sm mt-6 hover:bg-green-600"
             >
-              Copy the address and open {app.name}
+              {t("connect.open", { app: app.name })}
             </a>
             <p className="text-xs text-neutral-500 mt-3">
-              The code works once, for 10 minutes. Using {app.name} on another computer or in another browser? Paste the
-              code Kaption showed you on the sign-in page instead.
+              {t("connect.footnote", { app: app.name })}
             </p>
           </>
         )}

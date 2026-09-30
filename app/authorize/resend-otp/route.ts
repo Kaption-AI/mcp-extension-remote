@@ -25,11 +25,12 @@ import {
   sanitizeForLog,
 } from "@/src/otp";
 import type { Env } from "@/src/types";
+import { jsonError } from "@/app/i18n";
 
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return Response.json({ error: "Invalid content type" }, { status: 400 });
+    return jsonError("Invalid content type", { status: 400 });
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -38,13 +39,13 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    return jsonError("Invalid JSON body", { status: 400 });
   }
 
   const parsed = await ResendOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return Response.json({ error: msg }, { status: 400 });
+    return jsonError(msg, { status: 400 });
   }
 
   const { verifyTicket } = parsed.data;
@@ -52,8 +53,7 @@ export async function POST(request: Request): Promise<Response> {
   // Decrypt the verify ticket to get phone + oauthReqInfo
   const ticket = await readVerifyTicket(verifyTicket, env.EPHEMERAL_STATE_SECRET);
   if (!ticket) {
-    return Response.json(
-      { error: "Verification session expired. Please start over." },
+    return jsonError("Verification session expired. Please start over.",
       { status: 400 },
     );
   }
@@ -61,22 +61,20 @@ export async function POST(request: Request): Promise<Response> {
   const { phone, oauthReqInfo } = ticket;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return Response.json({ error: "Invalid session" }, { status: 400 });
+    return jsonError("Invalid session", { status: 400 });
   }
 
   // IP rate limiting
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {
-    return Response.json(
-      { error: "Too many requests. Try again later." },
+    return jsonError("Too many requests. Try again later.",
       { status: 429 },
     );
   }
 
   // Resend-specific rate limit (3 per 10 min)
   if (!(await checkResendRateLimit(env.OAUTH_KV, accountRef))) {
-    return Response.json(
-      { error: "Too many resend attempts. Please wait a few minutes." },
+    return jsonError("Too many resend attempts. Please wait a few minutes.",
       { status: 429 },
     );
   }
@@ -101,8 +99,7 @@ export async function POST(request: Request): Promise<Response> {
 
     if (!res.ok) {
       console.error(`[otp-resend] Send failed for ${sanitizeForLog(phone)}: ${res.status}`);
-      return Response.json(
-        { error: "Failed to resend code. Try again." },
+      return jsonError("Failed to resend code. Try again.",
         { status: 500 },
       );
     }
@@ -114,14 +111,13 @@ export async function POST(request: Request): Promise<Response> {
       env.EPHEMERAL_STATE_SECRET,
     );
     if (!newTicket) {
-      return Response.json({ error: "Failed to prepare verification flow." }, { status: 500 });
+      return jsonError("Failed to prepare verification flow.", { status: 500 });
     }
 
     return Response.json({ ok: true, verifyTicket: newTicket });
   } catch {
     console.error(`[otp-resend] Send error for ${sanitizeForLog(phone)}`);
-    return Response.json(
-      { error: "Failed to resend code. Try again." },
+    return jsonError("Failed to resend code. Try again.",
       { status: 500 },
     );
   }

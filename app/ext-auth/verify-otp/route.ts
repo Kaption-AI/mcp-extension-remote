@@ -15,6 +15,7 @@ import {
 } from "@/src/otp";
 import type { Env } from "@/src/types";
 import { corsOptions, withCors } from "../cors";
+import { jsonError } from "@/app/i18n";
 
 export async function OPTIONS(request: Request): Promise<Response> {
   return corsOptions(request);
@@ -23,7 +24,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return withCors(Response.json({ error: "Invalid content type" }, { status: 400 }), request);
+    return withCors(jsonError("Invalid content type", { status: 400 }), request);
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -32,25 +33,25 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+    return withCors(jsonError("Invalid JSON body", { status: 400 }), request);
   }
 
   const parsed = await ExtVerifyOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return withCors(Response.json({ error: msg }, { status: 400 }), request);
+    return withCors(jsonError(msg, { status: 400 }), request);
   }
 
   const { phone, code } = parsed.data;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return withCors(Response.json({ error: "Invalid phone number format" }, { status: 400 }), request);
+    return withCors(jsonError("Invalid phone number format", { status: 400 }), request);
   }
 
   const result = await verifyOTP(env.OAUTH_KV, accountRef, code);
 
   if (!result.valid) {
-    return withCors(Response.json({ error: result.error }, { status: 400 }), request);
+    return withCors(jsonError(result.error, { status: 400 }), request);
   }
 
   // Generate and store a cloud token for the extension

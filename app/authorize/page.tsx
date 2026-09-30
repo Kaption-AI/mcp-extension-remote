@@ -5,6 +5,7 @@ import SignIn from "./SignIn";
 import { CONNECT_COOKIE, connectDeps, maskPhone, peekConnectCode } from "@/src/connect-code";
 import { hmacVerify } from "@/src/otp";
 import type { Env } from "@/src/types";
+import { getServerT } from "../i18n-server";
 
 /** mcp.CONNECT_CODE.5 — the app asking to connect, by the name it registered with (Claude, ChatGPT…), or null. */
 async function clientName(env: Env, oauthReqInfo: string): Promise<string | null> {
@@ -31,6 +32,8 @@ export default async function AuthorizePage({
     typeof params._oauthReqInfo === "string" ? params._oauthReqInfo : "";
   const loginHint =
     typeof params._loginHint === "string" ? params._loginHint : "";
+  // mcp.CONNECT_CODE.8 — ?lang=, the kaption_lang cookie /connect set, or Accept-Language.
+  const { t } = await getServerT(params.lang);
 
   // mcp.CONNECT_CODE.4 — a code the /connect page remembered on this browser: only its masked phone reaches the page;
   // the code itself stays in the HttpOnly cookie and is spent server-side.
@@ -53,7 +56,7 @@ export default async function AuthorizePage({
       <Suspense
         fallback={
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
-            <p className="text-neutral-400">Loading...</p>
+            <p className="text-neutral-400">{t("common.loading")}</p>
           </div>
         }
       >

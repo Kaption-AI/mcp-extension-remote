@@ -12,6 +12,7 @@ import { ReviewerLoginSchema } from "@/src/schemas";
 import { deriveAccountRef, hmacVerify } from "@/src/otp";
 import type { Env } from "@/src/types";
 import { DEFAULT_CONNECTION_LIFETIME } from "@/src/connection-lifetime-options";
+import { jsonError } from "@/app/i18n";
 
 const RATE_WINDOW_SECONDS = 15 * 60;
 const MAX_ATTEMPTS = 10;
@@ -37,26 +38,25 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 export async function POST(request: Request): Promise<Response> {
   if (!request.headers.get("content-type")?.includes("application/json")) {
-    return Response.json({ error: "Invalid content type" }, { status: 400 });
+    return jsonError("Invalid content type", { status: 400 });
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
   const passwordHash = env.OPENAI_REVIEW_PASSWORD_SHA256?.trim().toLowerCase();
   const phone = env.OPENAI_REVIEW_PHONE?.trim();
   if (!passwordHash || !phone || !/^[a-f0-9]{64}$/.test(passwordHash)) {
-    return Response.json({ error: "Reviewer access is not configured" }, { status: 404 });
+    return jsonError("Reviewer access is not configured", { status: 404 });
   }
 
   let raw: unknown;
   try {
     raw = await request.json();
   } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    return jsonError("Invalid JSON body", { status: 400 });
   }
   const parsed = await ReviewerLoginSchema.safeParseAsync(raw);
   if (!parsed.success) {
-    return Response.json(
-      { error: parsed.error.issues[0]?.message || "Invalid input" },
+    return jsonError(parsed.error.issues[0]?.message || "Invalid input",
       { status: 400 },
     );
   }
@@ -65,8 +65,7 @@ export async function POST(request: Request): Promise<Response> {
   const rateKey = `openai-review-login:${ip}`;
   const attempts = Number(await env.OAUTH_KV.get(rateKey)) || 0;
   if (attempts >= MAX_ATTEMPTS) {
-    return Response.json(
-      { error: "Too many attempts. Try again later." },
+    return jsonError("Too many attempts. Try again later.",
       { status: 429, headers: { "Retry-After": String(RATE_WINDOW_SECONDS) } },
     );
   }
@@ -81,7 +80,7 @@ export async function POST(request: Request): Promise<Response> {
     !constantTimeEqual(submittedPhoneHash, configuredPhoneHash) ||
     !constantTimeEqual(submittedPasswordHash, passwordHash)
   ) {
-    return Response.json({ error: "Invalid reviewer credentials" }, { status: 401 });
+    return jsonError("Invalid reviewer credentials", { status: 401 });
   }
 
   const signedPayload = await hmacVerify(
@@ -89,22 +88,22 @@ export async function POST(request: Request): Promise<Response> {
     env.INTERNAL_API_KEY,
   );
   if (!signedPayload) {
-    return Response.json({ error: "Invalid or expired OAuth state" }, { status: 400 });
+    return jsonError("Invalid or expired OAuth state", { status: 400 });
   }
 
   let oauthRequest: AuthRequest;
   try {
     oauthRequest = JSON.parse(atob(signedPayload)) as AuthRequest;
   } catch {
-    return Response.json({ error: "Invalid OAuth state" }, { status: 400 });
+    return jsonError("Invalid OAuth state", { status: 400 });
   }
   if (!oauthRequest.clientId) {
-    return Response.json({ error: "Invalid OAuth state" }, { status: 400 });
+    return jsonError("Invalid OAuth state", { status: 400 });
   }
 
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return Response.json({ error: "Reviewer access is not configured" }, { status: 500 });
+    return jsonError("Reviewer access is not configured", { status: 500 });
   }
 
   try {
@@ -120,8 +119,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ redirectTo });
   } catch {
     console.error("[reviewer-auth] OAuth completion failed");
-    return Response.json(
-      { error: "Authorization failed. Please try again." },
+    return jsonError("Authorization failed. Please try again.",
       { status: 500 },
     );
   }

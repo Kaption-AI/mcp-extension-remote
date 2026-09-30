@@ -16,15 +16,16 @@ import {
   redeemAllowed,
 } from "@/src/connect-code";
 import type { Env } from "@/src/types";
+import { jsonError } from "@/app/i18n";
 
 export async function POST(request: Request): Promise<Response> {
   if (!request.headers.get("content-type")?.includes("application/json")) {
-    return Response.json({ error: "Invalid content type" }, { status: 400 });
+    return jsonError("Invalid content type", { status: 400 });
   }
   const { env } = getCloudflareContext() as unknown as { env: Env };
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (!(await redeemAllowed(env.OAUTH_KV, ip))) {
-    return Response.json({ error: "Too many tries. Wait a few minutes and try again." }, { status: 429 });
+    return jsonError("Too many tries. Wait a few minutes and try again.", { status: 429 });
   }
   let body: { code?: unknown } = {};
   try {
@@ -36,7 +37,7 @@ export async function POST(request: Request): Promise<Response> {
   const phone = code ? await peekConnectCode(connectDeps(env), code) : null;
   if (!code || !phone) {
     await countFailedRedeem(env.OAUTH_KV, ip);
-    return Response.json({ error: "This code doesn't work any more. Get a new one in Kaption." }, { status: 400 });
+    return jsonError("This code doesn't work any more. Get a new one in Kaption.", { status: 400 });
   }
   (await cookies()).set(CONNECT_COOKIE, code, {
     httpOnly: true,

@@ -18,6 +18,7 @@ import {
 } from "@/src/otp";
 import type { Env } from "@/src/types";
 import { corsOptions, withCors } from "../cors";
+import { jsonError } from "@/app/i18n";
 
 export async function OPTIONS(request: Request): Promise<Response> {
   return corsOptions(request);
@@ -26,7 +27,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return withCors(Response.json({ error: "Invalid content type" }, { status: 400 }), request);
+    return withCors(jsonError("Invalid content type", { status: 400 }), request);
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -35,32 +36,32 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+    return withCors(jsonError("Invalid JSON body", { status: 400 }), request);
   }
 
   const parsed = await ExtSendOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return withCors(Response.json({ error: msg }, { status: 400 }), request);
+    return withCors(jsonError(msg, { status: 400 }), request);
   }
 
   const { phone } = parsed.data;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return withCors(Response.json({ error: "Invalid phone number format" }, { status: 400 }), request);
+    return withCors(jsonError("Invalid phone number format", { status: 400 }), request);
   }
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {
     return withCors(
-      Response.json({ error: "Too many requests. Try again later." }, { status: 429 }),
+      jsonError("Too many requests. Try again later.", { status: 429 }),
       request,
     );
   }
 
   if (!(await checkRateLimit(env.OAUTH_KV, accountRef))) {
     return withCors(
-      Response.json({ error: "Too many OTP requests. Try again in an hour." }, { status: 429 }),
+      jsonError("Too many OTP requests. Try again in an hour.", { status: 429 }),
       request,
     );
   }
@@ -84,7 +85,7 @@ export async function POST(request: Request): Promise<Response> {
     if (!res.ok) {
       console.error(`[otp] Send failed for ${sanitizeForLog(phone)}: ${res.status}`);
       return withCors(
-        Response.json({ error: "Failed to send verification code. Try again." }, { status: 500 }),
+        jsonError("Failed to send verification code. Try again.", { status: 500 }),
         request,
       );
     }
@@ -93,7 +94,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     console.error(`[otp] Send error for ${sanitizeForLog(phone)}`);
     return withCors(
-      Response.json({ error: "Failed to send verification code. Try again." }, { status: 500 }),
+      jsonError("Failed to send verification code. Try again.", { status: 500 }),
       request,
     );
   }
