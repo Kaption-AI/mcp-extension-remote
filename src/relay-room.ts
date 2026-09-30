@@ -28,11 +28,17 @@ interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
   timeout: ReturnType<typeof setTimeout>;
+  /** mcp.CLOUD_RELAY.15 — the socket the request went to; only its close rejects it. */
+  ws?: WebSocket | null;
 }
 
 interface WsAttachment {
   authenticated: boolean;
   accountRef: string | null;
+  /** mcp.CLOUD_RELAY.15 — when this socket authenticated (ms); the newest one serves requests. */
+  authAt?: number;
+  /** mcp.CLOUD_RELAY.15 — when the socket was opened (ms); an unauthenticated one older than this grace is stale. */
+  openedAt?: number;
   /** mcp.CLOUD_RELAY.14 — the account whose room this is, set by the Worker; a handshake must be for it. */
   room?: string | null;
 }
@@ -40,6 +46,8 @@ interface WsAttachment {
 /** mcp.CLOUD_RELAY.14 — set by the Worker (index.ts) on the upgrade it forwards to the room. */
 export const ROOM_ACCOUNT_HEADER = "X-Kaption-Room-Account";
 
+/** mcp.CLOUD_RELAY.15 — an unauthenticated socket older than this is a client's abandoned attempt. */
+const STALE_HANDSHAKE_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 120_000; // 2 minutes — media downloads from WhatsApp CDN can be slow
 // mcp.CLOUD_RELAY.5 — 16MB cap, JSON-RPC validation, origin restrict, 50 pending, hibernation
 const MAX_MESSAGE_SIZE = 16 * 1024 * 1024; // [H2] 16MB — must accommodate base64-encoded media (images, audio, video)
@@ -106,23 +114,18 @@ export class RelayRoom extends DurableObject<Env> {
     this.authenticated = false;
     this.accountRef = null;
     // Persist initial (unauthenticated) state in WS attachment for hibernation
-    this.setWsAttachment(server, { authenticated: false, accountRef: null, room: request.headers.get(ROOM_ACCOUNT_HEADER) });
+    this.setWsAttachment(server, { authenticated: false, accountRef: null, room: request.headers.get(ROOM_ACCOUNT_HEADER), openedAt: Date.now() });
 
     server.addEventListener("message", (event) => {
       this.handleExtensionMessage(event.data as string);
     });
 
     server.addEventListener("close", () => {
-      this.extensionWs = null;
-      this.authenticated = false;
-      this.accountRef = null;
-      this.rejectAllPending("Extension disconnected");
+      this.forgetSocket(server);
     });
 
     server.addEventListener("error", () => {
-      this.extensionWs = null;
-      this.authenticated = false;
-      this.accountRef = null;
+      if (this.extensionWs === server) this.extensionWs = null;
     });
 
     return new Response(null, { status: 101, webSocket: client });
@@ -140,7 +143,9 @@ export class RelayRoom extends DurableObject<Env> {
     this.restoreFromHibernation();
 
     // mcp.CLOUD_RELAY.8 — relay is unprivileged; every tool needs live extension
-    if (!this.extensionWs || !this.authenticated) {
+    // mcp.CLOUD_RELAY.15 — several clients of one account may be connected; the newest authenticated one serves.
+    const target = this.servingSocket();
+    if (!target) {
       throw new Error(
         "Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge.",
       );
@@ -161,10 +166,10 @@ export class RelayRoom extends DurableObject<Env> {
         );
       }, REQUEST_TIMEOUT_MS);
 
-      this.pendingRequests.set(id, { resolve, reject, timeout });
+      this.pendingRequests.set(id, { resolve, reject, timeout, ws: target });
 
       try {
-        this.extensionWs!.send(
+        target.send(
           JSON.stringify({
             jsonrpc: "2.0",
             id,
@@ -185,7 +190,46 @@ export class RelayRoom extends DurableObject<Env> {
    */
   isExtensionConnected(): boolean {
     this.restoreFromHibernation();
-    return this.extensionWs !== null && this.authenticated;
+    return this.servingSocket() !== null;
+  }
+
+  /** mcp.CLOUD_RELAY.15 — the newest authenticated socket of this room, or null. */
+  private servingSocket(): WebSocket | null {
+    let sockets: WebSocket[] = [];
+    try {
+      sockets = this.ctx.getWebSockets();
+    } catch {
+      sockets = [];
+    }
+    let best: WebSocket | null = null;
+    let bestAt = -1;
+    for (const socket of sockets) {
+      const attachment = this.readWsAttachment(socket);
+      if (!attachment?.authenticated) continue;
+      const at = typeof attachment.authAt === "number" ? attachment.authAt : 0;
+      if (at >= bestAt) {
+        best = socket;
+        bestAt = at;
+      }
+    }
+    if (best) return best;
+    // Outside hibernation (tests, first run) the in-memory state is the only record.
+    return this.extensionWs && this.authenticated ? this.extensionWs : null;
+  }
+
+  /** mcp.CLOUD_RELAY.15 — a closed socket takes only its own in-flight requests with it. */
+  private forgetSocket(ws: WebSocket): void {
+    if (this.extensionWs === ws) {
+      this.extensionWs = null;
+      this.authenticated = false;
+      this.accountRef = null;
+    }
+    for (const [id, pending] of this.pendingRequests) {
+      if (pending.ws && pending.ws !== ws) continue;
+      clearTimeout(pending.timeout);
+      pending.reject(new Error("Extension disconnected"));
+      this.pendingRequests.delete(id);
+    }
   }
 
   /**
@@ -309,6 +353,7 @@ export class RelayRoom extends DurableObject<Env> {
         authenticated: true,
         accountRef: session.accountRef,
         room: this.roomOf(ws),
+        authAt: Date.now(),
       });
     }
     this.closeOtherSockets(ws);
@@ -359,21 +404,10 @@ export class RelayRoom extends DurableObject<Env> {
     // mcp.CLOUD_RELAY.13 — the socket that sent this handshake, even if another spoke while it was checked.
     this.extensionWs = ws;
     if (ws) {
-      this.setWsAttachment(ws, { authenticated: true, accountRef, room: this.roomOf(ws) });
+      this.setWsAttachment(ws, { authenticated: true, accountRef, room: this.roomOf(ws), authAt: Date.now() });
     }
     this.closeOtherSockets(ws);
     ws?.send(JSON.stringify({ type: "auth_ok", phone }));
-  }
-
-  /**
-   * Reject all pending requests with the given reason.
-   */
-  private rejectAllPending(reason: string): void {
-    for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error(reason));
-      this.pendingRequests.delete(id);
-    }
   }
 
   // ─── Hibernation support ─────────────────────────────────────────────
@@ -448,7 +482,12 @@ export class RelayRoom extends DurableObject<Env> {
     }
   }
 
-  /** mcp.CLOUD_RELAY.13 — once a socket authenticates, the room's older sockets are gone for good. */
+  /**
+   * mcp.CLOUD_RELAY.13, CLOUD_RELAY.15 — once a socket authenticates, the room's leftover sockets that never
+   * authenticated (a client's earlier attempts) are closed. Another AUTHENTICATED socket is a different client of
+   * the same account (Kaption.app and a browser, two browsers) and is kept: closing it made the two replace each
+   * other every few seconds, for ever (found 2026-09-30). Requests go to the newest authenticated socket.
+   */
   private closeOtherSockets(current: WebSocket | null): void {
     if (!current) return;
     let sockets: WebSocket[] = [];
@@ -459,6 +498,10 @@ export class RelayRoom extends DurableObject<Env> {
     }
     for (const socket of sockets) {
       if (socket === current) continue;
+      const attachment = this.readWsAttachment(socket);
+      if (attachment?.authenticated) continue;
+      // Another client may be mid-handshake: only an attempt left unauthenticated past the grace is stale.
+      if (typeof attachment?.openedAt === "number" && Date.now() - attachment.openedAt < STALE_HANDSHAKE_MS) continue;
       try {
         socket.close(4000, "Replaced by a newer connection");
       } catch {
@@ -471,11 +514,6 @@ export class RelayRoom extends DurableObject<Env> {
    * Durable Object WebSocket hibernation handler for close events.
    */
   async webSocketClose(ws: WebSocket): Promise<void> {
-    if (this.extensionWs === ws) {
-      this.extensionWs = null;
-      this.authenticated = false;
-      this.accountRef = null;
-      this.rejectAllPending("Extension disconnected");
-    }
+    this.forgetSocket(ws);
   }
 }
