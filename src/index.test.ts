@@ -232,6 +232,40 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     });
   });
 
+  it("redirects the legacy hostname's home page to the site's MCP page", async () => {
+    const next = vi.fn(async () => new Response("home page"));
+    const handler = createFetchHandler({ fetch: next } as any);
+    const { ctx } = createExecutionContext();
+
+    for (const method of ["GET", "HEAD"]) {
+      const response = await handler(
+        new Request("https://mcp-ext.kaptionai.com/", { method }),
+        createEnv(),
+        ctx,
+      );
+      expect(response.status).toBe(301);
+      expect(response.headers.get("Location")).toBe("https://kaptionai.com/mcp/");
+    }
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("keeps the canonical hostname's home page and the legacy hostname's other paths", async () => {
+    const next = vi.fn(async () => new Response("page"));
+    const handler = createFetchHandler({ fetch: next } as any);
+    const { ctx } = createExecutionContext();
+
+    const home = await handler(new Request("https://mcp.kaptionai.com/"), createEnv(), ctx);
+    expect(home.status).toBe(200);
+    const legacyMcp = await handler(new Request("https://mcp-ext.kaptionai.com/mcp"), createEnv(), ctx);
+    expect(legacyMcp.status).toBe(401);
+    const legacyMeta = await handler(
+      new Request("https://mcp-ext.kaptionai.com/.well-known/oauth-protected-resource"),
+      createEnv(),
+      ctx,
+    );
+    expect(legacyMeta.status).toBe(200);
+  });
+
   it("never trusts an unknown request host as an OAuth issuer", () => {
     expect(getMcpOrigin(new URL("https://attacker.example/mcp"))).toBe(
       "https://mcp.kaptionai.com",

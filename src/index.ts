@@ -63,6 +63,7 @@ const outerApp = new Hono<{ Bindings: Env }>();
 const MCP_ORIGIN = "https://mcp.kaptionai.com";
 const LEGACY_MCP_ORIGIN = "https://mcp-ext.kaptionai.com";
 const MCP_ORIGINS = new Set([MCP_ORIGIN, LEGACY_MCP_ORIGIN]);
+const LEGACY_HOME_REDIRECT = "https://kaptionai.com/mcp/";
 const OPENAI_CHALLENGE_PATH = "/.well-known/openai-apps-challenge";
 
 /**
@@ -541,6 +542,17 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
     // [L4] Propagate request ID
     const requestId =
       request.headers.get("x-request-id") || crypto.randomUUID();
+
+    // The legacy hostname's home page competes in search with the site's MCP
+    // page, so it redirects there. Only the page at "/" moves: the extension,
+    // the desktop app and existing connections still use every other path here.
+    if (
+      url.origin === LEGACY_MCP_ORIGIN
+      && url.pathname === "/"
+      && (request.method === "GET" || request.method === "HEAD")
+    ) {
+      return Response.redirect(LEGACY_HOME_REDIRECT, 301);
+    }
 
     // Public standards and domain-verification routes bypass OAuth.
     if (url.pathname === OPENAI_CHALLENGE_PATH) {
