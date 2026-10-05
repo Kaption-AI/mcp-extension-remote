@@ -2,10 +2,12 @@
 
 Cloud MCP relay for WhatsApp — lets AI assistants (Claude, ChatGPT, Cursor, etc.) interact with your WhatsApp conversations through the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-**Live at:** [mcp.kaptionai.com](https://mcp.kaptionai.com) (canonical) and
-[mcp-ext.kaptionai.com](https://mcp-ext.kaptionai.com) (backward-compatible alias)
+**Setup guide:** [kaptionai.com/mcp](https://kaptionai.com/mcp/) — connect WhatsApp to Claude, ChatGPT or Cursor.
 
-The relay **cannot read your messages**. It forwards MCP tool calls between the AI client and the Kaption browser extension, which processes everything locally in your browser. The code is open source — verify it yourself.
+**Live at:** [mcp.kaptionai.com](https://mcp.kaptionai.com) (canonical) and
+mcp-ext.kaptionai.com (backward-compatible alias for existing connections)
+
+The relay **cannot read your messages**. It forwards MCP tool calls between the AI client and the Kaption browser extension, which processes everything locally in your browser. Its source code is public (BUSL-1.1), so you can verify it yourself.
 
 ## Architecture
 
