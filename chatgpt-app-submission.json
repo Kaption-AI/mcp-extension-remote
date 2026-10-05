@@ -3,8 +3,8 @@
   "schema_version": 1,
   "app_info": {
     "display_name": "Kaption AI",
-    "subtitle": "Work with WhatsApp chats",
-    "description": "Kaption AI connects ChatGPT to the user's Kaption browser extension to search and summarize WhatsApp conversations, review transcribed voice notes, inspect contacts and groups, analyze communication patterns, and organize chats, reminders, labels, lists, and scheduled messages.",
+    "subtitle": "Personal WhatsApp MCP",
+    "description": "A personal MCP for WhatsApp. Search and summarize your chats, read your voice-note and call transcripts, and organize chats, labels, reminders and scheduled messages.",
     "category": "PRODUCTIVITY"
   },
   "tools": {
@@ -198,6 +198,18 @@
         "read_only_justification": "Computes and returns analytics and exports from user-authorized WhatsApp data without changing source data.",
         "open_world_justification": "Analytics remain private to the authenticated user and are not published or sent to another person.",
         "destructive_justification": "Does not delete, overwrite, or modify messages, contacts, chats, or analytics source data."
+      }
+    },
+    "call_recordings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists, retrieves and searches the user's own call recordings and their transcripts without changing them.",
+        "open_world_justification": "Only reads the user's private recordings and does not publish or send anything.",
+        "destructive_justification": "Does not delete, overwrite or change recordings or transcripts."
       }
     }
   },
