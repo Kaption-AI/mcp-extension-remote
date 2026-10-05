@@ -502,7 +502,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   query: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   summarize_conversation: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   manage_labels: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-  manage_notes: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  manage_notes: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
   download_media: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   manage_chat: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_reminders: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },

@@ -47,12 +47,12 @@
     "manage_notes": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Can write or replace a private WhatsApp Business note for a selected contact.",
-        "open_world_justification": "Contact notes remain private to the user's WhatsApp Business workspace.",
+        "open_world_justification": "Contact notes are stored on the user's WhatsApp Business account on WhatsApp's servers and sync across the user's devices. Notes are private to the business and are not sent to the contact.",
         "destructive_justification": "Setting a note can overwrite prior note content that may not be recoverable."
       }
     },
