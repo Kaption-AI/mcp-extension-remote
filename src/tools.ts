@@ -494,23 +494,25 @@ const TOOL_TITLES: Record<string, string> = {
 //   destructiveHint : may perform destructive/irreversible updates
 //                     (delete, or a scheduled/deferred WhatsApp send).
 //   idempotentHint  : repeating the call with the same args is a no-op.
-//   openWorldHint   : can change state visible to an external recipient or the
-//                     public internet. Reading remote/private data is false.
+//   openWorldHint   : acts on an independently controlled external system:
+//                     changes state visible to another WhatsApp user, syncs to
+//                     the account on WhatsApp's servers, or fetches live from
+//                     WhatsApp's backend. Reading the local Store is false.
 const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   query: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   summarize_conversation: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  manage_labels: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  manage_labels: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_notes: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   download_media: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  manage_chat: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  manage_chat: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_reminders: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   manage_scheduled_messages: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
-  manage_lists: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  manage_lists: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   list_contacts: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_contact: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_contact_groups: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   list_groups: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  get_group: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_group: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   export_contacts: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_api_info: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_analytics: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
