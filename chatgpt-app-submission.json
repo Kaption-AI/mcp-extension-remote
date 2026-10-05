@@ -3,8 +3,8 @@
   "schema_version": 1,
   "app_info": {
     "display_name": "Kaption AI",
-    "subtitle": "Personal WhatsApp MCP",
-    "description": "A personal MCP for WhatsApp. Search and summarize your chats, read your voice-note transcripts, and organize chats, labels, reminders and scheduled messages.",
+    "subtitle": "WhatsApp chats, audio & calls",
+    "description": "A personal MCP for WhatsApp, with voice-note and call transcripts. Search and summarize your chats, read what was said in voice notes and calls, and organize chats, labels, reminders and scheduled messages.",
     "category": "PRODUCTIVITY"
   },
   "tools": {
@@ -35,12 +35,12 @@
     "manage_labels": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, assigns, removes, or deletes labels in the user's WhatsApp Business account.",
-        "open_world_justification": "Label changes are private organization state and are not messages or public content.",
+        "open_world_justification": "Labels are stored on the user's WhatsApp Business account on WhatsApp's servers, so changes sync across the user's devices. It does not send messages to anyone.",
         "destructive_justification": "Can delete a label or remove it from selected conversations, which may not be automatically recoverable."
       }
     },
@@ -71,12 +71,12 @@
     "manage_chat": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Changes private chat state such as archive, unread, pin, mute, and draft values.",
-        "open_world_justification": "It cannot send a message and only changes the authenticated user's private WhatsApp state.",
+        "open_world_justification": "Changes chat state on the user's WhatsApp account. Marking a chat as read sends read receipts the other person can see. It never sends a message.",
         "destructive_justification": "Can clear or overwrite a draft and change chat state, including operations that may not be automatically reversible."
       }
     },
@@ -107,12 +107,12 @@
     "manage_lists": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Creates, renames, edits, deletes, or changes membership of private WhatsApp chat lists.",
-        "open_world_justification": "Chat-list organization is private to the authenticated user's WhatsApp account.",
+        "open_world_justification": "Chat lists are stored on the user's WhatsApp account on WhatsApp's servers and sync across the user's devices. It does not send messages to anyone.",
         "destructive_justification": "Can delete a list or replace its membership, which may not be automatically recoverable."
       }
     },
@@ -167,12 +167,12 @@
     "get_group": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Refreshes and retrieves current metadata and participants for one WhatsApp group without changing membership or content.",
-        "open_world_justification": "The network refresh only reads private group state and does not send a message or publish content.",
+        "open_world_justification": "Fetches the group's current participant list live from WhatsApp's servers. It only reads and does not change the group.",
         "destructive_justification": "Does not add, remove, or modify group participants or messages."
       }
     },
