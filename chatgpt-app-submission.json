@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "Kaption AI",
     "subtitle": "Personal WhatsApp MCP",
-    "description": "A personal MCP for WhatsApp. Search and summarize your chats, read your voice-note and call transcripts, and organize chats, labels, reminders and scheduled messages.",
+    "description": "A personal MCP for WhatsApp. Search and summarize your chats, read your voice-note transcripts, and organize chats, labels, reminders and scheduled messages.",
     "category": "PRODUCTIVITY"
   },
   "tools": {
