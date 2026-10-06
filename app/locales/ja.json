@@ -66,6 +66,8 @@
   "connect.footnote": "コードは 1 回のみ、10 分間有効です。別のパソコンやブラウザで {{app}} を使う場合は、Kaption に表示されたコードをサインインページに貼り付けてください。",
   "signin.this_app": "このアプリ",
   "signin.title": "{{app}} を WhatsApp に接続",
+  "signin.returns_to": "接続後、{{host}} に戻ります。",
+  "signin.returns_local": "接続後、このコンピューター上のアプリに戻ります。",
   "signin.remembered": "{{app}} は WhatsApp {{masked}} の Kaption を使用します。",
   "signin.not_you": "ご本人ではありませんか？",
   "signin.paste_hint": "WhatsApp の Kaption → AIアシスタント → 「Claude に追加」または「ChatGPT に追加」に表示されるコードを貼り付けてください。",

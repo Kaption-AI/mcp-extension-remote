@@ -6,6 +6,7 @@
  * pasted from Kaption. "Use my phone number instead" is today's phone + WhatsApp code form, unchanged.
  */
 import { useState } from "react";
+import Destination from "./Destination";
 import PhoneForm from "./PhoneForm";
 import {
   DEFAULT_CONNECTION_LIFETIME,
@@ -21,11 +22,13 @@ export default function SignIn({
   loginHint = "",
   rememberedFor,
   appName,
+  destination,
 }: {
   oauthReqInfo: string;
   loginHint?: string;
   rememberedFor: string | null;
   appName: string | null;
+  destination: string | null;
 }) {
   const { t } = useI18n();
   const [mode, setMode] = useState<"code" | "phone">(loginHint ? "phone" : "code");
@@ -39,7 +42,7 @@ export default function SignIn({
   if (mode === "phone" || !oauthReqInfo) {
     return (
       <div className="flex flex-col items-center gap-3 w-full max-w-[400px]">
-        <PhoneForm oauthReqInfo={oauthReqInfo} loginHint={loginHint} />
+        <PhoneForm oauthReqInfo={oauthReqInfo} loginHint={loginHint} appName={appName} destination={destination} />
         {oauthReqInfo && (
           <button type="button" onClick={() => setMode("code")} className="text-sm text-green-400 hover:underline">
             {t("signin.use_code")}
@@ -87,6 +90,7 @@ export default function SignIn({
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
       <h1 className="text-xl mb-2 text-neutral-50">{t("signin.title", { app })}</h1>
+      <Destination destination={destination} />
       {useRemembered && rememberedFor ? (
         <p className="text-sm text-neutral-400 mb-6 leading-relaxed" data-testid="connect-remembered">
           {rich(t("signin.remembered", { app }), {

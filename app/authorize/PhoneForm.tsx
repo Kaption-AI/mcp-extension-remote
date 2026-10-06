@@ -4,10 +4,21 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useI18n } from "../LanguageProvider";
 import { translateError } from "../i18n";
+import Destination from "./Destination";
 
 type ErrorState = { error?: string; errorKey?: string; errorParams?: Record<string, string> } | null;
 
-export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqInfo: string; loginHint?: string }) {
+export default function PhoneForm({
+  oauthReqInfo,
+  loginHint = "",
+  appName = null,
+  destination = null,
+}: {
+  oauthReqInfo: string;
+  loginHint?: string;
+  appName?: string | null;
+  destination?: string | null;
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const [phone, setPhone] = useState(loginHint);
@@ -77,7 +88,8 @@ export default function PhoneForm({ oauthReqInfo, loginHint = "" }: { oauthReqIn
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
-      <h1 className="text-xl mb-2 text-neutral-50">Kaption MCP</h1>
+      <h1 className="text-xl mb-2 text-neutral-50">{t("signin.title", { app: appName || t("signin.this_app") })}</h1>
+      <Destination destination={destination} />
       <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
         {t("phone.intro")}
       </p>

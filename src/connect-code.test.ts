@@ -7,6 +7,7 @@ import {
   formatConnectCode,
   generateConnectCode,
   maskPhone,
+  redirectDestination,
   normalizeConnectCode,
   peekConnectCode,
   pollConnectPairing,
@@ -60,6 +61,19 @@ describe("mcp.CONNECT_CODE.3 the code", () => {
   it("masks the phone to its country part and last four digits", () => {
     expect(maskPhone(PHONE)).toBe("+1 ••• 0123");
     expect(maskPhone("5511955550123")).toBe("+55 ••• 0123");
+  });
+
+  it("mcp.CONNECT_CODE.5 names where signing in returns: the redirect's host, or this computer", () => {
+    expect(redirectDestination("https://claude.ai/api/mcp/auth_callback")).toBe("claude.ai");
+    expect(redirectDestination("https://attacker-alpha.example.com/cb")).toBe("attacker-alpha.example.com");
+    expect(redirectDestination("https://evil.example:8443/cb")).toBe("evil.example:8443");
+    expect(redirectDestination("http://localhost:33418/callback")).toBe("local");
+    expect(redirectDestination("http://127.0.0.1:6274/oauth/callback")).toBe("local");
+    expect(redirectDestination("http://[::1]:8080/cb")).toBe("local");
+    expect(redirectDestination("http://localhost.evil.example/cb")).toBe("localhost.evil.example");
+    expect(redirectDestination("cursor://anysphere.cursor-retrieval/oauth/callback")).toBeNull();
+    expect(redirectDestination("not a url")).toBeNull();
+    expect(redirectDestination(undefined)).toBeNull();
   });
 });
 

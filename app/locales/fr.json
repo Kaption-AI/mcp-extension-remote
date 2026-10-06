@@ -66,6 +66,8 @@
   "connect.footnote": "Le code est valable une fois, pendant 10 minutes. Vous utilisez {{app}} sur un autre ordinateur ou dans un autre navigateur ? Collez plutôt le code affiché par Kaption sur la page de connexion.",
   "signin.this_app": "cette app",
   "signin.title": "Connecter {{app}} à WhatsApp",
+  "signin.returns_to": "Une fois connecté, vous reviendrez sur {{host}}.",
+  "signin.returns_local": "Une fois connecté, vous reviendrez à l'application sur cet ordinateur.",
   "signin.remembered": "{{app}} utilisera Kaption sur WhatsApp {{masked}}.",
   "signin.not_you": "Ce n'est pas vous ?",
   "signin.paste_hint": "Collez le code que Kaption affiche dans WhatsApp, sous Kaption → Assistants IA → Ajouter à Claude ou Ajouter à ChatGPT.",
