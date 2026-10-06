@@ -66,6 +66,8 @@
   "connect.footnote": "代码仅可使用一次，10 分钟内有效。在其他电脑或浏览器上使用 {{app}}？请改为把 Kaption 显示的代码粘贴到登录页面。",
   "signin.this_app": "此应用",
   "signin.title": "将 {{app}} 连接到 WhatsApp",
+  "signin.returns_to": "连接后，你将返回 {{host}}。",
+  "signin.returns_local": "连接后，你将返回这台电脑上的应用。",
   "signin.remembered": "{{app}} 将使用 WhatsApp {{masked}} 上的 Kaption。",
   "signin.not_you": "不是你？",
   "signin.paste_hint": "粘贴 Kaption 在 WhatsApp 中显示的代码，位于 Kaption → AI 助手 → 添加到 Claude 或 ChatGPT。",

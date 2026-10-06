@@ -66,6 +66,8 @@
   "connect.footnote": "Kod bir kez, 10 dakika boyunca geçerli. {{app}} uygulamasını başka bir bilgisayarda veya tarayıcıda mı kullanıyorsun? Bunun yerine Kaption'ın sana gösterdiği kodu giriş sayfasına yapıştır.",
   "signin.this_app": "bu uygulama",
   "signin.title": "WhatsApp'ını {{app}} ile bağla",
+  "signin.returns_to": "Bağlandıktan sonra {{host}} adresine geri döneceksiniz.",
+  "signin.returns_local": "Bağlandıktan sonra bu bilgisayardaki uygulamaya geri döneceksiniz.",
   "signin.remembered": "{{app}}, WhatsApp {{masked}} üzerindeki Kaption'ı kullanacak.",
   "signin.not_you": "Sen değil misin?",
   "signin.paste_hint": "Kaption'ın WhatsApp'ta Kaption → Yapay zekâ asistanları → Claude'a ekle veya ChatGPT'ye ekle altında gösterdiği kodu yapıştır.",

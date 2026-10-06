@@ -81,6 +81,22 @@ export function maskPhone(phone: string): string {
   return `+${digits.slice(0, digits.length > 11 ? 2 : 1)} ••• ${digits.slice(-4)}`;
 }
 
+/**
+ * mcp.CONNECT_CODE.5 — where signing in sends the person back: the redirect's host ("claude.ai"), "local" for an app on
+ * this computer (loopback), or null when it can't be read. Unlike the app's self-chosen name, the host can't be faked.
+ */
+export function redirectDestination(redirectUri: unknown): string | null {
+  if (typeof redirectUri !== "string") return null;
+  try {
+    const { protocol, hostname, host } = new URL(redirectUri);
+    if (protocol !== "https:" && protocol !== "http:") return null;
+    if (hostname === "localhost" || hostname === "[::1]" || /^127(\.\d{1,3}){3}$/.test(hostname)) return "local";
+    return host;
+  } catch {
+    return null;
+  }
+}
+
 const pairKey = (pairId: string) => `connect-pair:${pairId}`;
 const codeKey = (code: string) => `connect-code:${code}`;
 

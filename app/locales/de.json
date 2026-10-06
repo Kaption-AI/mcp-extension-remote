@@ -66,6 +66,8 @@
   "connect.footnote": "Der Code gilt einmal, 10 Minuten lang. Sie nutzen {{app}} auf einem anderen Computer oder in einem anderen Browser? Fügen Sie stattdessen den Code, den Kaption Ihnen angezeigt hat, auf der Anmeldeseite ein.",
   "signin.this_app": "diese App",
   "signin.title": "{{app}} mit WhatsApp verbinden",
+  "signin.returns_to": "Nach dem Verbinden geht es zurück zu {{host}}.",
+  "signin.returns_local": "Nach dem Verbinden geht es zurück zur App auf diesem Computer.",
   "signin.remembered": "{{app}} nutzt Kaption auf WhatsApp {{masked}}.",
   "signin.not_you": "Nicht Sie?",
   "signin.paste_hint": "Fügen Sie den Code ein, den Kaption in WhatsApp unter Kaption → KI-Assistenten → Zu Claude hinzufügen oder Zu ChatGPT hinzufügen anzeigt.",

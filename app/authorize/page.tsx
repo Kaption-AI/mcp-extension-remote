@@ -2,23 +2,27 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import SignIn from "./SignIn";
-import { CONNECT_COOKIE, connectDeps, maskPhone, peekConnectCode } from "@/src/connect-code";
+import { CONNECT_COOKIE, connectDeps, maskPhone, peekConnectCode, redirectDestination } from "@/src/connect-code";
 import { hmacVerify } from "@/src/otp";
 import type { Env } from "@/src/types";
 import { getServerT } from "../i18n-server";
 
-/** mcp.CONNECT_CODE.5 — the app asking to connect, by the name it registered with (Claude, ChatGPT…), or null. */
-async function clientName(env: Env, oauthReqInfo: string): Promise<string | null> {
+/**
+ * mcp.CONNECT_CODE.5 — the app asking to connect, by the name it registered with (Claude, ChatGPT…), and where signing
+ * in sends the person back. Anyone can register an app under any name, so the destination is what tells them apart.
+ */
+async function clientInfo(env: Env, oauthReqInfo: string): Promise<{ name: string | null; destination: string | null }> {
   try {
     const payload = await hmacVerify(oauthReqInfo, env.INTERNAL_API_KEY);
-    if (!payload) return null;
-    const request = JSON.parse(atob(payload)) as { clientId?: string };
-    if (!request.clientId) return null;
+    if (!payload) return { name: null, destination: null };
+    const request = JSON.parse(atob(payload)) as { clientId?: string; redirectUri?: string };
+    const destination = redirectDestination(request.redirectUri);
+    if (!request.clientId) return { name: null, destination };
     const client = await env.OAUTH_PROVIDER.lookupClient(request.clientId);
     const name = client?.clientName?.trim();
-    return name ? name.slice(0, 60) : null;
+    return { name: name ? name.slice(0, 60) : null, destination };
   } catch {
-    return null;
+    return { name: null, destination: null };
   }
 }
 
@@ -39,6 +43,7 @@ export default async function AuthorizePage({
   // the code itself stays in the HttpOnly cookie and is spent server-side.
   let rememberedFor: string | null = null;
   let appName: string | null = null;
+  let destination: string | null = null;
   try {
     const { env } = getCloudflareContext() as unknown as { env: Env };
     const remembered = (await cookies()).get(CONNECT_COOKIE)?.value;
@@ -46,7 +51,7 @@ export default async function AuthorizePage({
       const phone = await peekConnectCode(connectDeps(env), remembered);
       rememberedFor = phone ? maskPhone(phone) : null;
     }
-    if (oauthReqInfo) appName = await clientName(env, oauthReqInfo);
+    if (oauthReqInfo) ({ name: appName, destination } = await clientInfo(env, oauthReqInfo));
   } catch {
     rememberedFor = null;
   }
@@ -60,7 +65,7 @@ export default async function AuthorizePage({
           </div>
         }
       >
-        <SignIn oauthReqInfo={oauthReqInfo} loginHint={loginHint} rememberedFor={rememberedFor} appName={appName} />
+        <SignIn oauthReqInfo={oauthReqInfo} loginHint={loginHint} rememberedFor={rememberedFor} appName={appName} destination={destination} />
       </Suspense>
     </div>
   );
