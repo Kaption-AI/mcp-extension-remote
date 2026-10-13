@@ -28,12 +28,18 @@ export const PUBLIC_TOOL_OUTPUT_SCHEMA = z.object({
 });
 
 // mcp-local-send.MEDIA.1 — 8 MiB decoded fits the relay's 16 MiB frame ceiling.
-const localAttachmentSchema = z.object({
+// mcp-local-send.REFERENCES.1 — strict alternatives preserve source exclusivity.
+const attachmentName = z.string().min(1).max(200).regex(/^[^\\/\x00-\x1f\x7f]+$/);
+const attachmentMime = z.string().min(3).max(200);
+const localAttachmentSchema = z.union([
+  z.object({
   name: z.string().min(1).max(200).regex(/^[^\\/\x00-\x1f\x7f]+$/).describe('Filename without a path'),
   mime: z.string().min(3).max(200).describe('MIME type, e.g. image/png, application/pdf, audio/ogg, video/mp4'),
   size: z.number().int().min(1).max(8388608).describe('Decoded byte count (maximum 8 MiB)'),
   dataB64: z.string().min(4).max(11184812).regex(/^[A-Za-z0-9+/]*={0,2}$/).describe('Standard padded base64 bytes, without a data URL prefix'),
-}).describe('One inline attachment; requires the owner-only MCP_LOCAL_SEND flag and local delivery');
+}).strict(),
+  z.object({ ref: z.string().regex(/^[a-f0-9]{64}$/).describe('One-time attachmentRef returned by create_attachment_upload after PUT of the bytes') }).strict(),
+]).describe('Exactly one attachment source: dataB64 or uploaded ref (paths are never accepted); max 8 MiB. Requires MCP_LOCAL_SEND and local delivery');
 
 export const TOOLS: ToolDefinition[] = [
   {
@@ -208,6 +214,17 @@ export const TOOLS: ToolDefinition[] = [
       notification_type: z.enum(["extension", "whatsapp", "automatic"]).optional().describe('How to notify. Default: "automatic"'),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
+  },
+  {
+    name: 'create_attachment_upload',
+    description: 'Create a one-time attachment upload slot, authorized by your connected Kaption account and owner-only MCP_LOCAL_SEND. Returns uploadUrl, attachmentRef and expiresAt. PUT the raw file bytes to uploadUrl within 15 minutes (e.g. curl -T file.pdf), then pass attachment: {ref: attachmentRef} to send_message or a local schedule create/update within one hour. The extension consumes the ref once and stores the bytes locally. No third-party URLs. Requires a connected Rust extension; target_session selects the account.',
+    inputSchema: z.object({
+      name: attachmentName.describe('Filename without paths or control characters, max 200 characters'),
+      mime: attachmentMime.describe('Allowed image, document, audio or video MIME type'),
+      size: z.number().int().min(1).max(8388608).describe('Exact file size in bytes, maximum 8 MiB'),
+      target_session: z.string().optional().describe('Session ID of the Kaption account that will send the attachment'),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
     name: 'send_message',
