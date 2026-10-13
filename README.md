@@ -259,3 +259,13 @@ are preserved.
 ## License
 
 [BUSL-1.1](./LICENSE)
+
+### One-time attachment uploads
+
+`create_attachment_upload({name,mime,size,target_session?})` is forwarded to the selected
+Rust core, which checks the owner-only MCP_LOCAL_SEND flag and uses its Kaption JWT to
+create a same-user upload slot on the schedule Worker. PUT raw bytes to `uploadUrl`
+within 15 minutes, then send `attachment:{ref:attachmentRef}` within one hour. The core
+consumes the ref once and stores bytes locally for immediate or future scheduled sends.
+Maximum 8 MiB; existing consent/ask-first limits apply. The relay never reads local files
+or fetches third-party URLs, and rejects `path` and `url` attachment fields.

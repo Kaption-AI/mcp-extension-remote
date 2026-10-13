@@ -37,6 +37,7 @@ describe("Tool registration", () => {
     "download_media",
     "manage_chat",
     "manage_reminders",
+    'create_attachment_upload',
     'send_message',
     "manage_scheduled_messages",
     "manage_lists",
@@ -51,12 +52,12 @@ describe("Tool registration", () => {
     "call_recordings",
   ];
 
-  it("exports exactly 19 tools", () => {
-    expect(TOOLS).toHaveLength(19);
+  it("exports exactly 20 tools", () => {
+    expect(TOOLS).toHaveLength(20);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(18);
+    expect(CLOUD_TOOLS).toHaveLength(19);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 
@@ -996,5 +997,18 @@ describe('mcp-local-send schemas', () => {
   });
   it('marks sending as a non-idempotent write', () => {
     expect(send.annotations).toMatchObject({ readOnlyHint: false, idempotentHint: false });
+  });
+});
+
+
+describe('mcp-local-send.REFERENCES.1 cloud boundaries', () => {
+  it('accepts uploaded refs, rejects paths/URLs and conflicting sources', () => {
+    const send = TOOLS.find(t=>t.name==='send_message')!.inputSchema;
+    const ref='a'.repeat(64);
+    expect(send.safeParse({conversation_id:'synthetic',attachment:{ref}}).success).toBe(true);
+    for(const attachment of [{path:'/tmp/a.pdf'},{url:'https://example.com/a.pdf'},{ref,path:'/tmp/a.pdf'},{ref,dataB64:'YWJj'}]) {
+      expect(send.safeParse({conversation_id:'synthetic',attachment}).success).toBe(false);
+    }
+    expect(CLOUD_TOOLS.some(t=>t.name==='create_attachment_upload')).toBe(true);
   });
 });
