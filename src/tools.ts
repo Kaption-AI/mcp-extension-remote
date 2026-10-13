@@ -27,6 +27,14 @@ export const PUBLIC_TOOL_OUTPUT_SCHEMA = z.object({
   result: z.unknown().describe("The JSON-compatible result returned by the Kaption extension"),
 });
 
+// mcp-local-send.MEDIA.1 — 8 MiB decoded fits the relay's 16 MiB frame ceiling.
+const localAttachmentSchema = z.object({
+  name: z.string().min(1).max(200).regex(/^[^\\/\x00-\x1f\x7f]+$/).describe('Filename without a path'),
+  mime: z.string().min(3).max(200).describe('MIME type, e.g. image/png, application/pdf, audio/ogg, video/mp4'),
+  size: z.number().int().min(1).max(8388608).describe('Decoded byte count (maximum 8 MiB)'),
+  dataB64: z.string().min(4).max(11184812).regex(/^[A-Za-z0-9+/]*={0,2}$/).describe('Standard padded base64 bytes, without a data URL prefix'),
+}).describe('One inline attachment; requires the owner-only MCP_LOCAL_SEND flag and local delivery');
+
 export const TOOLS: ToolDefinition[] = [
   {
     name: "query",
@@ -202,11 +210,21 @@ export const TOOLS: ToolDefinition[] = [
     }),
   },
   {
+    name: 'send_message',
+    description: 'Queue a WhatsApp message from this computer for the earliest permitted delivery. Requires the owner-only MCP_LOCAL_SEND flag, Rust core, and user consent in Kaption. Supports an existing person chat or eligible group (@g.us) and one image, document, audio or video attachment (8 MiB max). Message is optional with an attachment; audio cannot have captions. Returns queued plus a schedule ID, not proof of delivery. Existing ask-first prompts, 8/hour, 20/day, group limits and delays apply. An assistant cannot accept consent or confirmation. Computer and WhatsApp must remain open. Use manage_scheduled_messages with mode local to inspect or cancel the returned ID.',
+    inputSchema: z.object({
+      conversation_id: z.string().min(1).describe('Existing person chat ID or eligible group ID ending @g.us'),
+      message: z.string().max(2000).optional().describe('Message or attachment caption; omit for attachment-only sends'),
+      attachment: localAttachmentSchema.optional(),
+      target_session: z.string().optional().describe('Session ID for multi-account routing'),
+    }),
+  },
+  {
     name: "manage_scheduled_messages",
     description: [
       "Schedule WhatsApp messages to be sent automatically at a specific time, in one of two modes:",
       "  bot (default) - sent from Kaption's WhatsApp number, not the user's own. Stored in Kaption's cloud and sent even when this computer is off. One-to-one chats only (no groups); one line, max 800 characters.",
-      '  local ("From this computer") - sent from the user\'s own WhatsApp number, as them, while this computer and WhatsApp are open. Stays on this device. Kaption keeps it within safe limits automatically (a few messages an hour and a day, minutes apart, only to chats where the other person has written, at most 3 a day to groups) and refuses what does not fit. The only mode that can send to groups (ones the user can post in and posted in within 30 days). Text only. A message whose time passes while this computer is off is missed, never sent late on its own.',
+      '  local ("From this computer") - sent from the user\'s own WhatsApp number, as them, while this computer and WhatsApp are open. Stays on this device. Kaption keeps it within safe limits automatically (a few messages an hour and a day, minutes apart, only to chats where the other person has written, at most 3 a day to groups) and refuses what does not fit. The only mode that can send to groups (ones the user can post in and posted in within 30 days). Supports one image, document, audio or video attachment (8 MiB max), behind MCP_LOCAL_SEND and Rust core; audio captions are refused. A message whose time passes while this computer is off is missed, never sent late on its own.',
       'The local mode must first be turned on by the user in Kaption (its "From this computer" option, after reading the risks); an assistant cannot turn it on. A refused local request says why and ends with a reason code, e.g. "(reason: per-day)".',
       "",
       "Actions:",
@@ -233,7 +251,8 @@ export const TOOLS: ToolDefinition[] = [
       filter: z.enum(["pending", "sent", "all"]).optional().describe('Filter for list action. Default: "pending" (not sent yet; in local mode also missed or failed ones waiting for the user)'),
       id: z.string().optional().describe("Scheduled message ID (required for get/update/delete/cancel/remove/send_now)"),
       conversation_id: z.string().optional().describe('Chat to send the message to (required for create): a person, or a group with mode "local"'),
-      message: z.string().optional().describe("Message text to send (required for create, optional for update). Bot: one line, max 800 characters. Local: text only, up to 2000 characters"),
+      message: z.string().optional().describe("Message text to send (required for create, optional for update). Bot: one line, max 800 characters. Local: text or caption up to 2000 characters; omit with an attachment"),
+      attachment: localAttachmentSchema.nullable().optional().describe('Local create/update only. One attachment; null removes it on update. Omit message for attachment-only sends'),
       datetime: z.string().optional().describe("ISO 8601 datetime when the message should be sent (required for create, optional for update)"),
       notification_type: z.enum(["extension", "whatsapp", "automatic"]).optional().describe('Bot mode only. Notification type. Default: "automatic"'),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
@@ -506,6 +525,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   download_media: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   manage_chat: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_reminders: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  send_message: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_scheduled_messages: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_lists: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   list_contacts: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -584,6 +604,7 @@ export function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
       properties,
       additionalProperties: false,
     };
+    if (schema.description) result.description = schema.description;
     if (required.length > 0) {
       result.required = required;
     }
@@ -608,6 +629,10 @@ export function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
 
   if (schema instanceof z.ZodEnum) {
     return { type: "string", enum: schema.options, description: schema.description };
+  }
+
+  if (schema instanceof z.ZodNullable) {
+    return { oneOf: [zodToJsonSchema(schema.unwrap()), { type: 'null' }], ...(schema.description ? { description: schema.description } : {}) };
   }
 
   if (schema instanceof z.ZodOptional) {
