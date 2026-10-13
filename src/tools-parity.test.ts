@@ -13,14 +13,14 @@ import { TOOLS as CLOUD_TOOLS, zodToJsonSchema, type ToolDefinition } from "./to
 import { existsSync } from "fs";
 import { resolve } from "path";
 
-const localToolsPath = resolve(__dirname, "../../kaption-mcp/src/tools.ts");
+const localToolsPath = process.env.MCP_LOCAL_TOOLS_PATH || resolve(__dirname, "../../kaption-mcp/src/tools.ts");
 const hasLocalBridge = existsSync(localToolsPath);
 
 let LOCAL_TOOLS: ToolDefinition[] = [];
 
 if (hasLocalBridge) {
   // Dynamic import only when the file exists (local dev, not CI)
-  const mod = await import("../../kaption-mcp/src/tools");
+  const mod = await import(/* @vite-ignore */ localToolsPath);
   LOCAL_TOOLS = mod.TOOLS;
 }
 

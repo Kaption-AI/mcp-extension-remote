@@ -37,6 +37,7 @@ describe("Tool registration", () => {
     "download_media",
     "manage_chat",
     "manage_reminders",
+    'send_message',
     "manage_scheduled_messages",
     "manage_lists",
     "list_contacts",
@@ -50,12 +51,12 @@ describe("Tool registration", () => {
     "call_recordings",
   ];
 
-  it("exports exactly 18 tools", () => {
-    expect(TOOLS).toHaveLength(18);
+  it("exports exactly 19 tools", () => {
+    expect(TOOLS).toHaveLength(19);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(17);
+    expect(CLOUD_TOOLS).toHaveLength(18);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 
@@ -973,5 +974,27 @@ describe("OAuth flow schemas", () => {
       code: "123456",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+
+describe('mcp-local-send schemas', () => {
+  const file = { name: 'file.pdf', mime: 'application/pdf', size: 3, dataB64: 'YWJj' };
+  const send = TOOLS.find(t => t.name === 'send_message')!;
+  const schedule = TOOLS.find(t => t.name === 'manage_scheduled_messages')!;
+  it('mcp-local-send.SEND.2 accepts an attachment-only group send and preserves session routing', () => {
+    const input = { conversation_id: '120363000000000001@g.us', attachment: file, target_session: 'synthetic' };
+    expect(send.inputSchema.parse(input)).toEqual(input);
+  });
+  it('mcp-local-send.MEDIA.1 rejects oversized uploads and path filenames', () => {
+    for (const patch of [{ size: 8388609 }, { name: '../file.pdf' }]) {
+      expect(send.inputSchema.safeParse({ conversation_id: '15555550100@c.us', attachment: { ...file, ...patch } }).success).toBe(false);
+    }
+  });
+  it('accepts attachment removal and local scheduling', () => {
+    expect(schedule.inputSchema.parse({ action: 'update', mode: 'local', id: 'synthetic', attachment: null })).toMatchObject({ attachment: null, mode: 'local' });
+  });
+  it('marks sending as a non-idempotent write', () => {
+    expect(send.annotations).toMatchObject({ readOnlyHint: false, idempotentHint: false });
   });
 });
