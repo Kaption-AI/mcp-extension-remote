@@ -8,7 +8,6 @@ on:
     - cron: '0 6 * * *' # daily heartbeat at 6am UTC
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -16,25 +15,34 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # Lockfile must match (npm ci); dependency install scripts are disabled.
+      - run: npm ci --ignore-scripts
       - run: npm test
 
   deploy:
     name: Build & Deploy
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # cosign keyless signing (Sigstore OIDC)
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # Lockfile must match (npm ci); dependency install scripts are disabled.
+      - run: npm ci --ignore-scripts
 
       # Render wrangler.jsonc from the gitignored template (first pass:
       # BUILD_HASH is "pending-build", COMMIT_SHA is final). OpenNext needs
@@ -70,7 +78,7 @@ jobs:
 
       # ─── PRE-DEPLOY: Sign the bundle and record in Rekor ───────────
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4.1.0
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
 
       - name: Pre-deploy Sigstore signing
         id: pre_sign
@@ -92,7 +100,7 @@ jobs:
           echo "Pre-deploy Rekor index: $PRE_REKOR_INDEX"
 
       - name: Upload signed artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: signed-worker-${{ github.sha }}
           path: |
