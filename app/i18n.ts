@@ -18,6 +18,7 @@ import zhTW from "./locales/zh-TW.json";
 import ja from "./locales/ja.json";
 
 import { DEFAULT_LANGUAGE, normalizeLanguage, type LanguageCode } from "./language";
+import { problem } from "../src/problem";
 
 export * from "./language";
 
@@ -100,10 +101,23 @@ export function errorBody(text: string | undefined): { error: string; errorKey?:
   return found.params ? { error: message, errorKey: found.key, errorParams: found.params } : { error: message, errorKey: found.key };
 }
 
-/** A JSON error response whose message the page can translate. */
-export function jsonError(message: string | undefined, init?: ResponseInit & { extra?: Record<string, unknown> }): Response {
-  const { extra, ...rest } = init ?? {};
-  return Response.json({ ...errorBody(message), ...(extra ?? {}) }, rest);
+/**
+ * An error response whose message the page can translate: an RFC 9457 problem document (src/problem.ts) with a
+ * machine-readable `code`, `detail` = the English message, and the `error` / `errorKey` / `errorParams` fields the
+ * pages read, kept as extension members.
+ */
+export function jsonError(
+  message: string | undefined,
+  init: { status: number; code?: string; headers?: HeadersInit; extra?: Record<string, unknown> },
+): Response {
+  const body = errorBody(message);
+  return problem({
+    status: init.status,
+    code: init.code,
+    detail: body.error,
+    headers: init.headers,
+    extra: { ...body, ...(init.extra ?? {}) },
+  });
 }
 
 /** What a page shows for a server error: the translated message when the server named one, else its text, else the fallback. */

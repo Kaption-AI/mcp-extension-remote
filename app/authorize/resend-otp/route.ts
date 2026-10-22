@@ -16,21 +16,23 @@ import {
   createVerifyTicket,
   deriveAccountRef,
   generateOTP,
-  checkResendRateLimit,
+  otpResendLimit,
+  otpIpLimit,
   incrementResendRateLimit,
-  checkIpRateLimit,
   incrementIpRateLimit,
   readVerifyTicket,
   storeOTP,
   sanitizeForLog,
 } from "@/src/otp";
 import type { Env } from "@/src/types";
-import { jsonError } from "@/app/i18n";
+import { errorBody, jsonError } from "@/app/i18n";
+import { withHeaders } from "@/src/problem";
+import { consumed, rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return jsonError("Invalid content type", { status: 400 });
+    return jsonError("Invalid content type", { status: 400, code: "invalid_content_type" });
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -39,13 +41,13 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return jsonError("Invalid JSON body", { status: 400 });
+    return jsonError("Invalid JSON body", { status: 400, code: "invalid_json" });
   }
 
   const parsed = await ResendOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return jsonError(msg, { status: 400 });
+    return jsonError(msg, { status: 400, code: "invalid_input" });
   }
 
   const { verifyTicket } = parsed.data;
@@ -54,30 +56,32 @@ export async function POST(request: Request): Promise<Response> {
   const ticket = await readVerifyTicket(verifyTicket, env.EPHEMERAL_STATE_SECRET);
   if (!ticket) {
     return jsonError("Verification session expired. Please start over.",
-      { status: 400 },
+      { status: 400, code: "verification_expired" },
     );
   }
 
   const { phone, oauthReqInfo } = ticket;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return jsonError("Invalid session", { status: 400 });
+    return jsonError("Invalid session", { status: 400, code: "invalid_session" });
   }
 
   // IP rate limiting
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {
-    return jsonError("Too many requests. Try again later.",
-      { status: 429 },
-    );
+  const ipLimit = await otpIpLimit(env.OAUTH_KV, ip);
+  if (ipLimit.remaining <= 0) {
+    const message = "Too many requests. Try again later.";
+    return tooManyRequests(ipLimit, message, { extra: errorBody(message) });
   }
 
   // Resend-specific rate limit (3 per 10 min)
-  if (!(await checkResendRateLimit(env.OAUTH_KV, accountRef))) {
-    return jsonError("Too many resend attempts. Please wait a few minutes.",
-      { status: 429 },
-    );
+  const resendLimit = await otpResendLimit(env.OAUTH_KV, accountRef);
+  if (resendLimit.remaining <= 0) {
+    const message = "Too many resend attempts. Please wait a few minutes.";
+    return tooManyRequests(resendLimit, message, { extra: errorBody(message) });
   }
+  // Both limits count this request from here on.
+  const headers = rateLimitHeaders(consumed(resendLimit), consumed(ipLimit));
 
   // Generate new OTP (replaces old one in KV)
   const code = generateOTP();
@@ -100,7 +104,7 @@ export async function POST(request: Request): Promise<Response> {
     if (!res.ok) {
       console.error(`[otp-resend] Send failed for ${sanitizeForLog(phone)}: ${res.status}`);
       return jsonError("Failed to resend code. Try again.",
-        { status: 500 },
+        { status: 500, code: "otp_send_failed", headers },
       );
     }
 
@@ -111,14 +115,14 @@ export async function POST(request: Request): Promise<Response> {
       env.EPHEMERAL_STATE_SECRET,
     );
     if (!newTicket) {
-      return jsonError("Failed to prepare verification flow.", { status: 500 });
+      return jsonError("Failed to prepare verification flow.", { status: 500, code: "internal_error", headers });
     }
 
-    return Response.json({ ok: true, verifyTicket: newTicket });
+    return withHeaders(Response.json({ ok: true, verifyTicket: newTicket }), headers);
   } catch {
     console.error(`[otp-resend] Send error for ${sanitizeForLog(phone)}`);
     return jsonError("Failed to resend code. Try again.",
-      { status: 500 },
+      { status: 500, code: "otp_send_failed", headers },
     );
   }
 }
