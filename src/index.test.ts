@@ -322,7 +322,7 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     );
   });
 
-  it("answers a tokenless MCP initialize with a JSON invalid_request body and the unchanged challenge", async () => {
+  it("answers a tokenless MCP initialize with a problem+json body and the unchanged challenge", async () => {
     const handler = createFetchHandler({
       fetch: vi.fn(async () => new Response("unexpected")),
     } as any);
@@ -339,19 +339,24 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("www-authenticate")).toBe(
       'Bearer realm="OAuth", resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp", scope="kaption:access"',
     );
     expect(await response.json()).toEqual({
+      type: "https://kaptionai.com/developers/#errors-authentication_required",
+      title: "Authentication required",
+      status: 401,
+      detail: expect.any(String),
+      code: "authentication_required",
       error: "invalid_request",
       error_description: expect.any(String),
       resource_metadata: "https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp",
     });
   });
 
-  it("answers a bad token on tools/list with a JSON invalid_token body and the unchanged challenge", async () => {
+  it("answers a bad token on tools/list with a problem+json invalid_token body and the unchanged challenge", async () => {
     const handler = createFetchHandler({
       fetch: vi.fn(async () => new Response("unexpected")),
     } as any);
@@ -368,11 +373,16 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
     expect(response.headers.get("www-authenticate")).toBe(
       'Bearer realm="OAuth", resource_metadata="https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp", error="invalid_token", scope="kaption:access"',
     );
     expect(await response.json()).toEqual({
+      type: "https://kaptionai.com/developers/#errors-invalid_token",
+      title: "Unauthorized",
+      status: 401,
+      detail: "Invalid access token",
+      code: "invalid_token",
       error: "invalid_token",
       error_description: "Invalid access token",
       resource_metadata: "https://mcp.kaptionai.com/.well-known/oauth-protected-resource/mcp",
@@ -392,8 +402,13 @@ describe("createFetchHandler OpenAI plugin discovery", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
     expect(await response.json()).toEqual({
+      type: "https://kaptionai.com/developers/#errors-missing_bearer_token",
+      title: "Unauthorized",
+      status: 401,
+      detail: "Missing bearer token",
+      code: "missing_bearer_token",
       error: "invalid_request",
       error_description: "Missing bearer token",
     });
@@ -474,13 +489,164 @@ describe("mcp.CONNECT_CODE.8 page language", () => {
     });
     const response = await handler(
       new Request("https://mcp.kaptionai.com/authorize?client_id=x", {
-        headers: { cookie: "kaption_lang=es", "accept-language": "de" },
+        headers: { cookie: "kaption_lang=es", "accept-language": "de", accept: "text/html,*/*;q=0.8" },
       }),
       env,
       ctx,
     );
     expect(response.status).toBe(400);
     expect(response.headers.get("content-language")).toBe("es");
+    expect(response.headers.get("content-type")).toContain("text/plain");
     expect(await response.text()).toMatch(/^Kaption no /);
+  });
+
+  it("a non-browser client gets the same rejection as problem+json", async () => {
+    const { handler } = pageHandler();
+    const { ctx } = createExecutionContext();
+    const env = createEnv({
+      OAUTH_PROVIDER: { parseAuthRequest: vi.fn(async () => { throw new Error("invalid_target"); }) } as any,
+    });
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/authorize?client_id=x", {
+        headers: { cookie: "kaption_lang=es", accept: "application/json" },
+      }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
+    expect(response.headers.get("content-language")).toBe("es");
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ status: 400, code: "invalid_authorization_request" });
+    expect(String(body.detail)).toMatch(/^Kaption no /);
+  });
+});
+
+describe("AR-ACT-02 error contract on the worker", () => {
+  const html404 = () =>
+    new Response("<!DOCTYPE html><html><body>404: This page could not be found.</body></html>", {
+      status: 404,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+
+  it("answers an unknown route with problem+json, never Next's HTML page", async () => {
+    const handler = createFetchHandler({ fetch: vi.fn(async () => html404()) } as any);
+    const { ctx } = createExecutionContext();
+    for (const accept of ["*/*", "application/json", "text/html"]) {
+      const response = await handler(
+        new Request("https://mcp.kaptionai.com/no-such-page", { headers: { accept } }),
+        createEnv(),
+        ctx,
+      );
+      expect(response.status).toBe(404);
+      expect(response.headers.get("content-type")).toBe("application/problem+json");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      const text = await response.text();
+      expect(text).not.toContain("<html");
+      expect(JSON.parse(text)).toEqual({
+        type: "https://kaptionai.com/developers/#errors-not_found",
+        title: "Not Found",
+        status: 404,
+        code: "not_found",
+      });
+    }
+  });
+
+  it("keeps a sign-in page's own answer for a browser", async () => {
+    const handler = createFetchHandler({ fetch: vi.fn(async () => html404()) } as any);
+    const { ctx } = createExecutionContext();
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/connect", { headers: { accept: "text/html" } }),
+      createEnv(),
+      ctx,
+    );
+    expect(response.headers.get("content-type")).toContain("text/html");
+  });
+
+  it("turns an empty 405 from a route handler into problem+json and keeps Allow", async () => {
+    const handler = createFetchHandler({
+      fetch: vi.fn(async () => new Response(null, { status: 405, headers: { Allow: "POST" } })),
+    } as any);
+    const { ctx } = createExecutionContext();
+    const response = await handler(new Request("https://mcp.kaptionai.com/authorize/send-otp"), createEnv(), ctx);
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+    expect(await response.json()).toMatchObject({ status: 405, code: "method_not_allowed" });
+  });
+
+  it("answers a wrong method on a worker route with 405 + Allow, an unknown one with 404", async () => {
+    const handler = createFetchHandler({ fetch: vi.fn(async () => new Response("unexpected")) } as any);
+    const { ctx } = createExecutionContext();
+    const wrongMethod = await handler(new Request("https://mcp.kaptionai.com/ws/auth"), createEnv(), ctx);
+    expect(wrongMethod.status).toBe(405);
+    expect(wrongMethod.headers.get("allow")).toBe("POST, OPTIONS");
+    expect(wrongMethod.headers.get("content-type")).toBe("application/problem+json");
+    expect(await wrongMethod.json()).toMatchObject({ code: "method_not_allowed" });
+
+    const unknown = await handler(new Request("https://mcp.kaptionai.com/transparency/nope"), createEnv(), ctx);
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ code: "not_found" });
+  });
+
+  it("answers an exception with a 500 problem instead of Cloudflare's HTML error page", async () => {
+    const handler = createFetchHandler({ fetch: vi.fn(async () => { throw new Error("boom"); }) } as any);
+    const { ctx } = createExecutionContext();
+    const response = await handler(new Request("https://mcp.kaptionai.com/support"), createEnv(), ctx);
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
+    expect(await response.json()).toMatchObject({ status: 500, code: "internal_error" });
+  });
+
+  it("names the missing configuration as problem+json", async () => {
+    const handler = createFetchHandler({ fetch: vi.fn(async () => new Response("unexpected")) } as any);
+    const { ctx } = createExecutionContext();
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/.well-known/openai-apps-challenge"),
+      createEnv(),
+      ctx,
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ code: "not_configured" });
+  });
+
+  it("answers an exhausted connect-code allowance with 429, Retry-After and RateLimit headers", async () => {
+    const { SignJWT } = await import("jose");
+    const jwt = await new SignJWT({ phone: TEST_PHONE })
+      .setProtectedHeader({ alg: "HS256" })
+      .sign(new TextEncoder().encode("jwt-secret"));
+    const expiresAt = Date.now() + 1200 * 1000;
+    const env = createEnv({
+      OAUTH_KV: {
+        get: vi.fn(async () => "10"),
+        getWithMetadata: vi.fn(async () => ({ value: "10", metadata: { expiresAt } })),
+        put: vi.fn(async () => undefined),
+        delete: vi.fn(async () => undefined),
+      } as unknown as KVNamespace,
+    });
+    const handler = createFetchHandler({ fetch: vi.fn(async () => new Response("unexpected")) } as any);
+    const { ctx } = createExecutionContext();
+    const response = await handler(
+      new Request("https://mcp.kaptionai.com/ext/connect-code/start", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${jwt}` },
+      }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(429);
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
+    expect(response.headers.get("retry-after")).toBe("1200");
+    expect(response.headers.get("ratelimit-limit")).toBe("10");
+    expect(response.headers.get("ratelimit-remaining")).toBe("0");
+    expect(response.headers.get("ratelimit-reset")).toBe("1200");
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(await response.json()).toMatchObject({
+      status: 429,
+      code: "rate_limited",
+      policy: "connect-code-start-account",
+      retry_after: 1200,
+      error: "rate_limited",
+    });
+    expect(env.OAUTH_KV.put).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import type {
   OTPRecord,
   RateLimitRecord,
 } from "./types";
+import { fixedWindowStatus, type LimitStatus } from "./rate-limit";
 
 const OTP_TTL = 300; // 5 minutes
 const RATE_WINDOW_TTL = 3600; // 1 hour window
@@ -243,123 +244,82 @@ export async function readVerifyTicket(
   return { phone: normalized, oauthReqInfo: payload.oauthReqInfo };
 }
 
-// mcp.RATE_LIMITS.4 — OTP send 50/hour, 5 verify attempts per code
-/** Check hourly rate limit (max 50 sends per hour). Returns true if allowed. */
-export async function checkRateLimit(
-  kv: KVNamespace,
-  accountRef: string,
-): Promise<boolean> {
-  const key = `rate:otp-send:${accountRef}`;
+// mcp.RATE_LIMITS.4 — OTP send 50/hour per account, resend 3/10 min per account,
+// 100 sends+resends/hour per IP, 5 verify attempts per code. Fixed windows: the
+// first counted request opens the window, `{count, windowStart}` in KV.
+export const OTP_SEND_POLICY = { name: "otp-send-account", limit: MAX_SENDS_PER_HOUR, windowSeconds: RATE_WINDOW_TTL };
+export const OTP_RESEND_POLICY = { name: "otp-resend-account", limit: 3, windowSeconds: 600 };
+export const OTP_IP_POLICY = { name: "otp-send-ip", limit: 100, windowSeconds: RATE_WINDOW_TTL };
+
+type Policy = typeof OTP_SEND_POLICY;
+
+async function windowStatus(kv: KVNamespace, key: string, policy: Policy): Promise<LimitStatus> {
+  return fixedWindowStatus(await kv.get(key), policy.name, policy.limit, policy.windowSeconds);
+}
+
+async function incrementWindow(kv: KVNamespace, key: string, policy: Policy): Promise<void> {
   const raw = await kv.get(key);
+  let record: RateLimitRecord | null = null;
+  try {
+    record = raw ? (JSON.parse(raw) as RateLimitRecord) : null;
+  } catch {
+    record = null;
+  }
+  if (!record || Date.now() - record.windowStart > policy.windowSeconds * 1000) {
+    record = { count: 1, windowStart: Date.now() };
+  } else {
+    record.count++;
+  }
+  await kv.put(key, JSON.stringify(record), { expirationTtl: policy.windowSeconds });
+}
 
-  if (!raw) return true;
+const otpSendKey = (accountRef: string) => `rate:otp-send:${accountRef}`;
+const otpResendKey = (accountRef: string) => `rate:otp-resend:${accountRef}`;
+const otpIpKey = (ip: string) => `rate:otp-ip:${ip}`;
 
-  const record: RateLimitRecord = JSON.parse(raw);
-  const elapsed = Date.now() - record.windowStart;
+/** Hourly send limit of an account (50), as headers can report it. */
+export function otpSendLimit(kv: KVNamespace, accountRef: string): Promise<LimitStatus> {
+  return windowStatus(kv, otpSendKey(accountRef), OTP_SEND_POLICY);
+}
 
-  if (elapsed > RATE_WINDOW_TTL * 1000) return true;
-  return record.count < MAX_SENDS_PER_HOUR;
+/** Resend limit of an account (3 per 10 minutes). */
+export function otpResendLimit(kv: KVNamespace, accountRef: string): Promise<LimitStatus> {
+  return windowStatus(kv, otpResendKey(accountRef), OTP_RESEND_POLICY);
+}
+
+/** [M1] Hourly send+resend limit of an IP address (100). */
+export function otpIpLimit(kv: KVNamespace, ip: string): Promise<LimitStatus> {
+  return windowStatus(kv, otpIpKey(ip), OTP_IP_POLICY);
+}
+
+/** Check hourly rate limit (max 50 sends per hour). Returns true if allowed. */
+export async function checkRateLimit(kv: KVNamespace, accountRef: string): Promise<boolean> {
+  return (await otpSendLimit(kv, accountRef)).remaining > 0;
 }
 
 /** Increment the send rate counter. */
-export async function incrementRateLimit(
-  kv: KVNamespace,
-  accountRef: string,
-): Promise<void> {
-  const key = `rate:otp-send:${accountRef}`;
-  const raw = await kv.get(key);
-
-  let record: RateLimitRecord;
-  if (!raw) {
-    record = { count: 1, windowStart: Date.now() };
-  } else {
-    record = JSON.parse(raw);
-    const elapsed = Date.now() - record.windowStart;
-    if (elapsed > RATE_WINDOW_TTL * 1000) {
-      record = { count: 1, windowStart: Date.now() };
-    } else {
-      record.count++;
-    }
-  }
-
-  await kv.put(key, JSON.stringify(record), { expirationTtl: RATE_WINDOW_TTL });
+export function incrementRateLimit(kv: KVNamespace, accountRef: string): Promise<void> {
+  return incrementWindow(kv, otpSendKey(accountRef), OTP_SEND_POLICY);
 }
 
-/**
- * Check resend-specific rate limit (max 3 resends per 10 minutes per account).
- * Returns true if allowed.
- */
-export async function checkResendRateLimit(
-  kv: KVNamespace,
-  accountRef: string,
-): Promise<boolean> {
-  const key = `rate:otp-resend:${accountRef}`;
-  const raw = await kv.get(key);
-  if (!raw) return true;
-  const record: RateLimitRecord = JSON.parse(raw);
-  const elapsed = Date.now() - record.windowStart;
-  if (elapsed > 600_000) return true; // 10-minute window
-  return record.count < 3;
+/** Check resend-specific rate limit (max 3 resends per 10 minutes per account). */
+export async function checkResendRateLimit(kv: KVNamespace, accountRef: string): Promise<boolean> {
+  return (await otpResendLimit(kv, accountRef)).remaining > 0;
 }
 
 /** Increment the resend rate counter. */
-export async function incrementResendRateLimit(
-  kv: KVNamespace,
-  accountRef: string,
-): Promise<void> {
-  const key = `rate:otp-resend:${accountRef}`;
-  const raw = await kv.get(key);
-  let record: RateLimitRecord;
-  if (!raw) {
-    record = { count: 1, windowStart: Date.now() };
-  } else {
-    record = JSON.parse(raw);
-    const elapsed = Date.now() - record.windowStart;
-    if (elapsed > 600_000) {
-      record = { count: 1, windowStart: Date.now() };
-    } else {
-      record.count++;
-    }
-  }
-  await kv.put(key, JSON.stringify(record), { expirationTtl: 600 });
+export function incrementResendRateLimit(kv: KVNamespace, accountRef: string): Promise<void> {
+  return incrementWindow(kv, otpResendKey(accountRef), OTP_RESEND_POLICY);
 }
 
-/**
- * [M1] Check IP-based rate limit (max 100 OTP sends per IP per hour).
- * Returns true if allowed.
- */
+/** [M1] Check IP-based rate limit (max 100 OTP sends per IP per hour). */
 export async function checkIpRateLimit(kv: KVNamespace, ip: string): Promise<boolean> {
-  const key = `rate:otp-ip:${ip}`;
-  const raw = await kv.get(key);
-
-  if (!raw) return true;
-
-  const record: RateLimitRecord = JSON.parse(raw);
-  const elapsed = Date.now() - record.windowStart;
-
-  if (elapsed > RATE_WINDOW_TTL * 1000) return true;
-  return record.count < 100;
+  return (await otpIpLimit(kv, ip)).remaining > 0;
 }
 
 /** Increment the IP-based send rate counter. */
-export async function incrementIpRateLimit(kv: KVNamespace, ip: string): Promise<void> {
-  const key = `rate:otp-ip:${ip}`;
-  const raw = await kv.get(key);
-
-  let record: RateLimitRecord;
-  if (!raw) {
-    record = { count: 1, windowStart: Date.now() };
-  } else {
-    record = JSON.parse(raw);
-    const elapsed = Date.now() - record.windowStart;
-    if (elapsed > RATE_WINDOW_TTL * 1000) {
-      record = { count: 1, windowStart: Date.now() };
-    } else {
-      record.count++;
-    }
-  }
-
-  await kv.put(key, JSON.stringify(record), { expirationTtl: RATE_WINDOW_TTL });
+export function incrementIpRateLimit(kv: KVNamespace, ip: string): Promise<void> {
+  return incrementWindow(kv, otpIpKey(ip), OTP_IP_POLICY);
 }
 
 /** Store an OTP code for an account reference. */
@@ -385,31 +345,35 @@ export async function verifyOTP(
   kv: KVNamespace,
   accountRef: string,
   code: string,
-): Promise<{ valid: boolean; error?: string }> {
+): Promise<{ valid: boolean; error?: string; code?: "otp_expired" | "otp_attempts_exceeded" | "otp_invalid" }> {
   const key = `otp:${accountRef}`;
   const raw = await kv.get(key);
 
   if (!raw) {
-    return { valid: false, error: "OTP expired or not found. Request a new code." };
+    return { valid: false, error: "OTP expired or not found. Request a new code.", code: "otp_expired" };
   }
 
   const record: OTPRecord = JSON.parse(raw);
 
   if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
     await kv.delete(key);
-    return { valid: false, error: "Too many attempts. Request a new code." };
+    return { valid: false, error: "Too many attempts. Request a new code.", code: "otp_attempts_exceeded" };
   }
 
   if (!constantTimeEqual(record.code, code)) {
     record.attempts++;
     if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
       await kv.delete(key);
-      return { valid: false, error: "Too many attempts. Request a new code." };
+      return { valid: false, error: "Too many attempts. Request a new code.", code: "otp_attempts_exceeded" };
     }
     const elapsed = (Date.now() - record.createdAt) / 1000;
     const remainingTtl = Math.max(60, Math.ceil(OTP_TTL - elapsed));
     await kv.put(key, JSON.stringify(record), { expirationTtl: remainingTtl });
-    return { valid: false, error: `Invalid code. ${MAX_VERIFY_ATTEMPTS - record.attempts} attempts remaining.` };
+    return {
+      valid: false,
+      error: `Invalid code. ${MAX_VERIFY_ATTEMPTS - record.attempts} attempts remaining.`,
+      code: "otp_invalid",
+    };
   }
 
   await kv.delete(key);

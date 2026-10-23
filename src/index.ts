@@ -42,9 +42,11 @@ import type { Env } from "./types";
 import {
   connectDeps,
   pollConnectPairing,
-  startAllowed,
   startConnectPairing,
+  startLimit,
 } from "./connect-code";
+import { acceptsHtml, ensureProblemJson, problem } from "./problem";
+import { rateLimitHeaders, tooManyRequests } from "./rate-limit";
 import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
@@ -59,6 +61,51 @@ const mcpHandler = RelayMCP.serve("/mcp");
 // ─── Non-OAuth routes ─────────────────────────────────────────────────
 
 const outerApp = new Hono<{ Bindings: Env }>();
+
+/**
+ * A problem document that also keeps the `{error, error_description}` pair
+ * these endpoints answered before, for callers that already read it.
+ */
+function legacyProblem(
+  status: number,
+  code: string,
+  error: string,
+  description: string,
+  headers?: HeadersInit,
+): Response {
+  return problem({ status, code, detail: description, headers, extra: { error, error_description: description } });
+}
+
+/** Methods each outer route answers, for 405 + Allow instead of a bare 404. */
+const OUTER_ROUTE_METHODS: { pattern: RegExp; allow: string }[] = [
+  { pattern: /^\/\.well-known\/openai-apps-challenge$/, allow: "GET, HEAD" },
+  { pattern: /^\/ws\/auth$/, allow: "POST, OPTIONS" },
+  { pattern: /^\/ws\/ext$/, allow: "GET" },
+  { pattern: /^\/ext\/connect-code\/(start|status)$/, allow: "POST, OPTIONS" },
+  { pattern: /^\/ext\/connections$/, allow: "GET, OPTIONS" },
+  { pattern: /^\/ext\/connections\/[^/]+$/, allow: "DELETE, OPTIONS" },
+  { pattern: /^\/transparency(\/(latest|verify|gaps))?$/, allow: "GET, HEAD" },
+  { pattern: /^\/transparency\/append$/, allow: "POST" },
+];
+
+outerApp.notFound((c) => {
+  const { pathname } = new URL(c.req.url);
+  const route = OUTER_ROUTE_METHODS.find((r) => r.pattern.test(pathname));
+  if (route) {
+    return problem({
+      status: 405,
+      code: "method_not_allowed",
+      detail: `${c.req.method} is not supported here. Allowed: ${route.allow}.`,
+      headers: { Allow: route.allow },
+    });
+  }
+  return problem({ status: 404, code: "not_found", detail: `No resource at ${pathname}.` });
+});
+
+outerApp.onError((err, c) => {
+  console.error(`[worker] ${c.req.method} ${new URL(c.req.url).pathname} failed:`, err?.message || err);
+  return problem({ status: 500, code: "internal_error", detail: "Internal error" });
+});
 
 const MCP_ORIGIN = "https://mcp.kaptionai.com";
 const LEGACY_MCP_ORIGIN = "https://mcp-ext.kaptionai.com";
@@ -82,7 +129,7 @@ export function getMcpOrigin(requestUrl: URL): string {
 // without a deploy or a repository-stored credential.
 outerApp.get(OPENAI_CHALLENGE_PATH, (c) => {
   const token = c.env.OPENAI_APPS_CHALLENGE_TOKEN?.trim();
-  if (!token) return c.text("Not configured", 404);
+  if (!token) return problem({ status: 404, code: "not_configured", detail: "Not configured" });
   return c.text(token, 200, { "Cache-Control": "no-store" });
 });
 
@@ -104,18 +151,18 @@ outerApp.post("/ws/auth", async (c) => {
   try {
     const auth = c.req.header("Authorization");
     if (!auth?.startsWith("Bearer ")) {
-      return c.json({ error: "invalid_request", error_description: "Missing bearer token" }, 401);
+      return legacyProblem(401, "missing_bearer_token", "invalid_request", "Missing bearer token");
     }
     const jwt = auth.slice(7);
 
     // Validate JWT and extract phone → accountRef
     const phone = await validateJwt(c.env.JWT_SECRET, jwt);
     if (!phone) {
-      return c.json({ error: "invalid_token", error_description: "Invalid JWT" }, 401);
+      return legacyProblem(401, "invalid_token", "invalid_token", "Invalid JWT");
     }
     const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
     if (!accountRef) {
-      return c.json({ error: "invalid_token", error_description: "Invalid JWT" }, 401);
+      return legacyProblem(401, "invalid_token", "invalid_token", "Invalid JWT");
     }
 
     // Generate single-use token, store in KV with a 60 s TTL
@@ -125,7 +172,7 @@ outerApp.post("/ws/auth", async (c) => {
     return c.json({ token }, 200, { "Access-Control-Allow-Origin": "*" });
   } catch (e: any) {
     console.error("[ws/auth] Token exchange error:", e?.message || e);
-    return c.json({ error: "server_error", error_description: "Internal error" }, 500);
+    return legacyProblem(500, "internal_error", "server_error", "Internal error");
   }
 });
 
@@ -133,7 +180,7 @@ outerApp.post("/ws/auth", async (c) => {
 outerApp.get("/ws/ext", async (c) => {
   const upgradeHeader = c.req.header("Upgrade");
   if (upgradeHeader !== "websocket") {
-    return c.json({ error: "invalid_request", error_description: "Expected WebSocket upgrade" }, 426);
+    return legacyProblem(426, "upgrade_required", "invalid_request", "Expected WebSocket upgrade", { Upgrade: "websocket" });
   }
 
   const url = new URL(c.req.url);
@@ -149,7 +196,7 @@ outerApp.get("/ws/ext", async (c) => {
   if (wstoken) {
     const ref = await c.env.OAUTH_KV.get(`ws-auth:${wstoken}`);
     if (!ref) {
-      return c.json({ error: "invalid_token", error_description: "Invalid or expired wstoken" }, 401);
+      return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or expired wstoken");
     }
     accountRefHint = ref;
     // Single-use: delete immediately
@@ -164,7 +211,7 @@ outerApp.get("/ws/ext", async (c) => {
     // mcp.CLOUD_RELAY.14 — the JWT's signature is checked here too, not only its payload read.
     const jwtPhone = await validateJwt(c.env.JWT_SECRET, jwt);
     if (!jwtPhone) {
-      return c.json({ error: "invalid_token", error_description: "Invalid JWT" }, 401);
+      return legacyProblem(401, "invalid_token", "invalid_token", "Invalid JWT");
     }
     accountRefHint = await deriveAccountRef(jwtPhone, c.env.PHONE_REF_SECRET);
   }
@@ -176,13 +223,13 @@ outerApp.get("/ws/ext", async (c) => {
       c.env.EPHEMERAL_STATE_SECRET,
     );
     if (!session) {
-      return c.json({ error: "invalid_token", error_description: "Invalid or expired token" }, 401);
+      return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or expired token");
     }
     accountRefHint = session.accountRef;
   }
 
   if (!accountRefHint) {
-    return c.json({ error: "invalid_request", error_description: "Missing phone, token, jwt, or wstoken parameter" }, 400);
+    return legacyProblem(400, "missing_credentials", "invalid_request", "Missing phone, token, jwt, or wstoken parameter");
   }
 
   // Route to the RelayRoom for this account reference via fetch (not RPC)
@@ -205,6 +252,16 @@ const CONNECTIONS_CORS = {
   "Access-Control-Allow-Headers": "Authorization",
   "Access-Control-Max-Age": "86400",
 };
+
+function unauthorizedConnections(): Response {
+  return problem({
+    status: 401,
+    code: "invalid_token",
+    detail: "Send the extension's Kaption JWT as a Bearer token.",
+    headers: { ...CONNECTIONS_CORS, "WWW-Authenticate": 'Bearer realm="kaption-extension"' },
+    extra: { error: "Unauthorized" },
+  });
+}
 
 async function accountFromBearer(authorization: string | undefined, env: Env): Promise<string | null> {
   if (!authorization?.startsWith("Bearer ")) return null;
@@ -235,25 +292,39 @@ outerApp.options("/ext/connect-code/status", () => new Response(null, { status: 
 outerApp.post("/ext/connect-code/start", async (c) => {
   const auth = c.req.header("Authorization");
   const phone = auth?.startsWith("Bearer ") ? await validateJwt(c.env.JWT_SECRET, auth.slice(7)) : null;
-  if (!phone) return c.json({ error: "invalid_token" }, 401, CONNECT_CORS);
+  if (!phone) return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or missing Kaption JWT", CONNECT_CORS);
   const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
-  if (!accountRef || !(await startAllowed(c.env.OAUTH_KV, accountRef))) {
-    return c.json({ error: "rate_limited" }, 429, CONNECT_CORS);
+  if (!accountRef) return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or missing Kaption JWT", CONNECT_CORS);
+  const limit = await startLimit(c.env.OAUTH_KV, accountRef);
+  if (!limit.allowed) {
+    return tooManyRequests(limit.status, "Too many connect codes requested for this phone. Try again later.", {
+      headers: CONNECT_CORS,
+      extra: { error: "rate_limited" },
+    });
   }
+  const headers = { ...CONNECT_CORS, ...rateLimitHeaders(limit.status) };
   try {
     const started = await startConnectPairing(connectDeps(c.env), phone);
-    if (!started) return c.json({ error: "handshake_unavailable" }, 502, CONNECT_CORS);
-    return c.json(started, 200, CONNECT_CORS);
+    if (!started) {
+      return problem({
+        status: 502,
+        code: "handshake_unavailable",
+        detail: "Kaption's WhatsApp handshake service did not answer. Try again.",
+        headers,
+        extra: { error: "handshake_unavailable" },
+      });
+    }
+    return c.json(started, 200, headers);
   } catch (e: any) {
     console.error("[connect-code] start failed:", e?.message || e);
-    return c.json({ error: "server_error" }, 500, CONNECT_CORS);
+    return legacyProblem(500, "internal_error", "server_error", "Internal error", headers);
   }
 });
 
 outerApp.post("/ext/connect-code/status", async (c) => {
   const auth = c.req.header("Authorization");
   const phone = auth?.startsWith("Bearer ") ? await validateJwt(c.env.JWT_SECRET, auth.slice(7)) : null;
-  if (!phone) return c.json({ error: "invalid_token" }, 401, CONNECT_CORS);
+  if (!phone) return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or missing Kaption JWT", CONNECT_CORS);
   let body: { pairId?: unknown } = {};
   try { body = await c.req.json(); } catch { body = {}; }
   try {
@@ -261,7 +332,7 @@ outerApp.post("/ext/connect-code/status", async (c) => {
     return c.json(status, 200, CONNECT_CORS);
   } catch (e: any) {
     console.error("[connect-code] status failed:", e?.message || e);
-    return c.json({ status: "error" }, 500, CONNECT_CORS);
+    return problem({ status: 500, code: "internal_error", detail: "Internal error", headers: CONNECT_CORS });
   }
 });
 
@@ -270,28 +341,30 @@ outerApp.options("/ext/connections/:grantId", () => new Response(null, { status:
 
 outerApp.get("/ext/connections", async (c) => {
   const userId = await accountFromBearer(c.req.header("Authorization"), c.env);
-  if (!userId) return c.json({ error: "Unauthorized" }, 401, CONNECTIONS_CORS);
+  if (!userId) return unauthorizedConnections();
   try {
     const connections = await listConnections(oauthApi(c.env), c.env.OAUTH_KV, userId);
     return c.json({ connections }, 200, { ...CONNECTIONS_CORS, "Cache-Control": "no-store" });
   } catch (e: any) {
     console.error("[connections] list failed:", e?.message || e);
-    return c.json({ error: "Could not load connections" }, 500, CONNECTIONS_CORS);
+    return problem({ status: 500, code: "internal_error", detail: "Could not load connections", headers: CONNECTIONS_CORS, extra: { error: "Could not load connections" } });
   }
 });
 
 outerApp.delete("/ext/connections/:grantId", async (c) => {
   const userId = await accountFromBearer(c.req.header("Authorization"), c.env);
-  if (!userId) return c.json({ error: "Unauthorized" }, 401, CONNECTIONS_CORS);
+  if (!userId) return unauthorizedConnections();
   const grantId = c.req.param("grantId");
-  if (!/^[^\s:/]{1,256}$/.test(grantId)) return c.json({ error: "Invalid connection id" }, 400, CONNECTIONS_CORS);
+  if (!/^[^\s:/]{1,256}$/.test(grantId)) {
+    return problem({ status: 400, code: "invalid_connection_id", detail: "Invalid connection id", headers: CONNECTIONS_CORS, extra: { error: "Invalid connection id" } });
+  }
   try {
     // revokeGrant is scoped to this account's own grants.
     await disconnect(oauthApi(c.env), c.env.OAUTH_KV, userId, grantId);
     return c.json({ ok: true }, 200, CONNECTIONS_CORS);
   } catch (e: any) {
     console.error("[connections] disconnect failed:", e?.message || e);
-    return c.json({ error: "Could not disconnect" }, 500, CONNECTIONS_CORS);
+    return problem({ status: 500, code: "internal_error", detail: "Could not disconnect", headers: CONNECTIONS_CORS, extra: { error: "Could not disconnect" } });
   }
 });
 
@@ -333,16 +406,15 @@ outerApp.get("/transparency/gaps", async (c) => {
   const accountId = c.req.query("account_id");
 
   if (!cfToken || !accountId) {
-    return c.json(
-      { error: "Provide Authorization: Bearer <CF_TOKEN> and ?account_id=<ID>" },
-      400,
-    );
+    const detail = "Provide Authorization: Bearer <CF_TOKEN> and ?account_id=<ID>";
+    return problem({ status: 400, code: "missing_parameters", detail, extra: { error: detail } });
   }
 
   // Guard against path/SSRF injection before interpolating into the CF API URL —
   // Cloudflare account IDs are exactly 32 lowercase hex characters.
   if (!/^[0-9a-f]{32}$/.test(accountId)) {
-    return c.json({ error: "Invalid account_id (expected 32 hex characters)" }, 400);
+    const detail = "Invalid account_id (expected 32 hex characters)";
+    return problem({ status: 400, code: "invalid_account_id", detail, extra: { error: detail } });
   }
 
   // Fetch CF deployment history
@@ -351,7 +423,12 @@ outerApp.get("/transparency/gaps", async (c) => {
     { headers: { Authorization: `Bearer ${cfToken}` } },
   );
   if (!cfRes.ok) {
-    return c.json({ error: "Failed to fetch CF deployments", status: cfRes.status }, 502);
+    return problem({
+      status: 502,
+      code: "upstream_error",
+      detail: "Failed to fetch CF deployments",
+      extra: { error: "Failed to fetch CF deployments", upstream_status: cfRes.status },
+    });
   }
   const cfData = (await cfRes.json()) as {
     result?: { deployments?: { id: string; created_on: string; source?: string }[] };
@@ -385,10 +462,15 @@ outerApp.get("/transparency/gaps", async (c) => {
 outerApp.post("/transparency/append", async (c) => {
   const apiKey = c.req.header("Authorization")?.replace("Bearer ", "");
   if (!c.env.DEPLOY_API_KEY || apiKey !== c.env.DEPLOY_API_KEY) {
-    return c.json({ error: "Unauthorized" }, 401);
+    return problem({ status: 401, code: "unauthorized", detail: "Unauthorized", extra: { error: "Unauthorized" } });
   }
 
-  const event = await c.req.json();
+  let event: unknown;
+  try {
+    event = await c.req.json();
+  } catch {
+    return problem({ status: 400, code: "invalid_json", detail: "Invalid JSON body" });
+  }
   const chainId = c.env.DEPLOYMENT_CHAIN.idFromName("main");
   const chain = c.env.DEPLOYMENT_CHAIN.get(chainId);
   const result = await chain.appendDeployment(event as any);
@@ -401,7 +483,9 @@ outerApp.post("/transparency/append", async (c) => {
  * The OAuth library answers a request without a token with an empty 401 body
  * and a bad token with `{error, error_description}`. Some MCP clients and
  * registries read the body rather than the header, so every Bearer 401 gets
- * an RFC 6750-style JSON body that also names the RFC 9728 metadata URL.
+ * an RFC 9457 problem body (code `authentication_required` without a token,
+ * else the challenge's error, e.g. `invalid_token`) that keeps the RFC 6750
+ * `error` / `error_description` pair and names the RFC 9728 metadata URL.
  * The status and every header — above all `WWW-Authenticate` — pass through
  * untouched; only the body and Content-Type change.
  */
@@ -432,13 +516,15 @@ export async function toJsonBearerChallenge(response: Response, requestUrl: URL)
         ? "The access token is invalid or expired"
         : "Missing bearer token. Authorize via OAuth using the resource metadata URL.";
 
-  const headers = new Headers(response.headers);
-  headers.set("Content-Type", "application/json");
-  headers.delete("Content-Length");
-  return new Response(
-    JSON.stringify({ error, error_description: errorDescription, resource_metadata: resourceMetadata }),
-    { status: 401, statusText: response.statusText, headers },
-  );
+  const code = error === "invalid_request" ? "authentication_required" : error;
+  return problem({
+    status: 401,
+    code,
+    title: code === "authentication_required" ? "Authentication required" : "Unauthorized",
+    detail: errorDescription,
+    headers: response.headers,
+    extra: { error, error_description: errorDescription, resource_metadata: resourceMetadata },
+  });
 }
 
 /**
@@ -530,8 +616,54 @@ export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): O
   } as OAuthProviderOptions<Env>;
 }
 
+/**
+ * GET /authorize that cannot start. A browser (Accept: text/html — what
+ * Claude or ChatGPT open) gets the localized sentence as before; any other
+ * client gets the same sentence in a problem document.
+ * mcp.CONNECT_CODE.8 — in the language /connect remembered, else the browser's.
+ */
+function authorizeError(req: Request, englishDetail?: string): Response {
+  const { lang } = resolveLanguage({
+    cookie: readCookie(req.headers.get("cookie"), LANG_COOKIE),
+    acceptLanguage: req.headers.get("accept-language"),
+  });
+  const message = englishDetail ?? getT(lang)("err.authorize_start");
+  const contentLanguage = englishDetail ? "en" : lang;
+  if (acceptsHtml(req)) {
+    return new Response(message, {
+      status: 400,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Language": contentLanguage },
+    });
+  }
+  return problem({
+    status: 400,
+    code: "invalid_authorization_request",
+    detail: message,
+    headers: { "Content-Language": contentLanguage },
+  });
+}
+
+/**
+ * The Worker's fetch handler. Every answer passes through the error
+ * contract (src/problem.ts): non-JSON 4xx/5xx become problem documents, and
+ * an exception becomes a 500 problem instead of Cloudflare's HTML error page.
+ */
 export function createFetchHandler(nextHandler: WorkerHandler) {
-  return async function fetch(
+  const route = createRouter(nextHandler);
+  return async function fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    let response: Response;
+    try {
+      response = await route(request, env, ctx);
+    } catch (e: any) {
+      console.error("[worker] unhandled error:", e?.message || e);
+      return problem({ status: 500, code: "internal_error", detail: "Internal error" });
+    }
+    return ensureProblemJson(response, request);
+  };
+}
+
+function createRouter(nextHandler: WorkerHandler) {
+  return async function route(
     request: Request,
     env: Env,
     ctx: ExecutionContext,
@@ -608,9 +740,7 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
             const oauthReqInfo =
               await oauthEnv.OAUTH_PROVIDER.parseAuthRequest(req);
             if (!oauthReqInfo.clientId) {
-              return new Response("Invalid authorization request", {
-                status: 400,
-              });
+              return authorizeError(req, "Invalid authorization request");
             }
             const encoded = btoa(JSON.stringify(oauthReqInfo));
             const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
@@ -639,15 +769,7 @@ export function createFetchHandler(nextHandler: WorkerHandler) {
               "[authorize] sign-in request rejected:",
               error instanceof Error ? error.message : error,
             );
-            // mcp.CONNECT_CODE.8 — in the language /connect remembered, else the browser's.
-            const { lang } = resolveLanguage({
-              cookie: readCookie(req.headers.get("cookie"), LANG_COOKIE),
-              acceptLanguage: req.headers.get("accept-language"),
-            });
-            return new Response(getT(lang)("err.authorize_start"), {
-              status: 400,
-              headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Language": lang },
-            });
+            return authorizeError(req);
           }
         }
 

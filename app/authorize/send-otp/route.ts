@@ -10,21 +10,23 @@ import {
   createVerifyTicket,
   deriveAccountRef,
   generateOTP,
-  checkRateLimit,
+  otpSendLimit,
+  otpIpLimit,
   incrementRateLimit,
-  checkIpRateLimit,
   incrementIpRateLimit,
   storeOTP,
   sanitizeForLog,
 } from "@/src/otp";
 import type { Env } from "@/src/types";
-import { jsonError } from "@/app/i18n";
+import { errorBody, jsonError } from "@/app/i18n";
+import { withHeaders } from "@/src/problem";
+import { consumed, rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
   // [M7] Validate Content-Type
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return jsonError("Invalid content type", { status: 400 });
+    return jsonError("Invalid content type", { status: 400, code: "invalid_content_type" });
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -33,19 +35,19 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return jsonError("Invalid JSON body", { status: 400 });
+    return jsonError("Invalid JSON body", { status: 400, code: "invalid_json" });
   }
 
   const parsed = await SendOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return jsonError(msg, { status: 400 });
+    return jsonError(msg, { status: 400, code: "invalid_input" });
   }
 
   const { phone, oauthReqInfo } = parsed.data;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return jsonError("Invalid phone number format", { status: 400 });
+    return jsonError("Invalid phone number format", { status: 400, code: "invalid_phone" });
   }
 
   // The dedicated synthetic review account uses a static password because
@@ -64,18 +66,20 @@ export async function POST(request: Request): Promise<Response> {
 
   // [M1] IP-based rate limiting
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {
-    return jsonError("Too many requests. Try again later.",
-      { status: 429 },
-    );
+  const ipLimit = await otpIpLimit(env.OAUTH_KV, ip);
+  if (ipLimit.remaining <= 0) {
+    const message = "Too many requests. Try again later.";
+    return tooManyRequests(ipLimit, message, { extra: errorBody(message) });
   }
 
   // Check hourly rate limit
-  if (!(await checkRateLimit(env.OAUTH_KV, accountRef))) {
-    return jsonError("Too many OTP requests. Try again in an hour.",
-      { status: 429 },
-    );
+  const accountLimit = await otpSendLimit(env.OAUTH_KV, accountRef);
+  if (accountLimit.remaining <= 0) {
+    const message = "Too many OTP requests. Try again in an hour.";
+    return tooManyRequests(accountLimit, message, { extra: errorBody(message) });
   }
+  // Both limits count this request from here on.
+  const headers = rateLimitHeaders(consumed(accountLimit), consumed(ipLimit));
 
   // Generate and store OTP
   const code = generateOTP();
@@ -99,7 +103,7 @@ export async function POST(request: Request): Promise<Response> {
       // [H1] Never leak internal details
       console.error(`[otp] Send failed for ${sanitizeForLog(phone)}: ${res.status}`);
       return jsonError("Failed to send verification code. Try again.",
-        { status: 500 },
+        { status: 500, code: "otp_send_failed", headers },
       );
     }
 
@@ -109,15 +113,15 @@ export async function POST(request: Request): Promise<Response> {
       env.EPHEMERAL_STATE_SECRET,
     );
     if (!verifyTicket) {
-      return jsonError("Failed to prepare verification flow.", { status: 500 });
+      return jsonError("Failed to prepare verification flow.", { status: 500, code: "internal_error", headers });
     }
 
-    return Response.json({ ok: true, verifyTicket });
+    return withHeaders(Response.json({ ok: true, verifyTicket }), headers);
   } catch (err) {
     // [H1] + [L2] Sanitize error logging
     console.error(`[otp] Send error for ${sanitizeForLog(phone)}`);
     return jsonError("Failed to send verification code. Try again.",
-      { status: 500 },
+      { status: 500, code: "otp_send_failed", headers },
     );
   }
 }

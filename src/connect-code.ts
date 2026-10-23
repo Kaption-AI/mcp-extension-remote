@@ -12,6 +12,7 @@
  */
 import { normalizeAndValidatePhone, openState, sealState } from "./otp";
 import type { Env } from "./types";
+import { readSlidingCounter, slidingStatus, writeSlidingCounter, type LimitStatus } from "./rate-limit";
 
 export const CONNECT_CODE_TTL_SECONDS = 600;
 const PAIR_TTL_SECONDS = 600;
@@ -172,24 +173,43 @@ export async function redeemConnectCode(deps: ConnectDeps, input: unknown): Prom
 }
 
 /** mcp.CONNECT_CODE.6 — a person guessing codes: at most 20 wrong ones per address in 10 minutes. */
-export async function redeemAllowed(kv: KVNamespace, ip: string): Promise<boolean> {
-  const count = Number((await kv.get(`rate:connect-redeem:${ip}`)) ?? "0");
-  return count < 20;
-}
-
-export async function countFailedRedeem(kv: KVNamespace, ip: string): Promise<void> {
-  const key = `rate:connect-redeem:${ip}`;
-  const count = Number((await kv.get(key)) ?? "0");
-  await kv.put(key, String(count + 1), { expirationTtl: 600 });
-}
-
+export const CONNECT_REDEEM_POLICY = { name: "connect-code-redeem-ip", limit: 20, windowSeconds: 600 };
 /** mcp.CONNECT_CODE.6 — at most 10 handshakes per phone an hour. */
-export async function startAllowed(kv: KVNamespace, accountRef: string): Promise<boolean> {
+export const CONNECT_START_POLICY = { name: "connect-code-start-account", limit: 10, windowSeconds: 3600 };
+
+const redeemKey = (ip: string) => `rate:connect-redeem:${ip}`;
+
+/** The wrong-code allowance left to this address (only wrong codes count). */
+export async function redeemLimit(kv: KVNamespace, ip: string): Promise<LimitStatus> {
+  const p = CONNECT_REDEEM_POLICY;
+  return slidingStatus(await readSlidingCounter(kv, redeemKey(ip)), p.name, p.limit, p.windowSeconds);
+}
+
+export async function redeemAllowed(kv: KVNamespace, ip: string): Promise<boolean> {
+  return (await redeemLimit(kv, ip)).remaining > 0;
+}
+
+/** Counts a wrong code; returns the allowance left after it. */
+export async function countFailedRedeem(kv: KVNamespace, ip: string): Promise<LimitStatus> {
+  const p = CONNECT_REDEEM_POLICY;
+  const { count } = await readSlidingCounter(kv, redeemKey(ip));
+  await writeSlidingCounter(kv, redeemKey(ip), count + 1, p.windowSeconds);
+  return { policy: p.name, limit: p.limit, windowSeconds: p.windowSeconds, remaining: Math.max(0, p.limit - count - 1), resetSeconds: p.windowSeconds };
+}
+
+/** Counts a handshake when one is allowed; `status` is the allowance after it (or the exhausted one). */
+export async function startLimit(kv: KVNamespace, accountRef: string): Promise<{ allowed: boolean; status: LimitStatus }> {
+  const p = CONNECT_START_POLICY;
   const key = `rate:connect-start:${accountRef}`;
-  const count = Number((await kv.get(key)) ?? "0");
-  if (count >= 10) return false;
-  await kv.put(key, String(count + 1), { expirationTtl: 3600 });
-  return true;
+  const counter = await readSlidingCounter(kv, key);
+  const status = slidingStatus(counter, p.name, p.limit, p.windowSeconds);
+  if (status.remaining <= 0) return { allowed: false, status };
+  await writeSlidingCounter(kv, key, counter.count + 1, p.windowSeconds);
+  return { allowed: true, status: { ...status, remaining: status.remaining - 1, resetSeconds: p.windowSeconds } };
+}
+
+export async function startAllowed(kv: KVNamespace, accountRef: string): Promise<boolean> {
+  return (await startLimit(kv, accountRef)).allowed;
 }
 
 /** Kaption's API (rest-api) for the handshake: POST, JSON in and out. */

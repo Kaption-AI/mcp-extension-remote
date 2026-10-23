@@ -9,16 +9,18 @@ import { ExtSendOTPSchema } from "@/src/schemas";
 import {
   deriveAccountRef,
   generateOTP,
-  checkRateLimit,
+  otpSendLimit,
+  otpIpLimit,
   incrementRateLimit,
-  checkIpRateLimit,
   incrementIpRateLimit,
   storeOTP,
   sanitizeForLog,
 } from "@/src/otp";
 import type { Env } from "@/src/types";
 import { corsOptions, withCors } from "../cors";
-import { jsonError } from "@/app/i18n";
+import { errorBody, jsonError } from "@/app/i18n";
+import { withHeaders } from "@/src/problem";
+import { consumed, rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
 
 export async function OPTIONS(request: Request): Promise<Response> {
   return corsOptions(request);
@@ -27,7 +29,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return withCors(jsonError("Invalid content type", { status: 400 }), request);
+    return withCors(jsonError("Invalid content type", { status: 400, code: "invalid_content_type" }), request);
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -36,35 +38,35 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return withCors(jsonError("Invalid JSON body", { status: 400 }), request);
+    return withCors(jsonError("Invalid JSON body", { status: 400, code: "invalid_json" }), request);
   }
 
   const parsed = await ExtSendOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return withCors(jsonError(msg, { status: 400 }), request);
+    return withCors(jsonError(msg, { status: 400, code: "invalid_input" }), request);
   }
 
   const { phone } = parsed.data;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return withCors(jsonError("Invalid phone number format", { status: 400 }), request);
+    return withCors(jsonError("Invalid phone number format", { status: 400, code: "invalid_phone" }), request);
   }
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  if (!(await checkIpRateLimit(env.OAUTH_KV, ip))) {
-    return withCors(
-      jsonError("Too many requests. Try again later.", { status: 429 }),
-      request,
-    );
+  const ipLimit = await otpIpLimit(env.OAUTH_KV, ip);
+  if (ipLimit.remaining <= 0) {
+    const message = "Too many requests. Try again later.";
+    return withCors(tooManyRequests(ipLimit, message, { extra: errorBody(message) }), request);
   }
 
-  if (!(await checkRateLimit(env.OAUTH_KV, accountRef))) {
-    return withCors(
-      jsonError("Too many OTP requests. Try again in an hour.", { status: 429 }),
-      request,
-    );
+  const accountLimit = await otpSendLimit(env.OAUTH_KV, accountRef);
+  if (accountLimit.remaining <= 0) {
+    const message = "Too many OTP requests. Try again in an hour.";
+    return withCors(tooManyRequests(accountLimit, message, { extra: errorBody(message) }), request);
   }
+  // Both limits count this request from here on.
+  const limitHeaders = rateLimitHeaders(consumed(accountLimit), consumed(ipLimit));
 
   const code = generateOTP();
   await storeOTP(env.OAUTH_KV, accountRef, code);
@@ -85,16 +87,16 @@ export async function POST(request: Request): Promise<Response> {
     if (!res.ok) {
       console.error(`[otp] Send failed for ${sanitizeForLog(phone)}: ${res.status}`);
       return withCors(
-        jsonError("Failed to send verification code. Try again.", { status: 500 }),
+        jsonError("Failed to send verification code. Try again.", { status: 500, code: "otp_send_failed", headers: limitHeaders }),
         request,
       );
     }
 
-    return withCors(Response.json({ ok: true }), request);
+    return withCors(withHeaders(Response.json({ ok: true }), limitHeaders), request);
   } catch {
     console.error(`[otp] Send error for ${sanitizeForLog(phone)}`);
     return withCors(
-      jsonError("Failed to send verification code. Try again.", { status: 500 }),
+      jsonError("Failed to send verification code. Try again.", { status: 500, code: "otp_send_failed", headers: limitHeaders }),
       request,
     );
   }

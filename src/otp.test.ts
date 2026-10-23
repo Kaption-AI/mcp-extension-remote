@@ -222,6 +222,7 @@ describe("OTP KV operations", () => {
       expect(await verifyOTP(kv, accountRef, "123456")).toEqual({
         valid: false,
         error: "OTP expired or not found. Request a new code.",
+        code: "otp_expired",
       });
     });
 

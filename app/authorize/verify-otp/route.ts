@@ -22,7 +22,7 @@ export async function POST(request: Request): Promise<Response> {
   // [M7] Validate Content-Type
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return jsonError("Invalid content type", { status: 400 });
+    return jsonError("Invalid content type", { status: 400, code: "invalid_content_type" });
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -31,13 +31,13 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return jsonError("Invalid JSON body", { status: 400 });
+    return jsonError("Invalid JSON body", { status: 400, code: "invalid_json" });
   }
 
   const parsed = await VerifyOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return jsonError(msg, { status: 400 });
+    return jsonError(msg, { status: 400, code: "invalid_input" });
   }
 
   const { verifyTicket, code } = parsed.data;
@@ -45,37 +45,37 @@ export async function POST(request: Request): Promise<Response> {
   const connectionLifetime = parsed.data.connectionLifetime ?? DEFAULT_CONNECTION_LIFETIME;
   const ticket = await readVerifyTicket(verifyTicket, env.EPHEMERAL_STATE_SECRET);
   if (!ticket) {
-    return jsonError("Verification session expired. Request a new code.", { status: 400 });
+    return jsonError("Verification session expired. Request a new code.", { status: 400, code: "verification_expired" });
   }
 
   const { phone, oauthReqInfo } = ticket;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return jsonError("Invalid phone number format", { status: 400 });
+    return jsonError("Invalid phone number format", { status: 400, code: "invalid_phone" });
   }
 
   const result = await verifyOTP(env.OAUTH_KV, accountRef, code);
 
   if (!result.valid) {
-    return jsonError(result.error, { status: 400 });
+    return jsonError(result.error, { status: 400, code: result.code });
   }
 
   // [M3] Verify HMAC signature on oauthReqInfo
   const rawPayload = await hmacVerify(oauthReqInfo, env.INTERNAL_API_KEY);
   if (!rawPayload) {
-    return jsonError("Invalid or tampered OAuth state", { status: 400 });
+    return jsonError("Invalid or tampered OAuth state", { status: 400, code: "invalid_oauth_state" });
   }
 
   let oauthReq: AuthRequest;
   try {
     oauthReq = JSON.parse(atob(rawPayload));
   } catch {
-    return jsonError("Invalid OAuth state", { status: 400 });
+    return jsonError("Invalid OAuth state", { status: 400, code: "invalid_oauth_state" });
   }
 
   if (!oauthReq.clientId) {
     return jsonError("Invalid OAuth state: missing clientId",
-      { status: 400 },
+      { status: 400, code: "invalid_oauth_state" },
     );
   }
 
@@ -102,7 +102,7 @@ export async function POST(request: Request): Promise<Response> {
     // [H1] Never leak internal error details
     console.error(`[otp] OAuth completion failed for ${sanitizeForLog(phone)}`);
     return jsonError("Authorization failed. Please try again.",
-      { status: 500 },
+      { status: 500, code: "authorization_failed" },
     );
   }
 }

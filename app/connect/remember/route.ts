@@ -13,19 +13,24 @@ import {
   maskPhone,
   normalizeConnectCode,
   peekConnectCode,
-  redeemAllowed,
+  redeemLimit,
 } from "@/src/connect-code";
 import type { Env } from "@/src/types";
-import { jsonError } from "@/app/i18n";
+import { errorBody, jsonError } from "@/app/i18n";
+import { withHeaders } from "@/src/problem";
+import { rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
 
 export async function POST(request: Request): Promise<Response> {
   if (!request.headers.get("content-type")?.includes("application/json")) {
-    return jsonError("Invalid content type", { status: 400 });
+    return jsonError("Invalid content type", { status: 400, code: "invalid_content_type" });
   }
   const { env } = getCloudflareContext() as unknown as { env: Env };
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  if (!(await redeemAllowed(env.OAUTH_KV, ip))) {
-    return jsonError("Too many tries. Wait a few minutes and try again.", { status: 429 });
+  // Only wrong codes count against this limit.
+  const limit = await redeemLimit(env.OAUTH_KV, ip);
+  if (limit.remaining <= 0) {
+    const message = "Too many tries. Wait a few minutes and try again.";
+    return tooManyRequests(limit, message, { extra: errorBody(message) });
   }
   let body: { code?: unknown } = {};
   try {
@@ -36,8 +41,12 @@ export async function POST(request: Request): Promise<Response> {
   const code = normalizeConnectCode(body.code);
   const phone = code ? await peekConnectCode(connectDeps(env), code) : null;
   if (!code || !phone) {
-    await countFailedRedeem(env.OAUTH_KV, ip);
-    return jsonError("This code doesn't work any more. Get a new one in Kaption.", { status: 400 });
+    const after = await countFailedRedeem(env.OAUTH_KV, ip);
+    return jsonError("This code doesn't work any more. Get a new one in Kaption.", {
+      status: 400,
+      code: "connect_code_expired",
+      headers: rateLimitHeaders(after),
+    });
   }
   (await cookies()).set(CONNECT_COOKIE, code, {
     httpOnly: true,
@@ -46,5 +55,5 @@ export async function POST(request: Request): Promise<Response> {
     path: "/authorize",
     maxAge: CONNECT_CODE_TTL_SECONDS,
   });
-  return Response.json({ masked: maskPhone(phone) });
+  return withHeaders(Response.json({ masked: maskPhone(phone) }), rateLimitHeaders(limit));
 }

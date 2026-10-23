@@ -24,7 +24,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (!contentType?.includes("application/json")) {
-    return withCors(jsonError("Invalid content type", { status: 400 }), request);
+    return withCors(jsonError("Invalid content type", { status: 400, code: "invalid_content_type" }), request);
   }
 
   const { env } = getCloudflareContext() as unknown as { env: Env };
@@ -33,25 +33,25 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return withCors(jsonError("Invalid JSON body", { status: 400 }), request);
+    return withCors(jsonError("Invalid JSON body", { status: 400, code: "invalid_json" }), request);
   }
 
   const parsed = await ExtVerifyOTPSchema.safeParseAsync(raw);
   if (!parsed.success) {
     const msg = parsed.error.issues[0]?.message || "Invalid input";
-    return withCors(jsonError(msg, { status: 400 }), request);
+    return withCors(jsonError(msg, { status: 400, code: "invalid_input" }), request);
   }
 
   const { phone, code } = parsed.data;
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
-    return withCors(jsonError("Invalid phone number format", { status: 400 }), request);
+    return withCors(jsonError("Invalid phone number format", { status: 400, code: "invalid_phone" }), request);
   }
 
   const result = await verifyOTP(env.OAUTH_KV, accountRef, code);
 
   if (!result.valid) {
-    return withCors(jsonError(result.error, { status: 400 }), request);
+    return withCors(jsonError(result.error, { status: 400, code: result.code }), request);
   }
 
   // Generate and store a cloud token for the extension
