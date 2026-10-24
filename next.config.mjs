@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -12,7 +9,7 @@ const nextConfig = {
   // NOTE: security headers are deliberately NOT configured here.
   //
   // A `headers()` rule matching every route is unrepresentable across the two
-  // path-to-regexp versions in this stack: Next 15.5's config validator rejects
+  // path-to-regexp versions in this stack: Next's config validator (15.5 at the time) rejects
   // the v8 wildcard ('/*path' -> "Unexpected MODIFIER"), while
   // @opennextjs/cloudflare's routingHandler runs path-to-regexp v8, which
   // rejects the classic '/(.*)' ("Unexpected ("). The v6 form '/:path*' fails
