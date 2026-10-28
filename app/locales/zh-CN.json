@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "未配置审核员访问权限",
   "err.too_many_attempts": "尝试次数过多。请稍后再试。",
   "err.reviewer_invalid": "审核员凭据无效",
-  "err.authorize_start": "Kaption 无法开始登录此应用。请从该应用的连接器中移除 Kaption，重新添加后再试一次。"
+  "err.authorize_start": "Kaption 无法开始登录此应用。请从该应用的连接器中移除 Kaption，重新添加后再试一次。",
+  "err.authorize_app_not_allowed": "Kaption 不会连接到此应用：登录后它会把你带到一个 Kaption 无法识别的地址。Kaption 适用于 Claude、ChatGPT 等已知的 AI 应用，以及你自己电脑上的应用。如果你没有预料到这个页面，请关闭它。"
 }

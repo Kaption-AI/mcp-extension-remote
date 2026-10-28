@@ -11,6 +11,7 @@
  * The extension's JWT is not the proof: the API can still mint one for any phone (ACCEPT_ANY_TOKEN_BYPASS).
  */
 import { normalizeAndValidatePhone, openState, sealState } from "./otp";
+import { classifyRedirectUri } from "./redirect-policy";
 import type { Env } from "./types";
 import { readSlidingCounter, slidingStatus, writeSlidingCounter, type LimitStatus } from "./rate-limit";
 
@@ -90,6 +91,8 @@ export function redirectDestination(redirectUri: unknown): string | null {
   if (typeof redirectUri !== "string") return null;
   try {
     const { protocol, hostname, host } = new URL(redirectUri);
+    // mcp.CLOUD_RELAY.16 — a desktop app's own scheme (claude://…) also returns to an app on this computer.
+    if (classifyRedirectUri(redirectUri) === "app") return "local";
     if (protocol !== "https:" && protocol !== "http:") return null;
     if (hostname === "localhost" || hostname === "[::1]" || /^127(\.\d{1,3}){3}$/.test(hostname)) return "local";
     return host;

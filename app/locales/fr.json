@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "L'accès évaluateur n'est pas configuré",
   "err.too_many_attempts": "Trop de tentatives. Réessayez plus tard.",
   "err.reviewer_invalid": "Identifiants d'évaluateur invalides",
-  "err.authorize_start": "Kaption n'a pas pu lancer la connexion à cette app. Retirez Kaption des connecteurs de l'app, ajoutez-le à nouveau, puis réessayez."
+  "err.authorize_start": "Kaption n'a pas pu lancer la connexion à cette app. Retirez Kaption des connecteurs de l'app, ajoutez-le à nouveau, puis réessayez.",
+  "err.authorize_app_not_allowed": "Kaption ne se connecte pas à cette app : après la connexion, vous seriez envoyé vers une adresse que Kaption ne reconnaît pas. Kaption fonctionne avec Claude, ChatGPT et d'autres apps d'IA connues, ainsi qu'avec les apps de votre propre ordinateur. Si vous ne vous attendiez pas à cette page, fermez-la."
 }

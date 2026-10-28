@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "İnceleyici erişimi yapılandırılmamış",
   "err.too_many_attempts": "Çok fazla deneme. Daha sonra tekrar dene.",
   "err.reviewer_invalid": "Geçersiz inceleyici kimlik bilgileri",
-  "err.authorize_start": "Kaption bu uygulamada giriş işlemini başlatamadı. Kaption'ı uygulamanın bağlayıcılarından kaldır, yeniden ekle ve bir kez daha dene."
+  "err.authorize_start": "Kaption bu uygulamada giriş işlemini başlatamadı. Kaption'ı uygulamanın bağlayıcılarından kaldır, yeniden ekle ve bir kez daha dene.",
+  "err.authorize_app_not_allowed": "Kaption bu uygulamaya bağlanmaz: giriş yaptıktan sonra seni Kaption'ın tanımadığı bir adrese gönderecekti. Kaption; Claude, ChatGPT ve bilinen diğer yapay zekâ uygulamalarıyla ve kendi bilgisayarındaki uygulamalarla çalışır. Bu sayfayı beklemiyorsan kapat."
 }

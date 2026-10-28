@@ -8,6 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CLOUD_TOOLS, PUBLIC_TOOL_OUTPUT_SCHEMA } from "./tools";
 import { scrubInlineMedia } from "./media-scrub";
 import type { Env } from "./types";
+import { relayWithAlias } from "./phone-alias";
 
 export class RelayMCP extends McpAgent<Env> {
   server = new McpServer({
@@ -114,8 +115,7 @@ export class RelayMCP extends McpAgent<Env> {
     method: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    const roomId = this.env.RELAY_ROOM.idFromName(accountRef);
-    const room = this.env.RELAY_ROOM.get(roomId);
-    return room.handleMcpRequest(method, params);
+    // mcp.CLOUD_RELAY.17 — follows a Brazilian number's other form when this account has no extension.
+    return relayWithAlias(this.env, accountRef, method, params);
   }
 }

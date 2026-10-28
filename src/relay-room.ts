@@ -23,6 +23,7 @@ import {
   validateExtensionSession,
   validateJwt,
 } from "./otp";
+import { rememberPhoneAlias } from "./phone-alias";
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -357,6 +358,7 @@ export class RelayRoom extends DurableObject<Env> {
       });
     }
     this.closeOtherSockets(ws);
+    if (session.phone) this.rememberAlias(session.phone, session.accountRef);
     ws?.send(
       JSON.stringify(
         session.phone
@@ -407,7 +409,20 @@ export class RelayRoom extends DurableObject<Env> {
       this.setWsAttachment(ws, { authenticated: true, accountRef, room: this.roomOf(ws), authAt: Date.now() });
     }
     this.closeOtherSockets(ws);
+    this.rememberAlias(phone, accountRef);
     ws?.send(JSON.stringify({ type: "auth_ok", phone }));
+  }
+
+  /** mcp.CLOUD_RELAY.17 — connections made with this phone's other Brazilian form find this room. Never blocks auth. */
+  private rememberAlias(phone: string, roomRef: string): void {
+    const pending = rememberPhoneAlias(this.env.OAUTH_KV, phone, roomRef, this.env.PHONE_REF_SECRET).catch((e) => {
+      console.warn("[RelayRoom] alias not recorded:", e instanceof Error ? e.message : e);
+    });
+    try {
+      this.ctx.waitUntil(pending);
+    } catch {
+      // no waitUntil outside the runtime (tests): the promise still runs
+    }
   }
 
   // ─── Hibernation support ─────────────────────────────────────────────

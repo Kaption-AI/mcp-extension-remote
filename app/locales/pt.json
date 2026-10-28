@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "O acesso de revisor não está configurado",
   "err.too_many_attempts": "Tentativas demais. Tente mais tarde.",
   "err.reviewer_invalid": "Credenciais de revisor inválidas",
-  "err.authorize_start": "O Kaption não conseguiu iniciar o login neste app. Remova o Kaption dos conectores do app, adicione de novo e tente mais uma vez."
+  "err.authorize_start": "O Kaption não conseguiu iniciar o login neste app. Remova o Kaption dos conectores do app, adicione de novo e tente mais uma vez.",
+  "err.authorize_app_not_allowed": "O Kaption não se conecta a este app: depois do login ele te mandaria para um endereço que o Kaption não reconhece. O Kaption funciona com o Claude, o ChatGPT e outros apps de IA conhecidos, e com apps do seu próprio computador. Se você não esperava esta página, feche-a."
 }

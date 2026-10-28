@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "Prüferzugang ist nicht konfiguriert",
   "err.too_many_attempts": "Zu viele Versuche. Versuchen Sie es später erneut.",
   "err.reviewer_invalid": "Ungültige Prüfer-Zugangsdaten",
-  "err.authorize_start": "Kaption konnte die Anmeldung bei dieser App nicht starten. Entfernen Sie Kaption aus den Connectors der App, fügen Sie es erneut hinzu und versuchen Sie es noch einmal."
+  "err.authorize_start": "Kaption konnte die Anmeldung bei dieser App nicht starten. Entfernen Sie Kaption aus den Connectors der App, fügen Sie es erneut hinzu und versuchen Sie es noch einmal.",
+  "err.authorize_app_not_allowed": "Kaption verbindet sich nicht mit dieser App: Nach der Anmeldung würden Sie an eine Adresse weitergeleitet, die Kaption nicht kennt. Kaption funktioniert mit Claude, ChatGPT und anderen bekannten KI-Apps sowie mit Apps auf Ihrem eigenen Computer. Wenn Sie diese Seite nicht erwartet haben, schließen Sie sie."
 }

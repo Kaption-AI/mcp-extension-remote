@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "Reviewer access is not configured",
   "err.too_many_attempts": "Too many attempts. Try again later.",
   "err.reviewer_invalid": "Invalid reviewer credentials",
-  "err.authorize_start": "Kaption couldn't start signing in to this app. Remove Kaption from the app's connectors, add it again, and try once more."
+  "err.authorize_start": "Kaption couldn't start signing in to this app. Remove Kaption from the app's connectors, add it again, and try once more.",
+  "err.authorize_app_not_allowed": "Kaption doesn't connect to this app: after signing in it would send you to an address Kaption doesn't recognize. Kaption works with Claude, ChatGPT and other known AI apps, and with apps on your own computer. If you didn't expect this page, close it."
 }

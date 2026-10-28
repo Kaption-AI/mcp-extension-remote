@@ -496,8 +496,9 @@ describe("mcp.CONNECT_CODE.8 page language", () => {
     );
     expect(response.status).toBe(400);
     expect(response.headers.get("content-language")).toBe("es");
-    expect(response.headers.get("content-type")).toContain("text/plain");
-    expect(await response.text()).toMatch(/^Kaption no /);
+    // mcp.CLOUD_RELAY.18 — a page (the browser shows it inside Claude or ChatGPT), with the sentence escaped in it.
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(await response.text()).toMatch(/<p data-testid="authorize-error">Kaption no /);
   });
 
   it("a non-browser client gets the same rejection as problem+json", async () => {
