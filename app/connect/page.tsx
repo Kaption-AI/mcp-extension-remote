@@ -5,6 +5,7 @@
  * fragment (#c=…, never sent to a server by the browser), is remembered on this browser for Kaption's sign-in page,
  * and the page shows the one thing left to do: add the connector in the app. Nothing here signs anyone in.
  */
+import { connectorAddress } from "@/src/connector-address";
 import { useEffect, useState } from "react";
 import { rich, useI18n } from "../LanguageProvider";
 import { translateError } from "../i18n";
@@ -56,6 +57,8 @@ export default function ConnectPage() {
         const data = (await res.json()) as { masked?: string; error?: string; errorKey?: string; errorParams?: Record<string, string> };
         if (res.ok && data.masked) {
           setMasked(data.masked);
+          // mcp.CLOUD_RELAY.19 — one address per WhatsApp number, so a second number is a second connector.
+          setServer(connectorAddress(url.origin, data.masked));
           setState("ready");
         } else {
           setError(data.errorKey ? { key: data.errorKey, params: data.errorParams } : data.error ? { text: data.error } : { key: "connect.expired" });

@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "審査担当者用のアクセスが設定されていません",
   "err.too_many_attempts": "試行回数が多すぎます。しばらくしてからもう一度お試しください。",
   "err.reviewer_invalid": "審査担当者の認証情報が正しくありません",
-  "err.authorize_start": "Kaption はこのアプリへのサインインを開始できませんでした。アプリのコネクタから Kaption を削除し、もう一度追加してからお試しください。"
+  "err.authorize_start": "Kaption はこのアプリへのサインインを開始できませんでした。アプリのコネクタから Kaption を削除し、もう一度追加してからお試しください。",
+  "err.authorize_app_not_allowed": "Kaption はこのアプリに接続しません。サインイン後、Kaption が認識できないアドレスに移動することになるためです。Kaption は Claude、ChatGPT などの既知の AI アプリと、お使いのコンピュータ上のアプリで動作します。このページに心当たりがない場合は閉じてください。"
 }

@@ -12,7 +12,10 @@ vi.mock("./otp", () => ({
   sanitizeAccountRefForLog: (ref: string) => ref,
 }));
 
+vi.mock("./phone-alias", () => ({ rememberPhoneAlias: vi.fn(async () => undefined) }));
+
 import { RelayRoom } from "./relay-room";
+import { rememberPhoneAlias } from "./phone-alias";
 
 function socket(attachment: unknown = null) {
   const s = {
@@ -94,6 +97,8 @@ describe("mcp.CLOUD_RELAY.15 several clients of one account stay connected", () 
     await new Promise((resolve) => setTimeout(resolve, 5));
     await r.webSocketMessage(browser as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
     await flush();
+    // A later millisecond than the browser's handshake: in the same one the two tie (flaky under a loaded run).
+    await new Promise((resolve) => setTimeout(resolve, 5));
     await r.webSocketMessage(app as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
     await flush();
     expect(app.closed).toBeNull();
@@ -132,5 +137,15 @@ describe("mcp.CLOUD_RELAY.15 several clients of one account stay connected", () 
     const id = JSON.parse(app.sent[0]).id;
     await r.webSocketMessage(app as any, JSON.stringify({ jsonrpc: "2.0", id, result: 1 }));
     await expect(second).resolves.toBe(1);
+  });
+});
+
+describe("mcp.CLOUD_RELAY.17 the extension's sign-in records its phone's other Brazilian form", () => {
+  it("after a JWT handshake the room asks for the alias with the proven phone and its own account", async () => {
+    const fresh = socket({ authenticated: false, accountRef: null, room: "acct_test" });
+    const r = room([fresh]);
+    await r.webSocketMessage(fresh as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
+    await flush();
+    expect(rememberPhoneAlias).toHaveBeenCalledWith(undefined, "15555550123", "acct_test", "y");
   });
 });

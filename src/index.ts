@@ -39,6 +39,7 @@ import {
   validateJwt,
 } from "./otp";
 import type { Env } from "./types";
+import { accountRefsForPhone } from "./phone-alias";
 import {
   connectDeps,
   pollConnectPairing,
@@ -46,6 +47,7 @@ import {
   startLimit,
 } from "./connect-code";
 import { acceptsHtml, ensureProblemJson, problem } from "./problem";
+import { checkClientRegistration, isAllowedRedirectUri } from "./redirect-policy";
 import { rateLimitHeaders, tooManyRequests } from "./rate-limit";
 import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
 
@@ -263,11 +265,15 @@ function unauthorizedConnections(): Response {
   });
 }
 
-async function accountFromBearer(authorization: string | undefined, env: Env): Promise<string | null> {
-  if (!authorization?.startsWith("Bearer ")) return null;
+/**
+ * The accounts a Kaption JWT speaks for: its phone's, then (mcp.CLOUD_RELAY.17) the same Brazilian mobile line written
+ * the other way, so connections made with either form are listed and can be disconnected. Empty when unauthorized.
+ */
+async function accountsFromBearer(authorization: string | undefined, env: Env): Promise<string[]> {
+  if (!authorization?.startsWith("Bearer ")) return [];
   const phone = await validateJwt(env.JWT_SECRET, authorization.slice(7));
-  if (!phone) return null;
-  return deriveAccountRef(phone, env.PHONE_REF_SECRET);
+  if (!phone) return [];
+  return accountRefsForPhone(phone, env.PHONE_REF_SECRET);
 }
 
 // getOAuthApi needs the provider's options but never serves pages itself.
@@ -340,10 +346,12 @@ outerApp.options("/ext/connections", () => new Response(null, { status: 204, hea
 outerApp.options("/ext/connections/:grantId", () => new Response(null, { status: 204, headers: CONNECTIONS_CORS }));
 
 outerApp.get("/ext/connections", async (c) => {
-  const userId = await accountFromBearer(c.req.header("Authorization"), c.env);
-  if (!userId) return unauthorizedConnections();
+  const userIds = await accountsFromBearer(c.req.header("Authorization"), c.env);
+  if (userIds.length === 0) return unauthorizedConnections();
   try {
-    const connections = await listConnections(oauthApi(c.env), c.env.OAUTH_KV, userId);
+    const helpers = oauthApi(c.env);
+    const lists = await Promise.all(userIds.map((userId) => listConnections(helpers, c.env.OAUTH_KV, userId)));
+    const connections = lists.flat().sort((a, b) => b.connectedAt - a.connectedAt);
     return c.json({ connections }, 200, { ...CONNECTIONS_CORS, "Cache-Control": "no-store" });
   } catch (e: any) {
     console.error("[connections] list failed:", e?.message || e);
@@ -352,15 +360,16 @@ outerApp.get("/ext/connections", async (c) => {
 });
 
 outerApp.delete("/ext/connections/:grantId", async (c) => {
-  const userId = await accountFromBearer(c.req.header("Authorization"), c.env);
-  if (!userId) return unauthorizedConnections();
+  const userIds = await accountsFromBearer(c.req.header("Authorization"), c.env);
+  if (userIds.length === 0) return unauthorizedConnections();
   const grantId = c.req.param("grantId");
   if (!/^[^\s:/]{1,256}$/.test(grantId)) {
     return problem({ status: 400, code: "invalid_connection_id", detail: "Invalid connection id", headers: CONNECTIONS_CORS, extra: { error: "Invalid connection id" } });
   }
   try {
-    // revokeGrant is scoped to this account's own grants.
-    await disconnect(oauthApi(c.env), c.env.OAUTH_KV, userId, grantId);
+    // revokeGrant is scoped to this account's own grants (each form's; a grant id belongs to at most one).
+    const helpers = oauthApi(c.env);
+    for (const userId of userIds) await disconnect(helpers, c.env.OAUTH_KV, userId, grantId);
     return c.json({ ok: true }, 200, CONNECTIONS_CORS);
   } catch (e: any) {
     console.error("[connections] disconnect failed:", e?.message || e);
@@ -590,6 +599,9 @@ export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): O
     // Advertise registration endpoint in /.well-known/oauth-authorization-server
     // so MCP clients (Claude Code, Cursor, etc.) can auto-register
     clientRegistrationEndpoint: "/register",
+    // mcp.CLOUD_RELAY.16 — registration stays open to every MCP client, but only with redirect URIs of known AI apps,
+    // loopback (CLI/desktop clients) or a known desktop app's scheme (security report #2198).
+    clientRegistrationCallback: checkClientRegistration,
     // Pin OAuth grants and access-token audiences to the trusted MCP hostname
     // the client selected. The provider also serves RFC 9728 metadata and
     // advertises it in 401 challenges for both the origin-level and
@@ -616,31 +628,122 @@ export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): O
   } as OAuthProviderOptions<Env>;
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+}
+
 /**
  * GET /authorize that cannot start. A browser (Accept: text/html — what
- * Claude or ChatGPT open) gets the localized sentence as before; any other
+ * Claude or ChatGPT open) gets a small page with the localized sentence
+ * (mcp.CLOUD_RELAY.18 — a page, never a bare 500 or plain text); any other
  * client gets the same sentence in a problem document.
  * mcp.CONNECT_CODE.8 — in the language /connect remembered, else the browser's.
  */
-function authorizeError(req: Request, englishDetail?: string): Response {
+function authorizeError(
+  req: Request,
+  options: { englishDetail?: string; key?: string; code?: string } = {},
+): Response {
   const { lang } = resolveLanguage({
     cookie: readCookie(req.headers.get("cookie"), LANG_COOKIE),
     acceptLanguage: req.headers.get("accept-language"),
   });
-  const message = englishDetail ?? getT(lang)("err.authorize_start");
+  const { englishDetail, key = "err.authorize_start", code = "invalid_authorization_request" } = options;
+  const message = englishDetail ?? getT(lang)(key);
   const contentLanguage = englishDetail ? "en" : lang;
   if (acceptsHtml(req)) {
-    return new Response(message, {
-      status: 400,
-      headers: { "Content-Type": "text/plain; charset=utf-8", "Content-Language": contentLanguage },
+    const html = `<!doctype html><html lang="${escapeHtml(contentLanguage)}"><head><meta charset="utf-8">`
+      + `<meta name="viewport" content="width=device-width, initial-scale=1"><title>Kaption</title>`
+      + `<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;`
+      + `background:#0a0a0a;color:#e5e5e5;font:15px/1.5 system-ui,-apple-system,sans-serif;padding:20px;box-sizing:border-box}`
+      + `main{max-width:420px;background:#171717;border:1px solid #262626;border-radius:12px;padding:28px}`
+      + `h1{font-size:17px;margin:0 0 10px}p{margin:0;color:#a3a3a3}</style></head>`
+      + `<body><main><h1>Kaption</h1><p data-testid="authorize-error">${escapeHtml(message)}</p></main></body></html>`;
+    const headers = new Headers({
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Language": contentLanguage,
+      "Cache-Control": "no-store",
     });
+    applySecurityHeaders(headers);
+    return new Response(html, { status: 400, headers });
   }
   return problem({
     status: 400,
-    code: "invalid_authorization_request",
+    code,
     detail: message,
     headers: { "Content-Language": contentLanguage },
   });
+}
+
+/**
+ * mcp.CLOUD_RELAY.18 — the RFC 8707 `resource` an MCP client names, as this server's one resource. Clients send the
+ * address they were given: the legacy SSE address (`/sse`, `/sse?phone=…`) or the MCP address with a query
+ * (`/mcp?phone=…`, mcp.CLOUD_RELAY.19's one-connector-per-number addresses). The library accepts only the exact
+ * `<origin>/mcp`, so those sign-ins failed ("couldn't start signing in", #1735). Both paths reach the same server
+ * on the same origin, so they are the same resource; anything else passes through for the library to judge.
+ */
+export function canonicalResource(value: string): string {
+  try {
+    const url = new URL(value);
+    if (!MCP_ORIGINS.has(url.origin) || url.hash || url.username || url.password) return value;
+    const path = url.pathname.replace(/\/+$/, "");
+    if (path !== "/mcp" && path !== "/sse") return value;
+    return `${url.origin}/mcp`;
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * mcp.CLOUD_RELAY.18 — serves /sse for a valid, unexpired access token bound to `<origin>/mcp` (exactly what the
+ * library demands on /mcp), with the grant's props as the library would set them. Null: let the library answer
+ * (no token, an unknown or expired one, another audience) with its own challenge.
+ */
+export async function serveSseWithServerToken(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  mcpOrigin: string,
+): Promise<Response | null> {
+  const auth = request.headers.get("Authorization");
+  if (!auth?.startsWith("Bearer ")) return null;
+  let summary: Awaited<ReturnType<Env["OAUTH_PROVIDER"]["unwrapToken"]>> = null;
+  try {
+    summary = await env.OAUTH_PROVIDER.unwrapToken(auth.slice(7));
+  } catch {
+    return null;
+  }
+  if (!summary) return null;
+  const audience = Array.isArray(summary.audience) && summary.audience.length === 1 ? summary.audience[0] : summary.audience;
+  if (audience !== `${mcpOrigin}/mcp`) return null;
+  (ctx as ExecutionContext & { props?: unknown }).props = summary.grant.props;
+  return (sseHandler as unknown as WorkerHandler).fetch(request, env, ctx);
+}
+
+/** mcp.CLOUD_RELAY.18 — GET /authorize with its `resource` parameter(s) made canonical. */
+export function withCanonicalAuthorizeResource(req: Request): Request {
+  const url = new URL(req.url);
+  const values = url.searchParams.getAll("resource");
+  if (values.length === 0) return req;
+  const canonical = values.map(canonicalResource);
+  if (canonical.every((value, i) => value === values[i])) return req;
+  url.searchParams.delete("resource");
+  for (const value of canonical) url.searchParams.append("resource", value);
+  return new Request(url.toString(), req);
+}
+
+/** mcp.CLOUD_RELAY.18 — POST /token (form body) with its `resource` parameter(s) made canonical. */
+export async function withCanonicalTokenResource(req: Request): Promise<Request> {
+  if (!/application\/x-www-form-urlencoded/i.test(req.headers.get("content-type") ?? "")) return req;
+  const params = new URLSearchParams(await req.clone().text());
+  const values = params.getAll("resource");
+  if (values.length === 0) return req;
+  const canonical = values.map(canonicalResource);
+  if (canonical.every((value, i) => value === values[i])) return req;
+  params.delete("resource");
+  for (const value of canonical) params.append("resource", value);
+  const headers = new Headers(req.headers);
+  headers.delete("content-length");
+  return new Request(req.url, { method: req.method, headers, body: params.toString() });
 }
 
 /**
@@ -707,7 +810,9 @@ function createRouter(nextHandler: WorkerHandler) {
     // Store phone hint by IP for pre-filling the authorize form.
     // The /sse?phone=X request comes from the CLI; /authorize opens in the
     // browser on the same machine → same IP.  Short TTL, harmless if stale.
-    if (url.pathname === "/sse" && url.searchParams.has("phone")) {
+    // mcp.CLOUD_RELAY.19 — /mcp?phone=X (one connector per number) pre-fills the same way. The phone here is only a
+    // hint for the form: it never signs anyone in (mcp.CLOUD_RELAY.20).
+    if ((url.pathname === "/sse" || url.pathname === "/mcp") && url.searchParams.has("phone")) {
       const ip = request.headers.get("cf-connecting-ip") || "unknown";
       const phone = url.searchParams.get("phone")!;
       ctx.waitUntil((async () => {
@@ -740,7 +845,13 @@ function createRouter(nextHandler: WorkerHandler) {
             const oauthReqInfo =
               await oauthEnv.OAUTH_PROVIDER.parseAuthRequest(req);
             if (!oauthReqInfo.clientId) {
-              return authorizeError(req, "Invalid authorization request");
+              return authorizeError(req, { englishDetail: "Invalid authorization request" });
+            }
+            // mcp.CLOUD_RELAY.16 — a client registered before the redirect rule, with an address that isn't a known
+            // AI app's, can't start a sign-in either (the library already checked it is one the client registered).
+            if (!isAllowedRedirectUri(oauthReqInfo.redirectUri)) {
+              console.warn("[authorize] sign-in refused: redirect not allowed for client", oauthReqInfo.clientId);
+              return authorizeError(req, { key: "err.authorize_app_not_allowed", code: "unauthorized_client" });
             }
             const encoded = btoa(JSON.stringify(oauthReqInfo));
             const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
@@ -802,7 +913,7 @@ function createRouter(nextHandler: WorkerHandler) {
     // token endpoint (connection-lifetime.ts).
     if (url.pathname === "/token" && request.method === "POST") {
       return handleTokenRequest(
-        request,
+        await withCanonicalTokenResource(request),
         requestEnv,
         ctx,
         (req) => oauthHandler.fetch(req, requestEnv, ctx),
@@ -810,6 +921,19 @@ function createRouter(nextHandler: WorkerHandler) {
       );
     }
 
-    return toJsonBearerChallenge(await oauthHandler.fetch(request, requestEnv, ctx), url);
+    // mcp.CLOUD_RELAY.18 — the legacy SSE address with a token issued for this server (audience <origin>/mcp, the only
+    // resource the library issues for). The library's audience check compares the token with the request PATH, so
+    // every such token was refused on /sse ("Token audience does not match resource server") and apps connected
+    // through the SSE address re-authorized in a loop (#1735). Same checks as the library, then the SSE handler.
+    if (url.pathname === "/sse" || url.pathname.startsWith("/sse/")) {
+      const served = await serveSseWithServerToken(request, requestEnv, ctx, mcpOrigin);
+      if (served) return served;
+    }
+
+    // mcp.CLOUD_RELAY.18 — /authorize names the canonical resource (the /sse or /mcp?… address the app was given).
+    const oauthRequest = url.pathname === "/authorize" && request.method === "GET"
+      ? withCanonicalAuthorizeResource(request)
+      : request;
+    return toJsonBearerChallenge(await oauthHandler.fetch(oauthRequest, requestEnv, ctx), url);
   };
 }

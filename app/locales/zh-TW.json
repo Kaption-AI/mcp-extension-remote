@@ -151,5 +151,6 @@
   "err.reviewer_not_configured": "尚未設定審查者存取權",
   "err.too_many_attempts": "嘗試次數過多。請稍後再試。",
   "err.reviewer_invalid": "審查者憑證無效",
-  "err.authorize_start": "Kaption 無法開始登入此應用程式。請從該應用程式的連接器中移除 Kaption，重新新增後再試一次。"
+  "err.authorize_start": "Kaption 無法開始登入此應用程式。請從該應用程式的連接器中移除 Kaption，重新新增後再試一次。",
+  "err.authorize_app_not_allowed": "Kaption 不會連接到此應用程式：登入後它會把你帶到一個 Kaption 無法識別的位址。Kaption 適用於 Claude、ChatGPT 等已知的 AI 應用程式，以及你自己電腦上的應用程式。如果你沒有預期到這個頁面，請關閉它。"
 }

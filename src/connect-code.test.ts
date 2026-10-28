@@ -71,7 +71,10 @@ describe("mcp.CONNECT_CODE.3 the code", () => {
     expect(redirectDestination("http://127.0.0.1:6274/oauth/callback")).toBe("local");
     expect(redirectDestination("http://[::1]:8080/cb")).toBe("local");
     expect(redirectDestination("http://localhost.evil.example/cb")).toBe("localhost.evil.example");
-    expect(redirectDestination("cursor://anysphere.cursor-retrieval/oauth/callback")).toBeNull();
+    // mcp.CLOUD_RELAY.16 — a known desktop app's own scheme returns to an app on this computer; any other scheme: unknown.
+    expect(redirectDestination("cursor://anysphere.cursor-retrieval/oauth/callback")).toBe("local");
+    expect(redirectDestination("claude://claude.ai/mcp-auth-callback/sdk")).toBe("local");
+    expect(redirectDestination("evilapp://callback")).toBeNull();
     expect(redirectDestination("not a url")).toBeNull();
     expect(redirectDestination(undefined)).toBeNull();
   });
