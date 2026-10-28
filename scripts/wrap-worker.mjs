@@ -33,6 +33,10 @@ export { BucketCachePurge } from "./next-handler.js";
 // Export our custom Durable Objects for wrangler bindings
 export { RelayMCP, RelayRoom, DeploymentChainDO } from "../src/index.ts";
 
+// mcp.CLOUD_RELAY.18 — named entrypoint reachable only through a service binding
+// ({ service: "mcp-remote", entrypoint: "InternalRelay" }); no route dispatches to it.
+export { InternalRelay } from "../src/index.ts";
+
 // Import the Next.js handler and our routing factory
 import nextHandler from "./next-handler.js";
 import { createFetchHandler } from "../src/index.ts";
