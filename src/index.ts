@@ -53,6 +53,8 @@ import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, read
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
 export { RelayMCP, RelayRoom, DeploymentChainDO };
+// mcp.CLOUD_RELAY.18 — service-binding-only entrypoint for other Kaption workers (no route reaches it)
+export { InternalRelay } from "./internal-relay";
 
 // ─── MCP Handlers (authenticated tool calls) ────────────────────────
 // Pass directly to OAuthProvider as apiHandlers so ctx.props (set by

@@ -71,6 +71,10 @@
     "binding": "ASSETS"
   }
 
+  // Named entrypoint InternalRelay (src/internal-relay.ts, mcp.CLOUD_RELAY.18) needs no config here: other
+  // workers on this account reach it only through a service binding
+  // { "service": "mcp-remote", "entrypoint": "InternalRelay" }. No route serves it.
+
   // Secrets (set via `wrangler secret put`):
   // - INTERNAL_API_KEY: API key for rest-api OTP endpoint
   // - DEPLOY_API_KEY: API key for transparency chain append
