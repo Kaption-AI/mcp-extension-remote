@@ -39,7 +39,7 @@ const localAttachmentSchema = z.union([
   dataB64: z.string().min(4).max(11184812).regex(/^[A-Za-z0-9+/]*={0,2}$/).describe('Standard padded base64 bytes, without a data URL prefix'),
 }).strict(),
   z.object({ ref: z.string().regex(/^[a-f0-9]{64}$/).describe('One-time attachmentRef returned by create_attachment_upload after PUT of the bytes') }).strict(),
-]).describe('Exactly one attachment source: dataB64 or uploaded ref (paths are never accepted); max 8 MiB. Requires MCP_LOCAL_SEND and local delivery');
+]).describe('Exactly one attachment source: dataB64 or uploaded ref (paths are never accepted); max 8 MiB. Only when sending from this computer is turned on for the account');
 
 export const TOOLS: ToolDefinition[] = [
   {
@@ -217,7 +217,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'create_attachment_upload',
-    description: 'Create a one-time attachment upload slot, authorized by your connected Kaption account and owner-only MCP_LOCAL_SEND. Returns uploadUrl, attachmentRef and expiresAt. PUT the raw file bytes to uploadUrl within 15 minutes (e.g. curl -T file.pdf), then pass attachment: {ref: attachmentRef} to send_message or a local schedule create/update within one hour. The extension consumes the ref once and stores the bytes locally. No third-party URLs. Requires a connected Rust extension; target_session selects the account.',
+    description: 'Create a one-time attachment upload slot, authorized by your connected Kaption account (attachments from an assistant must be turned on for it). Returns uploadUrl, attachmentRef and expiresAt. PUT the raw file bytes to uploadUrl within 15 minutes (e.g. curl -T file.pdf), then pass attachment: {ref: attachmentRef} to send_message or a local schedule create/update within one hour. The extension consumes the ref once and stores the bytes locally. No third-party URLs. Needs a newer Kaption version; target_session selects the account.',
     inputSchema: z.object({
       name: attachmentName.describe('Filename without paths or control characters, max 200 characters'),
       mime: attachmentMime.describe('Allowed image, document, audio or video MIME type'),
@@ -228,7 +228,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'send_message',
-    description: 'Queue a WhatsApp message from this computer for the earliest permitted delivery. Requires the owner-only MCP_LOCAL_SEND flag, Rust core, and user consent in Kaption. Supports an existing person chat or eligible group (@g.us) and one image, document, audio or video attachment (8 MiB max). Message is optional with an attachment; audio cannot have captions. Returns queued plus a schedule ID, not proof of delivery. Existing ask-first prompts, 8/hour, 20/day, group limits and delays apply. An assistant cannot accept consent or confirmation. Computer and WhatsApp must remain open. Use manage_scheduled_messages with mode local to inspect or cancel the returned ID.',
+    description: 'Queue a WhatsApp message from this computer for the earliest permitted delivery. Needs a newer Kaption version, sending from this computer turned on for the account, and the user\'s consent in Kaption. Supports an existing person chat or eligible group (@g.us) and one image, document, audio or video attachment (8 MiB max). Message is optional with an attachment; audio cannot have captions. Returns queued plus a schedule ID, not proof of delivery. Existing ask-first prompts, 8/hour, 20/day, group limits and delays apply. An assistant cannot accept consent or confirmation. Computer and WhatsApp must remain open. Use manage_scheduled_messages with mode local to inspect or cancel the returned ID.',
     inputSchema: z.object({
       conversation_id: z.string().min(1).describe('Existing person chat ID or eligible group ID ending @g.us'),
       message: z.string().max(2000).optional().describe('Message or attachment caption; omit for attachment-only sends'),
@@ -241,7 +241,7 @@ export const TOOLS: ToolDefinition[] = [
     description: [
       "Schedule WhatsApp messages to be sent automatically at a specific time, in one of two modes:",
       "  bot (default) - sent from Kaption's WhatsApp number, not the user's own. Stored in Kaption's cloud and sent even when this computer is off. One-to-one chats only (no groups); one line, max 800 characters.",
-      '  local ("From this computer") - sent from the user\'s own WhatsApp number, as them, while this computer and WhatsApp are open. Stays on this device. Kaption keeps it within safe limits automatically (a few messages an hour and a day, minutes apart, only to chats where the other person has written, at most 3 a day to groups) and refuses what does not fit. The only mode that can send to groups (ones the user can post in and posted in within 30 days). Supports one image, document, audio or video attachment (8 MiB max), behind MCP_LOCAL_SEND and Rust core; audio captions are refused. A message whose time passes while this computer is off is missed, never sent late on its own.',
+      '  local ("From this computer") - sent from the user\'s own WhatsApp number, as them, while this computer and WhatsApp are open. Stays on this device. Kaption keeps it within safe limits automatically (a few messages an hour and a day, minutes apart, only to chats where the other person has written, at most 3 a day to groups) and refuses what does not fit. The only mode that can send to groups (ones the user can post in and posted in within 30 days). Supports one image, document, audio or video attachment (8 MiB max), when attachments from an assistant are turned on for the account and Kaption is up to date; audio captions are refused. A message whose time passes while this computer is off is missed, never sent late on its own.',
       'The local mode must first be turned on by the user in Kaption (its "From this computer" option, after reading the risks); an assistant cannot turn it on. A refused local request says why and ends with a reason code, e.g. "(reason: per-day)".',
       "",
       "Actions:",
@@ -404,7 +404,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "get_api_info",
-    description: "Get HTTP REST API connection info for programmatic access without MCP overhead. Returns URL, auth token, and available endpoints.",
+    description: "Get HTTP REST API connection info for programmatic access without MCP overhead. Returns the URL, how to authenticate (where the token file is; the token itself is never returned) and the available endpoints.",
     inputSchema: z.object({}),
   },
   {
@@ -562,9 +562,8 @@ for (const tool of TOOLS) {
 }
 
 /**
- * Public cloud tool surface. `get_api_info` is local-only because it returns
- * the extension's private REST connection token and is never safe or useful
- * to relay to a hosted MCP client.
+ * Public cloud tool surface. `get_api_info` is local-only: it describes the
+ * local hub's REST API on this computer, which is never useful to a hosted client.
  */
 export const CLOUD_TOOLS: ToolDefinition[] = TOOLS.filter(
   (tool) => tool.name !== "get_api_info",
