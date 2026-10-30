@@ -31,7 +31,7 @@ export { DOShardedTagCache } from "./next-handler.js";
 export { BucketCachePurge } from "./next-handler.js";
 
 // Export our custom Durable Objects for wrangler bindings
-export { RelayMCP, RelayRoom, DeploymentChainDO } from "../src/index.ts";
+export { RelayMCP, RelayRoom, DeploymentChainDO, UsageLedger, UsageTotals } from "../src/index.ts";
 
 // mcp.CLOUD_RELAY.18 — named entrypoint reachable only through a service binding
 // ({ service: "mcp-remote", entrypoint: "InternalRelay" }); no route dispatches to it.

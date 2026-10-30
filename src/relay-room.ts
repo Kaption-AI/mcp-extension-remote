@@ -133,6 +133,23 @@ export class RelayRoom extends DurableObject<Env> {
   }
 
   /**
+   * mcp-usage-accounting.RECORD.5 — the same call as handleMcpRequest, settled instead of thrown, so the caller (in
+   * another Durable Object) learns the JSON-RPC error code: errors lose their own properties across RPC.
+   */
+  async handleMcpRequestSettled(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<{ ok: true; result: unknown } | { ok: false; message: string; code: number | string | null }> {
+    try {
+      return { ok: true, result: await this.handleMcpRequest(method, params) };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const code = (err as { code?: unknown })?.code;
+      return { ok: false, message, code: typeof code === "number" || typeof code === "string" ? code : null };
+    }
+  }
+
+  /**
    * Forward an MCP tool call to the connected extension.
    * Returns the JSON-RPC result or throws on error/timeout.
    */
@@ -147,8 +164,9 @@ export class RelayRoom extends DurableObject<Env> {
     // mcp.CLOUD_RELAY.15 — several clients of one account may be connected; the newest authenticated one serves.
     const target = this.servingSocket();
     if (!target) {
-      throw new Error(
-        "Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge.",
+      throw Object.assign(
+        new Error("Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge."),
+        { code: "offline" },
       );
     }
 
@@ -163,7 +181,7 @@ export class RelayRoom extends DurableObject<Env> {
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(id);
         reject(
-          new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`),
+          Object.assign(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`), { code: "timeout" }),
         );
       }, REQUEST_TIMEOUT_MS);
 
@@ -313,8 +331,12 @@ export class RelayRoom extends DurableObject<Env> {
         if (obj.error) {
           const errObj = obj.error as Record<string, unknown>;
           pending.reject(
-            new Error(
-              (errObj.message as string) || "Extension returned error",
+            Object.assign(
+              new Error(
+                (errObj.message as string) || "Extension returned error",
+              ),
+              // mcp-usage-accounting.RECORD.5 — -32003 is a plan-limit refusal.
+              { code: typeof errObj.code === "number" ? errObj.code : null },
             ),
           );
         } else {

@@ -1,11 +1,18 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import type { RelayRoom } from "./relay-room";
 import type { DeploymentChainDO } from "./deployment-chain";
+import type { UsageLedger, UsageTotals } from "./usage-ledger";
 
 export interface Env {
   MCP_OBJECT: DurableObjectNamespace;
   RELAY_ROOM: DurableObjectNamespace<RelayRoom>;
   DEPLOYMENT_CHAIN: DurableObjectNamespace<DeploymentChainDO>;
+  /** mcp-usage-accounting.STORE.1 — one ledger per account. */
+  USAGE_LEDGER?: DurableObjectNamespace<UsageLedger>;
+  /** mcp-usage-accounting.ADMIN.1 — global totals without accounts. */
+  USAGE_TOTALS?: DurableObjectNamespace<UsageTotals>;
+  /** mcp-usage-accounting.STORE.4 — "off" stops recording (kill switch); anything else records. */
+  USAGE_LEDGER_ENABLED?: string;
   OAUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
   INTERNAL_API_BASE_URL: string;
