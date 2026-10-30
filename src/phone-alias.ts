@@ -95,3 +95,31 @@ export async function relayWithAlias(
     return env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(alias)).handleMcpRequest(method, params);
   }
 }
+
+/** A relayed call's error, carrying the extension's JSON-RPC code (or "offline" / "timeout") in this isolate. */
+export class RelayCallError extends Error {
+  constructor(message: string, readonly code: number | string | null) {
+    super(message);
+  }
+}
+
+/**
+ * relayWithAlias through RelayRoom.handleMcpRequestSettled: the same routing (the alias is followed only when the
+ * account's own room has no extension), with the error code kept (mcp-usage-accounting.RECORD.5).
+ */
+export async function relayWithAliasSettled(
+  env: Pick<Env, "RELAY_ROOM" | "OAUTH_KV">,
+  accountRef: string,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<unknown> {
+  const call = (ref: string) => env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(ref)).handleMcpRequestSettled(method, params);
+  let settled = await call(accountRef);
+  if (!settled.ok && NOT_CONNECTED.test((settled as { message: string }).message)) {
+    const alias = await aliasedRoom(env.OAUTH_KV, accountRef).catch(() => null);
+    if (alias) settled = await call(alias);
+  }
+  if ("result" in settled) return settled.result;
+  const failed = settled as { message: string; code: number | string | null };
+  throw new RelayCallError(failed.message, failed.code);
+}

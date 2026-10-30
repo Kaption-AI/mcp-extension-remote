@@ -34,6 +34,15 @@
       {
         "name": "DEPLOYMENT_CHAIN",
         "class_name": "DeploymentChainDO"
+      },
+      // mcp-usage-accounting.STORE.1 — Claude and ChatGPT usage: one ledger per account, plus global totals.
+      {
+        "name": "USAGE_LEDGER",
+        "class_name": "UsageLedger"
+      },
+      {
+        "name": "USAGE_TOTALS",
+        "class_name": "UsageTotals"
       }
     ]
   },
@@ -42,6 +51,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["RelayMCP", "RelayRoom", "DeploymentChainDO"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["UsageLedger", "UsageTotals"]
     }
   ],
 
@@ -61,6 +74,8 @@
 
   "vars": {
     "INTERNAL_API_BASE_URL": "https://api.kaptionai.com",
+    // mcp-usage-accounting.STORE.4 — "off" stops recording Claude and ChatGPT usage (kill switch).
+    "USAGE_LEDGER_ENABLED": "on",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },

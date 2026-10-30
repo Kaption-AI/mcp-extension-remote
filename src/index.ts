@@ -24,9 +24,21 @@ import { Hono } from "hono";
 import {
   connectionLifetimeCallback,
   disconnect,
+  grantRefFromToken,
   handleTokenRequest,
   listConnections,
 } from "./connection-lifetime";
+import { UsageLedger, UsageTotals, ledgerFor } from "./usage-ledger";
+import {
+  LOCAL_MAX_BODY_BYTES,
+  buildReport,
+  dayOf,
+  monthOf,
+  monthRange,
+  parseLocalBatch,
+  type ConnectionRow,
+  type DayRow,
+} from "./usage";
 import { RelayMCP } from "./relay-mcp";
 import { RelayRoom, ROOM_ACCOUNT_HEADER } from "./relay-room";
 import { DeploymentChainDO } from "./deployment-chain";
@@ -52,15 +64,42 @@ import { rateLimitHeaders, tooManyRequests } from "./rate-limit";
 import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
-export { RelayMCP, RelayRoom, DeploymentChainDO };
+export { RelayMCP, RelayRoom, DeploymentChainDO, UsageLedger, UsageTotals };
 // mcp.CLOUD_RELAY.18 — service-binding-only entrypoint for other Kaption workers (no route reaches it)
 export { InternalRelay } from "./internal-relay";
 
 // ─── MCP Handlers (authenticated tool calls) ────────────────────────
 // Pass directly to OAuthProvider as apiHandlers so ctx.props (set by
 // the OAuthProvider after token validation) flows through correctly.
-const sseHandler = RelayMCP.serveSSE("/sse");
-const mcpHandler = RelayMCP.serve("/mcp");
+const sseHandler = withConnectionProps(RelayMCP.serveSSE("/sse") as unknown as WorkerHandler);
+const mcpHandler = withConnectionProps(RelayMCP.serve("/mcp") as unknown as WorkerHandler);
+
+/**
+ * mcp-usage-accounting.RECORD.7 — adds the connection (OAuth grant id) to the session's props, so each call is
+ * counted on its connection. The library has already validated the token when these handlers run, and its tokens
+ * are `<userId>:<grantId>:<secret>`, so the grant id read from it is the one the library just accepted; it is only
+ * attached when the token's user is the props' account.
+ */
+export function attachGrantToProps(request: Request, ctx: { props?: unknown }): void {
+  const auth = request.headers.get("Authorization");
+  const ref = grantRefFromToken(auth?.startsWith("Bearer ") ? auth.slice(7) : null);
+  const props = ctx.props as { accountRef?: unknown } | undefined;
+  if (!ref || !props || typeof props !== "object" || props.accountRef !== ref.userId) return;
+  ctx.props = { ...props, grantId: ref.grantId };
+}
+
+function withConnectionProps(handler: WorkerHandler): WorkerHandler {
+  return {
+    fetch(request: Request, env: any, ctx: any) {
+      try {
+        attachGrantToProps(request, ctx);
+      } catch {
+        // Counting never stands in the way of a call.
+      }
+      return handler.fetch(request, env, ctx);
+    },
+  };
+}
 
 // ─── Non-OAuth routes ─────────────────────────────────────────────────
 
@@ -88,6 +127,9 @@ const OUTER_ROUTE_METHODS: { pattern: RegExp; allow: string }[] = [
   { pattern: /^\/ext\/connect-code\/(start|status)$/, allow: "POST, OPTIONS" },
   { pattern: /^\/ext\/connections$/, allow: "GET, OPTIONS" },
   { pattern: /^\/ext\/connections\/[^/]+$/, allow: "DELETE, OPTIONS" },
+  { pattern: /^\/ext\/usage$/, allow: "GET, OPTIONS" },
+  { pattern: /^\/ext\/usage\/local$/, allow: "POST, OPTIONS" },
+  { pattern: /^\/admin\/usage$/, allow: "GET" },
   { pattern: /^\/transparency(\/(latest|verify|gaps))?$/, allow: "GET, HEAD" },
   { pattern: /^\/transparency\/append$/, allow: "POST" },
 ];
@@ -352,8 +394,22 @@ outerApp.get("/ext/connections", async (c) => {
   if (userIds.length === 0) return unauthorizedConnections();
   try {
     const helpers = oauthApi(c.env);
-    const lists = await Promise.all(userIds.map((userId) => listConnections(helpers, c.env.OAUTH_KV, userId)));
-    const connections = lists.flat().sort((a, b) => b.connectedAt - a.connectedAt);
+    const [lists, usage] = await Promise.all([
+      Promise.all(userIds.map((userId) => listConnections(helpers, c.env.OAUTH_KV, userId))),
+      // mcp-usage-accounting.REPORT.2 — this month's calls per connection; the list never fails over it.
+      monthUsageByConnection(c.env, userIds, Date.now()).catch((e: any) => {
+        console.error("[connections] usage failed:", e?.message || e);
+        return null;
+      }),
+    ]);
+    const connections = lists
+      .flat()
+      .sort((a, b) => b.connectedAt - a.connectedAt)
+      .map((connection) =>
+        usage
+          ? { ...connection, usage: usage.byConnection.get(connection.id) ?? { month: usage.month, calls: 0, ok: 0 } }
+          : connection,
+      );
     return c.json({ connections }, 200, { ...CONNECTIONS_CORS, "Cache-Control": "no-store" });
   } catch (e: any) {
     console.error("[connections] list failed:", e?.message || e);
@@ -377,6 +433,139 @@ outerApp.delete("/ext/connections/:grantId", async (c) => {
     console.error("[connections] disconnect failed:", e?.message || e);
     return problem({ status: 500, code: "internal_error", detail: "Could not disconnect", headers: CONNECTIONS_CORS, extra: { error: "Could not disconnect" } });
   }
+});
+
+// ─── Claude and ChatGPT usage (spec mcp-usage-accounting) ─────────────
+
+const USAGE_CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
+
+/** The accounts' ledgers merged: a Brazilian line's two forms are two accounts (mcp.CLOUD_RELAY.17). */
+async function mergedLedgers(env: Env, userIds: string[], month: string) {
+  const reports = await Promise.all(userIds.map((userId) => ledgerFor(env, userId).report(month)));
+  const rows: DayRow[] = reports.flatMap((r) => r.rows);
+  const connections: ConnectionRow[] = reports.flatMap((r) => r.connections);
+  const since = reports.map((r) => r.since).filter((d): d is string => !!d).sort()[0] ?? null;
+  return { rows, connections, since };
+}
+
+/** mcp-usage-accounting.REPORT.2 — this month's calls per connection, for Connected apps. */
+async function monthUsageByConnection(env: Env, userIds: string[], now: number) {
+  const month = monthOf(now);
+  const { rows } = await mergedLedgers(env, userIds, month);
+  const byConnection = new Map<string, { month: string; calls: number; ok: number }>();
+  for (const row of rows) {
+    const entry = byConnection.get(row.connection) ?? { month, calls: 0, ok: 0 };
+    entry.calls += row.calls;
+    if (row.outcome === "ok") entry.ok += row.calls;
+    byConnection.set(row.connection, entry);
+  }
+  return { month, byConnection };
+}
+
+outerApp.options("/ext/usage", () => new Response(null, { status: 204, headers: USAGE_CORS }));
+outerApp.options("/ext/usage/local", () => new Response(null, { status: 204, headers: USAGE_CORS }));
+
+// mcp-usage-accounting.REPORT.1 — the caller's own usage this month (or ?month=YYYY-MM): by app, connection, tool, day.
+outerApp.get("/ext/usage", async (c) => {
+  const userIds = await accountsFromBearer(c.req.header("Authorization"), c.env);
+  if (userIds.length === 0) return unauthorizedConnections();
+  const now = Date.now();
+  const month = c.req.query("month") || monthOf(now);
+  if (!monthRange(month)) {
+    return problem({ status: 400, code: "invalid_month", detail: "month must be YYYY-MM.", headers: USAGE_CORS });
+  }
+  try {
+    const [{ rows, connections, since }, grants] = await Promise.all([
+      mergedLedgers(c.env, userIds, month),
+      activeGrantIds(c.env, userIds),
+    ]);
+    const report = buildReport(month, rows, connections, since, grants, now);
+    return c.json(report, 200, { ...USAGE_CORS, "Cache-Control": "no-store" });
+  } catch (e: any) {
+    console.error("[usage] report failed:", e?.message || e);
+    return problem({ status: 500, code: "internal_error", detail: "Could not load usage", headers: USAGE_CORS });
+  }
+});
+
+// mcp-usage-accounting.LOCAL.5-8 — the extension's batched counters for calls from local apps (the local hub).
+outerApp.post("/ext/usage/local", async (c) => {
+  const userIds = await accountsFromBearer(c.req.header("Authorization"), c.env);
+  if (userIds.length === 0) return unauthorizedConnections();
+  const text = await c.req.text();
+  if (text.length > LOCAL_MAX_BODY_BYTES) {
+    return problem({ status: 413, code: "usage_batch_too_large", detail: "The batch is larger than 64 KB.", headers: USAGE_CORS });
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = null;
+  }
+  const parsed = parseLocalBatch(body, Date.now());
+  if ("error" in parsed) {
+    return problem({ status: 400, code: "invalid_usage_batch", detail: parsed.error, headers: USAGE_CORS });
+  }
+  if (c.env.USAGE_LEDGER_ENABLED === "off") {
+    return c.json({ ok: true, accepted: 0, duplicate: false, recording: false }, 200, USAGE_CORS);
+  }
+  try {
+    // The account's own form (the one its extension signs in with).
+    const result = await ledgerFor(c.env, userIds[0]).record(parsed.cells, {
+      batchId: `local:${parsed.batchId}`,
+      accountTag: userIds[0],
+    });
+    return c.json({ ok: true, ...result }, 200, USAGE_CORS);
+  } catch (e: any) {
+    console.error("[usage] local batch failed:", e?.message || e);
+    return problem({ status: 500, code: "internal_error", detail: "Could not record usage", headers: USAGE_CORS });
+  }
+});
+
+/** The account's cloud connections that still exist (grant ids). */
+async function activeGrantIds(env: Env, userIds: string[]): Promise<Set<string>> {
+  const helpers = oauthApi(env);
+  const ids = new Set<string>();
+  for (const userId of userIds) {
+    let cursor: string | undefined;
+    do {
+      const page = await helpers.listUserGrants(userId, { cursor, limit: 100 });
+      for (const grant of page.items) ids.add(grant.id);
+      cursor = page.cursor;
+    } while (cursor);
+  }
+  return ids;
+}
+
+/** Constant-time comparison of two strings. */
+function sameSecret(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  let diff = left.length ^ right.length;
+  for (let i = 0; i < Math.max(left.length, right.length); i++) diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  return diff === 0;
+}
+
+// mcp-usage-accounting.ADMIN.1-2 — aggregate usage over every account (no account, no connection), for Kaption's
+// internal services holding the internal API key. ?from=YYYY-MM-DD&to=YYYY-MM-DD (to exclusive; default this month).
+outerApp.get("/admin/usage", async (c) => {
+  const auth = c.req.header("Authorization") ?? "";
+  if (!auth.startsWith("Bearer ") || !sameSecret(auth.slice(7), c.env.INTERNAL_API_KEY ?? "")) {
+    return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
+  }
+  const now = Date.now();
+  const month = monthRange(monthOf(now))!;
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  const from = day.test(c.req.query("from") ?? "") ? c.req.query("from")! : dayOf(month.from);
+  const to = day.test(c.req.query("to") ?? "") ? c.req.query("to")! : dayOf(month.to);
+  if (!c.env.USAGE_TOTALS) return c.json({ from, to, rows: [], accounts: [] });
+  const totals = c.env.USAGE_TOTALS.get(c.env.USAGE_TOTALS.idFromName("global"));
+  return c.json({ from, to, ...(await totals.report(from, to)) }, 200, { "Cache-Control": "no-store" });
 });
 
 // Transparency endpoints
@@ -807,6 +996,10 @@ function createRouter(nextHandler: WorkerHandler) {
       return outerApp.fetch(request, env, ctx);
     }
     if (url.pathname.startsWith("/ext/connect-code/")) {
+      return outerApp.fetch(request, env, ctx);
+    }
+    // mcp-usage-accounting.REPORT.1, LOCAL.5, ADMIN.1
+    if (url.pathname === "/ext/usage" || url.pathname === "/ext/usage/local" || url.pathname === "/admin/usage") {
       return outerApp.fetch(request, env, ctx);
     }
     // Store phone hint by IP for pre-filling the authorize form.
