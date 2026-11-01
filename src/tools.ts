@@ -767,9 +767,12 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   create_kaption_checkout_link: { title: "Create a Kaption checkout link", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 };
 
+// mcp.TOOLS — directories (Claude's Connectors Directory) read the listing name from annotations.title, so every tool
+// carries its title both at the top level and inside its annotations.
 for (const tool of TOOLS) {
-  tool.title = TOOL_TITLES[tool.name];
-  tool.annotations = TOOL_ANNOTATIONS[tool.name];
+  const title = TOOL_TITLES[tool.name] ?? TOOL_ANNOTATIONS[tool.name]?.title;
+  tool.title = title;
+  tool.annotations = TOOL_ANNOTATIONS[tool.name] && { ...TOOL_ANNOTATIONS[tool.name], title };
 }
 
 /**

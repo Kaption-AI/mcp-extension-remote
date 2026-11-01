@@ -7,6 +7,8 @@ describe("tool metadata for directory review", () => {
   it("gives every tool a title and both safety hints", () => {
     for (const tool of getToolsForMCP()) {
       expect(tool.title, tool.name).toBeTruthy();
+      // The Connectors Directory reads the listing name from annotations.title.
+      expect(tool.annotations?.title, tool.name).toBe(tool.title);
       expect(typeof tool.annotations?.readOnlyHint, tool.name).toBe("boolean");
       expect(typeof tool.annotations?.destructiveHint, tool.name).toBe("boolean");
     }
