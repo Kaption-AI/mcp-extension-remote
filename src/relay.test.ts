@@ -66,14 +66,16 @@ describe("Tool registration", () => {
     "manage_business_agent",
     "kaption_plans",
     "create_kaption_checkout_link",
+    "manage_status",
+    "list_status_posts",
   ];
 
-  it("exports exactly 36 tools", () => {
-    expect(TOOLS).toHaveLength(36);
+  it("exports exactly 38 tools", () => {
+    expect(TOOLS).toHaveLength(38);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(35);
+    expect(CLOUD_TOOLS).toHaveLength(37);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 
