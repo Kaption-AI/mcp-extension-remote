@@ -651,6 +651,52 @@ export const TOOLS: ToolDefinition[] = [
       method: z.enum(["card", "alipay"]).optional().describe("alipay only where kaption_plans offers it; card covers card and, in Brazil, Pix (default card)"),
     }),
   },
+  // scheduled-status.MCP (kaptionai features/kext/scheduled-status.feature.yaml) — WhatsApp Status posts scheduled from
+  // the user's own WhatsApp on their computer. Listed only while a connected extension said features.scheduled_status
+  // (manage-kaption.ts). manage_status writes (schedule, cancel); list_status_posts reads through TOOL_ROUTES. Kept the
+  // same on the local hub (tools-parity.test.ts).
+  {
+    name: "manage_status",
+    description: [
+      "Schedule a post to the user's WhatsApp Status (stories) for a future date and time, or cancel a scheduled status post. The post is made later by the user's own WhatsApp on this computer; to post right now the user uses WhatsApp itself, so there is no post-now action. Only when status posts are turned on for the account; needs the \"From this computer\" scheduled mode and its consent in Kaption (an assistant cannot accept consent). A status is either text (max 700 characters) on a background colour (#RRGGBB) with a font (0-7), or one image (JPG/PNG/WebP) or MP4 video with an optional caption (max 1024). Who sees it follows the user's WhatsApp status privacy setting. WhatsApp must be open on this computer at posting time: the Kaption bot and cloud templates cannot post statuses. datetime must be in the future. Each post counts as one scheduled item in the plan's scheduling quota, and the mode's limits (per hour, per day, pending) still apply; scheduling is not a delivery confirmation.",
+      "",
+      "Reading status posts is list_status_posts.",
+      "",
+      "Actions:",
+      '  schedule: { action: "schedule", datetime: "2026-10-27T09:00:00-03:00", text: "Open today 9-18", background_color: "#25D366", font: 2 }',
+      '  schedule (photo/video): { action: "schedule", datetime: "2026-10-27T09:00:00-03:00", attachment: { name, mime, dataB64 }, caption: "New menu" }',
+      '  cancel: { action: "cancel", id: "<status item id>" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      action: z.enum(["schedule", "cancel"]).describe("schedule or cancel"),
+      text: z.string().max(700).optional().describe("Text status (max 700 characters). Omit when posting an attachment."),
+      background_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe("Text status background as #RRGGBB (default #7ACCA5)"),
+      font: z.number().int().min(0).max(7).optional().describe("Text status font index 0-7 (default 0)"),
+      attachment: z.object({
+        name: z.string().min(1).max(200).describe("Filename without a path"),
+        mime: z.enum(["image/jpeg", "image/png", "image/webp", "video/mp4"]).describe("image/jpeg, image/png, image/webp or video/mp4"),
+        dataB64: z.string().min(4).max(11184812).describe("File bytes as base64 (8 MiB max)"),
+      }).optional().describe("One image or MP4 video for a photo/video status"),
+      caption: z.string().max(1024).optional().describe("Caption for an image or video status (max 1024 characters)"),
+      datetime: z.string().optional().describe("ISO 8601 date-time in the future to post at (required for schedule)"),
+      id: z.string().optional().describe("Status item ID (cancel)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "list_status_posts",
+    description: [
+      "List the user's scheduled WhatsApp Status posts (id, type, state, time, text or caption) and, when WhatsApp has them loaded, the statuses the user posted recently. Changes nothing.",
+      "",
+      "Examples:",
+      "  Waiting to be posted: {}",
+      '  Everything: { filter: "all" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      filter: z.enum(["pending", "all", "sent"]).optional().describe('Default: "pending" (waiting, missed or failed)'),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
 ];
 
 /**
@@ -666,6 +712,7 @@ export const TOOL_ROUTES: Record<string, { method: string; action: string }> = {
   list_chat_lists: { method: "manage_lists", action: "list" },
   get_chat_list: { method: "manage_lists", action: "get" },
   get_contact_note: { method: "manage_notes", action: "get" },
+  list_status_posts: { method: "manage_status", action: "list" },
 };
 
 /** The call the extension receives for a tool call: a routed read becomes its manage_* method and action. */
@@ -717,6 +764,8 @@ const TOOL_TITLES: Record<string, string> = {
   manage_business_agent: "Manage Business Agent",
   kaption_plans: "Kaption plans",
   create_kaption_checkout_link: "Create a Kaption checkout link",
+  manage_status: "Schedule a WhatsApp status",
+  list_status_posts: "List status posts",
 };
 
 // Safety annotations use OpenAI's review definitions:
@@ -765,6 +814,8 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   manage_business_agent: { title: "Manage Business Agent", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   kaption_plans: { title: "Kaption plans", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   create_kaption_checkout_link: { title: "Create a Kaption checkout link", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  manage_status: { title: "Schedule a WhatsApp status", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  list_status_posts: { title: "List status posts", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };
 
 // mcp.TOOLS — directories (Claude's Connectors Directory) read the listing name from annotations.title, so every tool

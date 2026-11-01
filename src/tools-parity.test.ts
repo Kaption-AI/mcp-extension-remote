@@ -37,7 +37,7 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
 
   it("same annotations and _meta for the manage tools (mcp-manage-kaption.LIST.2, UI.1)", () => {
     for (const name of [
-      "get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug", "get_business_agent", "manage_business_agent", "kaption_plans", "create_kaption_checkout_link",
+      "get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug", "get_business_agent", "manage_business_agent", "kaption_plans", "create_kaption_checkout_link", "manage_status", "list_status_posts",
     ]) {
       const cloud = CLOUD_TOOLS.find((t) => t.name === name)!;
       const local = LOCAL_TOOLS.find((t) => t.name === name)!;
@@ -106,6 +106,8 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       manage_business_agent: { action: "run_evals", eval_case_ids: ["a", "b"], confirmation_token: "t" },
       kaption_plans: {},
       create_kaption_checkout_link: { plan: "pro", period: "monthly", method: "card" },
+      manage_status: { action: "schedule", datetime: "2026-12-01T09:00:00Z", text: "Open today", background_color: "#25D366", font: 2 },
+      list_status_posts: { filter: "all" },
     };
 
     for (const [name, input] of Object.entries(sampleInputs)) {
@@ -140,6 +142,8 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       get_business_agent: { action: "pause" },
       manage_business_agent: { action: "status" },
       create_kaption_checkout_link: { plan: "free" },
+      manage_status: { action: "post_now", text: "Hi" },
+      list_status_posts: { filter: "later" },
     };
 
     for (const [name, input] of Object.entries(invalidInputs)) {

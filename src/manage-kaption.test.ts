@@ -107,6 +107,58 @@ describe("mcp-manage-kaption.LIST.2 the rule", () => {
     expect([...visibleManageTools([{ manage_kaption: true }])]).toEqual(["get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug"]);
     expect([...visibleManageTools([{ business_agent: true, plans: true }])]).toEqual(["get_business_agent", "manage_business_agent", "kaption_plans", "create_kaption_checkout_link"]);
     expect(readManageFeatures({ manage_kaption: "yes", plans: true, local_send: false })).toEqual({ plans: true });
+    // scheduled-status.MCP — the status tools follow their own key.
+    expect([...visibleManageTools([{ scheduled_status: true }])]).toEqual(["manage_status", "list_status_posts"]);
+    expect([...visibleManageTools([{ manage_kaption: true, business_agent: true, plans: true }])]).not.toContain("manage_status");
+    expect(readManageFeatures({ scheduled_status: true, other: true })).toEqual({ scheduled_status: true });
+    expect(readManageFeatures({ scheduled_status: "true" })).toEqual({});
+  });
+});
+
+describe("scheduled-status.MCP the status tools on the relay", () => {
+  it("hidden for an older extension (no scheduled_status key) and when it is false", async () => {
+    for (const features of [{}, { manage_kaption: true, plans: true }, { scheduled_status: false }]) {
+      const names = (await (await session(fakeRoom(features))).client.listTools()).tools.map((t) => t.name);
+      expect(names).not.toContain("manage_status");
+      expect(names).not.toContain("list_status_posts");
+      expect(names).toContain("query");
+    }
+  });
+
+  it("listed with scheduled_status true: manage_status writes, list_status_posts reads", async () => {
+    const s = await session(fakeRoom({ scheduled_status: true }));
+    const tools = (await s.client.listTools()).tools;
+    expect(await s.manage()).toEqual(["manage_status", "list_status_posts"]);
+    const manage = tools.find((t) => t.name === "manage_status")!;
+    const list = tools.find((t) => t.name === "list_status_posts")!;
+    expect((manage.inputSchema.properties as any).action.enum).toEqual(["schedule", "cancel"]);
+    expect(manage.annotations).toMatchObject({ title: "Schedule a WhatsApp status", readOnlyHint: false, destructiveHint: true });
+    expect(list.annotations).toMatchObject({ title: "List status posts", readOnlyHint: true, destructiveHint: false });
+    expect(manage.description).not.toMatch(/post_now/);
+  });
+
+  it("a hidden status tool never reaches the extension; a visible one is relayed (list as manage_status list)", async () => {
+    const hiddenRoom = fakeRoom({ manage_kaption: true });
+    const hidden: any = await (await session(hiddenRoom)).client.callTool({ name: "manage_status", arguments: { action: "cancel", id: "s1" } });
+    expect(hidden.isError).toBe(true);
+    expect(hiddenRoom.calls).toEqual([]);
+
+    const room = fakeRoom({ scheduled_status: true });
+    const s = await session(room);
+    const listed: any = await s.client.callTool({ name: "list_status_posts", arguments: { filter: "all" } });
+    expect(listed.isError).toBeFalsy();
+    const cancelled: any = await s.client.callTool({ name: "manage_status", arguments: { action: "cancel", id: "s1" } });
+    expect(cancelled.isError).toBeFalsy();
+    expect(room.calls).toEqual([
+      { method: "manage_status", params: { filter: "all", action: "list" } },
+      { method: "manage_status", params: { action: "cancel", id: "s1" } },
+    ]);
+  });
+
+  it("post_now is not an action", async () => {
+    const s = await session(fakeRoom({ scheduled_status: true }));
+    const res: any = await s.client.callTool({ name: "manage_status", arguments: { action: "post_now", text: "Hi" } });
+    expect(res.isError).toBe(true);
   });
 });
 
@@ -124,7 +176,7 @@ describe("mcp-manage-kaption.LIST.2 an MCP session lists the manage tools from i
     expect(room.watchers).toEqual(["ab".repeat(32)]);
     expect(await s.manage()).toEqual(["get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug"]);
 
-    room.features = { manage_kaption: true, business_agent: true, plans: true };
+    room.features = { manage_kaption: true, business_agent: true, plans: true, scheduled_status: true };
     await s.agent.refreshManageVisibility();
     await flush();
     expect(await s.manage()).toEqual(MANAGE_KAPTION_TOOLS);
