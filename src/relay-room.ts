@@ -24,6 +24,7 @@ import {
   validateJwt,
 } from "./otp";
 import { rememberPhoneAlias } from "./phone-alias";
+import { readManageFeatures, visibleManageTools, type ManageFeatures } from "./manage-kaption";
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -42,7 +43,15 @@ interface WsAttachment {
   openedAt?: number;
   /** mcp.CLOUD_RELAY.14 — the account whose room this is, set by the Worker; a handshake must be for it. */
   room?: string | null;
+  /** mcp-manage-kaption.LIST.1 — the manage families this client said in its auth message (absent: said nothing). */
+  features?: ManageFeatures;
 }
+
+/** mcp-manage-kaption.LIST.2 — MCP sessions (RelayMCP Durable Object ids) told when this room's manage tools change. */
+const MANAGE_WATCHERS_KEY = "manage-watchers";
+const MANAGE_VISIBLE_KEY = "manage-visible";
+const MAX_MANAGE_WATCHERS = 50;
+const MANAGE_WATCHER_TTL_MS = 7 * 24 * 3600 * 1000;
 
 /** mcp.CLOUD_RELAY.14 — set by the Worker (index.ts) on the upgrade it forwards to the room. */
 export const ROOM_ACCOUNT_HEADER = "X-Kaption-Room-Account";
@@ -123,6 +132,7 @@ export class RelayRoom extends DurableObject<Env> {
 
     server.addEventListener("close", () => {
       this.forgetSocket(server);
+      this.manageMaybeChanged(server);
     });
 
     server.addEventListener("error", () => {
@@ -213,7 +223,7 @@ export class RelayRoom extends DurableObject<Env> {
   }
 
   /** mcp.CLOUD_RELAY.15 — the newest authenticated socket of this room, or null. */
-  private servingSocket(): WebSocket | null {
+  private servingSocket(exclude: WebSocket | null = null): WebSocket | null {
     let sockets: WebSocket[] = [];
     try {
       sockets = this.ctx.getWebSockets();
@@ -223,6 +233,7 @@ export class RelayRoom extends DurableObject<Env> {
     let best: WebSocket | null = null;
     let bestAt = -1;
     for (const socket of sockets) {
+      if (socket === exclude) continue;
       const attachment = this.readWsAttachment(socket);
       if (!attachment?.authenticated) continue;
       const at = typeof attachment.authAt === "number" ? attachment.authAt : 0;
@@ -233,7 +244,72 @@ export class RelayRoom extends DurableObject<Env> {
     }
     if (best) return best;
     // Outside hibernation (tests, first run) the in-memory state is the only record.
-    return this.extensionWs && this.authenticated ? this.extensionWs : null;
+    return this.extensionWs && this.authenticated && this.extensionWs !== exclude ? this.extensionWs : null;
+  }
+
+  // ─── mcp-manage-kaption.LIST.2 — which manage tools this account's MCP sessions list ─────────────
+
+  /**
+   * The manage families the serving socket (the one calls go to, CLOUD_RELAY.15) said in its auth message; {} when it
+   * said nothing (older extensions: the tools stay hidden), null when no extension is connected.
+   */
+  manageFeatures(exclude: WebSocket | null = null): ManageFeatures | null {
+    this.restoreFromHibernation();
+    const socket = this.servingSocket(exclude);
+    if (!socket) return null;
+    return readManageFeatures(this.readWsAttachment(socket)?.features);
+  }
+
+  /** manageFeatures(), and the MCP session `watcherId` is told (refreshManageVisibility) when they change. */
+  async watchManage(watcherId: string): Promise<ManageFeatures | null> {
+    if (typeof watcherId === "string" && /^[0-9a-f]{16,128}$/i.test(watcherId)) {
+      try {
+        const now = Date.now();
+        const watchers = { ...((await this.ctx.storage?.get<Record<string, number>>(MANAGE_WATCHERS_KEY)) ?? {}) };
+        watchers[watcherId] = now;
+        const kept = Object.entries(watchers)
+          .filter(([, at]) => now - at < MANAGE_WATCHER_TTL_MS)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, MAX_MANAGE_WATCHERS);
+        await this.ctx.storage?.put(MANAGE_WATCHERS_KEY, Object.fromEntries(kept));
+      } catch {
+        // no storage (tests): the session still gets the features
+      }
+    }
+    return this.manageFeatures();
+  }
+
+  /** After a socket authenticates or closes: when the listed manage tools change, tell the watching MCP sessions. */
+  private manageMaybeChanged(closing: WebSocket | null = null): void {
+    const work = (async () => {
+      const storage = this.ctx.storage;
+      if (!storage) return;
+      const visible = [...visibleManageTools([this.manageFeatures(closing)])].join(",");
+      if ((await storage.get<string>(MANAGE_VISIBLE_KEY)) === visible) return;
+      await storage.put(MANAGE_VISIBLE_KEY, visible);
+      const watchers = (await storage.get<Record<string, number>>(MANAGE_WATCHERS_KEY)) ?? {};
+      const namespace = this.env.MCP_OBJECT;
+      if (!namespace) return;
+      const gone: string[] = [];
+      await Promise.all(Object.keys(watchers).map(async (id) => {
+        try {
+          await (namespace.get(namespace.idFromString(id)) as unknown as { refreshManageVisibility(): Promise<unknown> })
+            .refreshManageVisibility();
+        } catch {
+          gone.push(id);
+        }
+      }));
+      if (gone.length) {
+        const left = { ...watchers };
+        for (const id of gone) delete left[id];
+        await storage.put(MANAGE_WATCHERS_KEY, left);
+      }
+    })().catch((e) => console.warn("[RelayRoom] manage tools change not sent:", e instanceof Error ? e.message : e));
+    try {
+      this.ctx.waitUntil(work);
+    } catch {
+      // no waitUntil outside the runtime (tests): the promise still runs
+    }
   }
 
   /** mcp.CLOUD_RELAY.15 — a closed socket takes only its own in-flight requests with it. */
@@ -290,10 +366,12 @@ export class RelayRoom extends DurableObject<Env> {
 
     // [H6] Auth handshake — first message must authenticate (JWT or legacy token)
     if (obj.type === "auth" && (typeof obj.jwt === "string" || typeof obj.token === "string")) {
+      // mcp-manage-kaption.LIST.1 — the auth message may say which manage families this account may use.
+      const features = obj.features && typeof obj.features === "object" ? readManageFeatures(obj.features) : undefined;
       if (typeof obj.jwt === "string") {
-        this.handleJwtAuth(obj.jwt as string);
+        this.handleJwtAuth(obj.jwt as string, this.extensionWs, features);
       } else {
-        this.handleAuthHandshake(obj.token as string);
+        this.handleAuthHandshake(obj.token as string, this.extensionWs, features);
       }
       return;
     }
@@ -349,7 +427,11 @@ export class RelayRoom extends DurableObject<Env> {
   /**
    * [H6] Validate the auth token sent in the first WebSocket message (legacy).
    */
-  private async handleAuthHandshake(token: string, ws: WebSocket | null = this.extensionWs): Promise<void> {
+  private async handleAuthHandshake(
+    token: string,
+    ws: WebSocket | null = this.extensionWs,
+    features?: ManageFeatures,
+  ): Promise<void> {
     const session = await validateExtensionSession(
       this.env.OAUTH_KV,
       token,
@@ -377,9 +459,11 @@ export class RelayRoom extends DurableObject<Env> {
         accountRef: session.accountRef,
         room: this.roomOf(ws),
         authAt: Date.now(),
+        ...(features ? { features } : {}),
       });
     }
     this.closeOtherSockets(ws);
+    this.manageMaybeChanged();
     if (session.phone) this.rememberAlias(session.phone, session.accountRef);
     ws?.send(
       JSON.stringify(
@@ -394,7 +478,11 @@ export class RelayRoom extends DurableObject<Env> {
    * Validate a Kaption JWT sent in the auth handshake.
    * Calls the internal API to verify the JWT and extract the phone number.
    */
-  private async handleJwtAuth(jwt: string, ws: WebSocket | null = this.extensionWs): Promise<void> {
+  private async handleJwtAuth(
+    jwt: string,
+    ws: WebSocket | null = this.extensionWs,
+    features?: ManageFeatures,
+  ): Promise<void> {
     const phone = await validateJwt(
       this.env.JWT_SECRET,
       jwt,
@@ -428,9 +516,16 @@ export class RelayRoom extends DurableObject<Env> {
     // mcp.CLOUD_RELAY.13 — the socket that sent this handshake, even if another spoke while it was checked.
     this.extensionWs = ws;
     if (ws) {
-      this.setWsAttachment(ws, { authenticated: true, accountRef, room: this.roomOf(ws), authAt: Date.now() });
+      this.setWsAttachment(ws, {
+        authenticated: true,
+        accountRef,
+        room: this.roomOf(ws),
+        authAt: Date.now(),
+        ...(features ? { features } : {}),
+      });
     }
     this.closeOtherSockets(ws);
+    this.manageMaybeChanged();
     this.rememberAlias(phone, accountRef);
     ws?.send(JSON.stringify({ type: "auth_ok", phone }));
   }
@@ -552,5 +647,6 @@ export class RelayRoom extends DurableObject<Env> {
    */
   async webSocketClose(ws: WebSocket): Promise<void> {
     this.forgetSocket(ws);
+    this.manageMaybeChanged(ws);
   }
 }

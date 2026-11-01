@@ -19,6 +19,7 @@
  */
 import { deriveAccountRef, normalizeAndValidatePhone } from "./otp";
 import type { Env } from "./types";
+import type { ManageFeatures } from "./manage-kaption";
 
 const BR_WITH_NINE = /^55([1-9][1-9])9([6-9]\d{7})$/;
 const BR_WITHOUT_NINE = /^55([1-9][1-9])([6-9]\d{7})$/;
@@ -122,4 +123,20 @@ export async function relayWithAliasSettled(
   if ("result" in settled) return settled.result;
   const failed = settled as { message: string; code: number | string | null };
   throw new RelayCallError(failed.message, failed.code);
+}
+
+/**
+ * mcp-manage-kaption.LIST.2 — the manage families of the extension that answers `accountRef`'s calls: its own room's,
+ * or (when that room has no extension) its phone's other form's room, as relayWithAlias routes. The MCP session
+ * `watcherId` is told when they change. null when no extension is connected.
+ */
+export async function manageFeaturesWithAlias(
+  env: Pick<Env, "RELAY_ROOM" | "OAUTH_KV">,
+  accountRef: string,
+  watcherId: string,
+): Promise<ManageFeatures | null> {
+  const own = await env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(accountRef)).watchManage(watcherId);
+  if (own) return own;
+  const alias = await aliasedRoom(env.OAUTH_KV, accountRef).catch(() => null);
+  return alias ? env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(alias)).watchManage(watcherId) : null;
 }
