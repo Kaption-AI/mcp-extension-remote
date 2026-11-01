@@ -35,6 +35,26 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
     expect(cloudNames).toEqual(localNames);
   });
 
+  it("same annotations and _meta for the manage tools (mcp-manage-kaption.LIST.2, UI.1)", () => {
+    for (const name of [
+      "get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug", "get_business_agent", "manage_business_agent", "kaption_plans", "create_kaption_checkout_link",
+    ]) {
+      const cloud = CLOUD_TOOLS.find((t) => t.name === name)!;
+      const local = LOCAL_TOOLS.find((t) => t.name === name)!;
+      expect(cloud.annotations, name).toEqual(local.annotations);
+      expect(cloud._meta, name).toEqual(local._meta);
+    }
+  });
+
+  it("the same plans page as the local hub (mcp-manage-kaption.UI.1)", async () => {
+    const localUi = resolve(localToolsPath, "../plansUi.ts");
+    if (!existsSync(localUi)) return;
+    const local = await import(/* @vite-ignore */ localUi);
+    const cloud = await import("./plans-ui");
+    expect(cloud.PLANS_UI_HTML).toBe(local.PLANS_UI_HTML);
+    expect(cloud.PLANS_UI_MIME_TYPE).toBe(local.PLANS_UI_MIME_TYPE);
+  });
+
   it("same descriptions for every tool", () => {
     for (let i = 0; i < LOCAL_TOOLS.length; i++) {
       expect(CLOUD_TOOLS[i].description, `description mismatch for ${LOCAL_TOOLS[i].name}`).toBe(
@@ -77,6 +97,15 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       get_contact_note: { contact_id: "abc@c.us" },
       get_api_info: {},
       call_recordings: { action: "search", search: "budget", limit: 5 },
+      get_kaption_settings: {},
+      update_kaption_settings: { id: "transcription.automatic", value: false },
+      reconnect_kaption_connection: { bridge: "local" },
+      kaption_help: { action: "read", topic: "pricing" },
+      report_bug: { description: "The pill does not open", expected: "It opens" },
+      get_business_agent: { action: "eval_results", job_id: "j1", eval_case_ids: ["a"] },
+      manage_business_agent: { action: "run_evals", eval_case_ids: ["a", "b"], confirmation_token: "t" },
+      kaption_plans: {},
+      create_kaption_checkout_link: { plan: "pro", period: "monthly", method: "card" },
     };
 
     for (const [name, input] of Object.entries(sampleInputs)) {
@@ -107,6 +136,10 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       manage_scheduled_messages: { action: "get", id: "m1" },
       manage_lists: { action: "list" },
       get_reminder: {},
+      update_kaption_settings: {},
+      get_business_agent: { action: "pause" },
+      manage_business_agent: { action: "status" },
+      create_kaption_checkout_link: { plan: "free" },
     };
 
     for (const [name, input] of Object.entries(invalidInputs)) {

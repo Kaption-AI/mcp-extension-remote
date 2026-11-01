@@ -14,10 +14,14 @@ describe("tool metadata for directory review", () => {
 });
 
 // The ChatGPT app submission lists every public tool with the same safety hints the server advertises.
+// mcp-manage-kaption.LIST.2 — the manage tools are listed only for accounts whose extension turns them on (owner-only
+// for now), so a reviewer never sees them and the submission leaves them out until they go public.
 describe("chatgpt-app-submission.json", () => {
   it("matches the public tool list and its hints", async () => {
     const { readFileSync } = await import("node:fs");
-    const { CLOUD_TOOLS } = await import("./tools");
+    const { CLOUD_TOOLS: ALL } = await import("./tools");
+    const { MANAGE_TOOL_FEATURE } = await import("./manage-kaption");
+    const CLOUD_TOOLS = ALL.filter((t) => !MANAGE_TOOL_FEATURE[t.name]);
     const submission = JSON.parse(readFileSync(new URL("../chatgpt-app-submission.json", import.meta.url), "utf8"));
     expect(Object.keys(submission.tools).sort()).toEqual(CLOUD_TOOLS.map((t) => t.name).sort());
     for (const tool of CLOUD_TOOLS) {

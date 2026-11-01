@@ -20,12 +20,23 @@ export interface ToolDefinition {
   description: string;
   inputSchema: z.ZodType;
   annotations?: ToolAnnotations;
+  /** MCP Apps / ChatGPT Apps metadata (mcp-manage-kaption.UI.1: kaption_plans links its UI resource). */
+  _meta?: Record<string, unknown>;
 }
+
+/** mcp-manage-kaption.UI.1 — the plans UI resource kaption_plans links (MCP Apps and ChatGPT's outputTemplate). */
+export const PLANS_UI_URI = "ui://kaption/plans.html";
 
 /** Stable structured-output envelope used by every public cloud tool. */
 export const PUBLIC_TOOL_OUTPUT_SCHEMA = z.object({
   result: z.unknown().describe("The JSON-compatible result returned by the Kaption extension"),
 });
+
+/**
+ * mcp-manage-kaption.UI.2 — kaption_plans answers the extension's JSON itself as structuredContent (the plans page and
+ * ChatGPT's output template read it there): any object.
+ */
+export const PLANS_TOOL_OUTPUT_SCHEMA = z.object({}).passthrough().describe("The plans answer of the Kaption extension");
 
 // mcp-local-send.MEDIA.1 — 8 MiB decoded fits the relay's 16 MiB frame ceiling.
 // mcp-local-send.REFERENCES.1 — strict alternatives preserve source exclusivity.
@@ -561,6 +572,85 @@ export const TOOLS: ToolDefinition[] = [
       contact_id: z.string().describe("The contact ID"),
     }),
   },
+  // mcp-manage-kaption.LIST.2, LIST.5 — the manage tools below are listed only while a connected extension said so in
+  // its features (manage-kaption.ts); the extension's core answers them, and reads and writes are separate tools there
+  // already, so none needs a TOOL_ROUTES entry. Generated from kaptionai kext/scripts/mcp-manage-tools.json, the
+  // same on the local hub and the cloud relay (tools-parity.test.ts).
+  {
+    name: "get_kaption_settings",
+    description: "Reads Kaption's own settings for this WhatsApp account. Returns every visible setting, grouped (transcription, translation, dictation, media, notifications, app, features, backups, assistants, sending, plan), each with its id, current value, allowed values, what an assistant may do with it (change, off_only or read_only) and, for those it may not change, the Kaption screen where the user changes it. Also returns the local and cloud connections (connected, reconnecting or off) and which one carries this call. Sign-in, passwords, keys, the app lock and consents are never included. Changes nothing.",
+    inputSchema: z.object({}),
+  },
+  {
+    name: "update_kaption_settings",
+    description: "Changes one Kaption setting for this WhatsApp account and returns the setting as it now reads. Accepted: changes that make Kaption do less or are neutral (turn a feature off, keep less media, transcribe or dictate on this computer, change the app language, show or hide a screen). Refused, with the Kaption screen where the user can change it: anything that would share, send or cost more, settings marked read_only, and values outside the allowed values. Setting ids and allowed values come from get_kaption_settings.",
+    inputSchema: z.object({
+      id: z.string().describe("The setting id, e.g. transcription.automatic"),
+      value: z.unknown().optional().describe("The new value: one of the setting's allowed values (true/false, a choice, a number of bytes or a list of kinds)"),
+    }),
+  },
+  {
+    name: "reconnect_kaption_connection",
+    description: "Restarts Kaption's local or cloud assistant connection when it is switched on and not connected. The connection that carries this call is never restarted, and a connection that is switched off stays off. Returns the connection's state.",
+    inputSchema: z.object({
+      bridge: z.enum(["local", "cloud"]).describe("Which connection to restart"),
+    }),
+  },
+  {
+    name: "kaption_help",
+    description: "Reads Kaption's own guides and suggested prompts: how Kaption's features and plans work and how Claude and ChatGPT connect to it. action \"list\" returns every guide topic (id, title, one line); \"read\" with a topic returns that guide's text; \"prompts\" returns the prompts Kaption's AI assistants screen suggests, in the user's Kaption language.",
+    inputSchema: z.object({
+      action: z.enum(["list", "read", "prompts"]).describe("list, read or prompts"),
+      topic: z.string().optional().describe("For read: a topic id from list, e.g. pricing"),
+    }),
+  },
+  {
+    name: "report_bug",
+    description: "Reports a problem with Kaption to Kaption support, in two steps. A call with description (and optionally expected) sends nothing: it returns a preview of exactly what would be sent (the description and a few facts about this install: Kaption version, browser or app, operating system and the user's own WhatsApp number; never messages, chats or contacts) and a confirmation_token. A call with only that confirmation_token sends the previewed report. A token works once, for 10 minutes; at most 5 reports are sent per hour.",
+    inputSchema: z.object({
+      description: z.string().optional().describe("Step 1: what went wrong, in the user's words"),
+      expected: z.string().optional().describe("Step 1, optional: what the user expected instead"),
+      confirmation_token: z.string().optional().describe("Step 2: the token from the preview"),
+    }),
+  },
+  {
+    name: "get_business_agent",
+    description: "Reads the user's Meta Business Agent (the AI that answers customers on their WhatsApp Business number). Changes nothing. action \"status\": connection (last 4 digits only), whether it answers and for whom, and credit. \"get_instructions\": its skills, their saved text and whether a draft differs from what is live. \"list_knowledge\": its knowledge files (name, kind, size). \"list_tools\": its custom tools (name, description, state). \"activity\": agent replies per day for the last 7 days (counts only). \"list_evals\" and \"eval_results\" (with job_id): its evaluations and their scores, where available. When the number is not connected, or the account lacks the Business Agent plan, the answer says what is needed and where.",
+    inputSchema: z.object({
+      action: z.enum(["status", "get_instructions", "list_knowledge", "list_tools", "activity", "list_evals", "eval_results"]).optional().describe("What to read (default status)"),
+      job_id: z.string().optional().describe("eval_results: the run id that manage_business_agent run_evals returned"),
+      eval_case_ids: z.array(z.string()).optional().describe("eval_results: exactly one eval id adds that eval's transcript"),
+    }),
+  },
+  {
+    name: "manage_business_agent",
+    description: "Changes the user's Meta Business Agent (the AI that answers customers on their WhatsApp Business number). action \"pause\" stops its answers at once. \"resume\" and \"publish\" are two steps: the first call changes nothing and returns what will happen and a confirmation_token; the second call with that token turns answers on (resume) or puts a skill's draft live (publish). \"draft_instructions\" saves a skill's draft without publishing it. \"test_chat\" sends one message to Meta's private test chat for the agent, never to a customer, and returns its reply. \"run_evals\" (two steps, where available) starts an evaluation run. When the number is not connected, or the account lacks the Business Agent plan, nothing changes and the answer says what is needed and where.",
+    inputSchema: z.object({
+      action: z.enum(["pause", "resume", "draft_instructions", "publish", "test_chat", "run_evals"]).describe("What to change"),
+      skill: z.string().optional().describe("draft_instructions, publish: the skill slug (from get_business_agent get_instructions; default instructions)"),
+      description: z.string().optional().describe("draft_instructions: the skill's one-line description"),
+      text: z.string().optional().describe("draft_instructions: the skill's full instructions text"),
+      message: z.string().optional().describe("test_chat: the customer message to try"),
+      conversation_id: z.string().optional().describe("test_chat: continue an earlier test chat"),
+      eval_case_ids: z.array(z.string()).optional().describe("run_evals: the evals to run (from get_business_agent list_evals); empty runs all"),
+      confirmation_token: z.string().optional().describe("resume, publish, run_evals: the token from the first call"),
+    }),
+  },
+  {
+    name: "kaption_plans",
+    description: "Reads Kaption's plans exactly as the plans window in Kaption shows them to this user now: each plan's price per month and for each billing period in the user's currency, what it includes, which one the user has, and which payment methods are offered (card, Pix in Brazil, Alipay where available). Changes nothing.",
+    inputSchema: z.object({}),
+    _meta: { ui: { resourceUri: PLANS_UI_URI }, "openai/outputTemplate": PLANS_UI_URI },
+  },
+  {
+    name: "create_kaption_checkout_link",
+    description: "Creates the user's own private checkout link for one Kaption plan and billing period (with method alipay where kaption_plans offers it). It never collects payment details and never pays: payment happens on the checkout page. A plan that is coming soon or already the user's gets no link, and the answer says why.",
+    inputSchema: z.object({
+      plan: z.enum(["pro", "business", "business_agent"]).describe("The plan"),
+      period: z.enum(["yearly", "quarterly", "monthly"]).optional().describe("The billing period (default yearly)"),
+      method: z.enum(["card", "alipay"]).optional().describe("alipay only where kaption_plans offers it; card covers card and, in Brazil, Pix (default card)"),
+    }),
+  },
 ];
 
 /**
@@ -618,6 +708,15 @@ const TOOL_TITLES: Record<string, string> = {
   list_chat_lists: "List chat lists",
   get_chat_list: "Get chat list",
   get_contact_note: "Get contact note",
+  get_kaption_settings: "Get Kaption settings",
+  update_kaption_settings: "Update a Kaption setting",
+  reconnect_kaption_connection: "Reconnect a Kaption connection",
+  kaption_help: "Kaption help",
+  report_bug: "Report a Kaption problem",
+  get_business_agent: "Get Business Agent",
+  manage_business_agent: "Manage Business Agent",
+  kaption_plans: "Kaption plans",
+  create_kaption_checkout_link: "Create a Kaption checkout link",
 };
 
 // Safety annotations use OpenAI's review definitions:
@@ -657,6 +756,15 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_chat_lists: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_chat_list: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_contact_note: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_kaption_settings: { title: "Get Kaption settings", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  update_kaption_settings: { title: "Update a Kaption setting", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  reconnect_kaption_connection: { title: "Reconnect a Kaption connection", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  kaption_help: { title: "Kaption help", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  report_bug: { title: "Report a Kaption problem", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  get_business_agent: { title: "Get Business Agent", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  manage_business_agent: { title: "Manage Business Agent", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  kaption_plans: { title: "Kaption plans", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  create_kaption_checkout_link: { title: "Create a Kaption checkout link", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 };
 
 for (const tool of TOOLS) {
@@ -688,6 +796,7 @@ export function getToolsForMCP(): Array<{
   description: string;
   inputSchema: Record<string, unknown>;
   annotations?: ToolAnnotations;
+  _meta?: Record<string, unknown>;
 }> {
   return TOOLS.map((tool) => ({
     name: tool.name,
@@ -695,6 +804,7 @@ export function getToolsForMCP(): Array<{
     description: tool.description,
     inputSchema: zodToJsonSchema(tool.inputSchema),
     annotations: tool.annotations,
+    ...(tool._meta ? { _meta: tool._meta } : {}),
   }));
 }
 
@@ -782,6 +892,11 @@ export function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
     const result: Record<string, unknown> = { oneOf: options };
     if (schema.description) result.description = schema.description;
     return result;
+  }
+
+  // Any JSON value (update_kaption_settings.value).
+  if (schema instanceof z.ZodUnknown || schema instanceof z.ZodAny) {
+    return schema.description ? { description: schema.description } : {};
   }
 
   return { type: "object" };

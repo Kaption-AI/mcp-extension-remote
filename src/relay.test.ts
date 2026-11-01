@@ -57,14 +57,23 @@ describe("Tool registration", () => {
     "list_chat_lists",
     "get_chat_list",
     "get_contact_note",
+    "get_kaption_settings",
+    "update_kaption_settings",
+    "reconnect_kaption_connection",
+    "kaption_help",
+    "report_bug",
+    "get_business_agent",
+    "manage_business_agent",
+    "kaption_plans",
+    "create_kaption_checkout_link",
   ];
 
-  it("exports exactly 27 tools", () => {
-    expect(TOOLS).toHaveLength(27);
+  it("exports exactly 36 tools", () => {
+    expect(TOOLS).toHaveLength(36);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(26);
+    expect(CLOUD_TOOLS).toHaveLength(35);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 

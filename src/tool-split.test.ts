@@ -4,7 +4,21 @@ import { NO_ACCOUNT_TEXT, toolErrorText } from "./tool-errors";
 
 // mcp.TOOLS.19 — Claude's Connectors Directory rejects a tool that takes both safe and unsafe operations, so every
 // read has its own read-only tool and the manage_* tools only write.
-const READ_ACTIONS = new Set(["list", "get", "search"]);
+// mcp-manage-kaption.LIST.5 — and the read actions of kaption_help and get_business_agent.
+const READ_ACTIONS = new Set([
+  "list",
+  "get",
+  "search",
+  "read",
+  "prompts",
+  "status",
+  "get_instructions",
+  "list_knowledge",
+  "list_tools",
+  "activity",
+  "list_evals",
+  "eval_results",
+]);
 
 function actionsOf(name: string): string[] {
   const tool = getToolsForMCP().find((t) => t.name === name)!;
