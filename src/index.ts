@@ -20,6 +20,7 @@
  */
 
 import OAuthProvider, { getOAuthApi, type OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
+import { BRAND_ICON_PATH, brandIconResponse } from "./brand-icon";
 import { Hono } from "hono";
 import {
   connectionLifetimeCallback,
@@ -978,6 +979,11 @@ function createRouter(nextHandler: WorkerHandler) {
       && (request.method === "GET" || request.method === "HEAD")
     ) {
       return Response.redirect(LEGACY_HOME_REDIRECT, 301);
+    }
+
+    // mcp.CLOUD_RELAY.23 — the icon directory listings and consent screens show.
+    if (url.pathname === BRAND_ICON_PATH && (request.method === "GET" || request.method === "HEAD")) {
+      return brandIconResponse(request.method);
     }
 
     // Public standards and domain-verification routes bypass OAuth.

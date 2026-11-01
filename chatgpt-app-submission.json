@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "Kaption AI",
     "subtitle": "WhatsApp chats, audio & calls",
-    "description": "A personal MCP for WhatsApp, with voice-note and call transcripts. Search and summarize your chats, read what was said in voice notes and calls, and organize chats, labels, reminders and scheduled messages.",
+    "description": "A personal MCP for WhatsApp, with voice-note and call transcripts. Search and summarize your chats, read what was said in voice notes and calls, organize chats, labels, reminders and scheduled messages, and send messages from your own number after you confirm them.",
     "category": "PRODUCTIVITY"
   },
   "tools": {
@@ -51,7 +51,7 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Can write or replace a private WhatsApp Business note for a selected contact.",
+        "read_only_justification": "Writes or replaces a private WhatsApp Business note for a selected contact. Reading a note is the separate read-only get_contact_note tool.",
         "open_world_justification": "Contact notes are stored on the user's WhatsApp Business account on WhatsApp's servers and sync across the user's devices. Notes are private to the business and are not sent to the contact.",
         "destructive_justification": "Setting a note can overwrite prior note content that may not be recoverable."
       }
@@ -87,7 +87,7 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, completes, reopens, or deletes the user's private Kaption reminders.",
+        "read_only_justification": "Creates, updates, completes, reopens, or deletes the user's private Kaption reminders. Listing and reading reminders are the separate read-only list_reminders and get_reminder tools.",
         "open_world_justification": "Reminder changes remain private and do not create public content or contact another person.",
         "destructive_justification": "Can delete a reminder, which is not automatically recoverable."
       }
@@ -99,7 +99,7 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Creates, updates, or deletes scheduled-message records and can cause a message to be sent later.",
+        "read_only_justification": "Creates, updates, cancels, deletes or sends now scheduled-message records and can cause a message to be sent later. Listing and reading them are the separate read-only list_scheduled_messages and get_scheduled_message tools.",
         "open_world_justification": "A scheduled message is delivered through WhatsApp to an external recipient (a person, or a group in local mode) at the selected time, from Kaption's number or, in local mode, from the user's own number.",
         "destructive_justification": "Sending a scheduled WhatsApp message is irreversible after delivery, and deleting a schedule is not automatically recoverable."
       }
@@ -111,7 +111,7 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Creates, renames, edits, deletes, or changes membership of private WhatsApp chat lists.",
+        "read_only_justification": "Creates, renames, edits, deletes, or changes membership of private WhatsApp chat lists. Listing and reading lists are the separate read-only list_chat_lists and get_chat_list tools.",
         "open_world_justification": "Chat lists are stored on the user's WhatsApp account on WhatsApp's servers and sync across the user's devices. It does not send messages to anyone.",
         "destructive_justification": "Can delete a list or replace its membership, which may not be automatically recoverable."
       }
@@ -211,6 +211,114 @@
         "open_world_justification": "Only reads the user's private recordings and does not publish or send anything.",
         "destructive_justification": "Does not delete, overwrite or change recordings or transcripts."
       }
+    },
+    "send_message": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Queues one WhatsApp message (optionally with one attachment) from the user's own number to an existing chat or eligible group.",
+        "open_world_justification": "The message is delivered through WhatsApp to another person or group. It only works after the user turned on sending from this computer and gave consent in Kaption; Kaption's ask-first prompts, hourly and daily limits and delays apply, and an assistant cannot give that consent.",
+        "destructive_justification": "A delivered WhatsApp message cannot be unsent by the app. Until delivery, the queued message can be cancelled with manage_scheduled_messages."
+      }
+    },
+    "create_attachment_upload": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a one-time, short-lived upload slot for a file the user wants to attach to a message they send or schedule.",
+        "open_world_justification": "Returns an upload URL that accepts the file's bytes from outside Kaption; the file is passed to the user's own Kaption once and is not published or sent until a separate send_message or schedule call.",
+        "destructive_justification": "Creating an upload slot does not delete or overwrite anything; an unused slot simply expires."
+      }
+    },
+    "list_reminders": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the user's private Kaption reminders without changing them.",
+        "open_world_justification": "Only reads the user's private reminders.",
+        "destructive_justification": "Does not create, change or delete reminders."
+      }
+    },
+    "get_reminder": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one private Kaption reminder by ID without changing it.",
+        "open_world_justification": "Only reads the user's private reminder.",
+        "destructive_justification": "Does not change or delete the reminder."
+      }
+    },
+    "list_scheduled_messages": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the user's scheduled WhatsApp messages without changing or sending them.",
+        "open_world_justification": "Only reads the user's own schedule; nothing is sent.",
+        "destructive_justification": "Does not create, change, cancel or send scheduled messages."
+      }
+    },
+    "get_scheduled_message": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one scheduled WhatsApp message by ID without changing or sending it.",
+        "open_world_justification": "Only reads the user's own schedule; nothing is sent.",
+        "destructive_justification": "Does not change, cancel or send the message."
+      }
+    },
+    "list_chat_lists": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the user's custom WhatsApp chat lists without changing them.",
+        "open_world_justification": "Only reads the user's private lists.",
+        "destructive_justification": "Does not create, edit or delete lists."
+      }
+    },
+    "get_chat_list": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one custom chat list and its chats without changing it.",
+        "open_world_justification": "Only reads the user's private list.",
+        "destructive_justification": "Does not edit or delete the list or its chats."
+      }
+    },
+    "get_contact_note": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the private WhatsApp Business note saved for one contact without changing it.",
+        "open_world_justification": "Only reads the business's private note; nothing is sent to the contact.",
+        "destructive_justification": "Does not write or delete the note."
+      }
     }
   },
   "test_cases": [
@@ -253,15 +361,31 @@
       "tools_triggered": "query, manage_chat",
       "expected_output": "Resolves the exact sample chat, requests confirmation for the write, and reports that only the selected chat was archived.",
       "expected_output_url": null
+    },
+    {
+      "description": "Read the review account's reminders without changing them.",
+      "user_prompt": "What reminders do I have coming up?",
+      "file_attachment_urls": null,
+      "tools_triggered": "list_reminders",
+      "expected_output": "Lists the sample account's active reminders with their times and does not create, complete or delete any.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Send one message to an explicitly named synthetic contact, with confirmation.",
+      "user_prompt": "Send a WhatsApp message to Review Contact saying hello.",
+      "file_attachment_urls": null,
+      "tools_triggered": "query, send_message",
+      "expected_output": "Resolves the exact sample chat, asks the user to confirm the text before sending, then reports that the message was queued (with its ID) for the earliest permitted delivery, not that it was delivered.",
+      "expected_output_url": null
     }
   ],
   "negative_test_cases": [
     {
-      "description": "Do not trigger for an unsupported immediate-send request.",
-      "user_prompt": "Send a WhatsApp message to Review Contact right now saying hello.",
+      "description": "Do not trigger for an unsupported WhatsApp call request.",
+      "user_prompt": "Start a WhatsApp voice call with Review Contact.",
       "file_attachment_urls": null,
       "tools_triggered": null,
-      "expected_output": "The app should not be invoked because it has no immediate-send tool; the assistant should explain that limitation.",
+      "expected_output": "The app should not be invoked because it cannot place or answer calls (it only reads recordings of past calls); the assistant should explain that limitation.",
       "expected_output_url": null
     },
     {

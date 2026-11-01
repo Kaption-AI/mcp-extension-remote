@@ -6,6 +6,7 @@ import OAuthProvider, {
 import { SignJWT } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  isGoogleClient,
   FIXED_LIFETIME_SECONDS,
   IDLE_EXPIRED_DESCRIPTION,
   IDLE_LIMIT_SECONDS,
@@ -116,13 +117,13 @@ const form = (fields: Record<string, string>): RequestInit => ({
   body: new URLSearchParams(fields).toString(),
 });
 
-async function register(target: Target, clientName = "Claude"): Promise<string> {
+async function register(target: Target, clientName = "Claude", redirectUri = REDIRECT_URI): Promise<string> {
   const response = await target.call("/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       client_name: clientName,
-      redirect_uris: [REDIRECT_URI],
+      redirect_uris: [redirectUri],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
@@ -145,13 +146,18 @@ interface Tokens {
 /** The consent (completed as the verify-otp route does) and the app's code exchange. */
 async function connect(
   target: Target,
-  { clientId, userId, lifetime }: { clientId: string; userId: string; lifetime?: ConnectionLifetime },
+  {
+    clientId,
+    userId,
+    lifetime,
+    redirectUri = REDIRECT_URI,
+  }: { clientId: string; userId: string; lifetime?: ConnectionLifetime; redirectUri?: string },
 ): Promise<Tokens> {
   const authorize = new URL(`${ORIGIN}/authorize`);
   authorize.search = new URLSearchParams({
     response_type: "code",
     client_id: clientId,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     scope: "kaption:access",
     state: "state",
     code_challenge: await pkceChallenge(CODE_VERIFIER),
@@ -172,7 +178,7 @@ async function connect(
     form({
       grant_type: "authorization_code",
       code,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
       client_id: clientId,
       code_verifier: CODE_VERIFIER,
     }),
@@ -511,5 +517,69 @@ describe("the consent form", () => {
       expect(VerifyOTPSchema.safeParse({ ...base, connectionLifetime }).success).toBe(true);
     }
     expect(VerifyOTPSchema.safeParse({ ...base, connectionLifetime: "forever" }).success).toBe(false);
+  });
+});
+
+// mcp.CLOUD_RELAY.22 — Google asks MCP servers not to rotate refresh tokens.
+describe("refresh tokens for Google's apps", () => {
+  const GOOGLE_REDIRECT = "https://oauth-redirect.googleusercontent.com/r/kaption-connector";
+
+  it("returns the same refresh token on every refresh, and it keeps working", async () => {
+    const relay = createRelay();
+    const clientId = await register(relay, "Gemini", GOOGLE_REDIRECT);
+    const first = await connect(relay, { clientId, userId: "account-1", lifetime: "inactive-90d", redirectUri: GOOGLE_REDIRECT });
+
+    for (let use = 0; use < 5; use++) {
+      advanceDays(89); // past the old 30-day end and close to the idle limit each time
+      const tokens = await refreshOk(relay, clientId, first.refresh_token);
+      expect(tokens.refresh_token).toBe(first.refresh_token);
+      expect(tokens.access_token).not.toBe(first.access_token);
+      const unwrapped = await relay.helpers.unwrapToken(tokens.access_token);
+      expect(unwrapped?.grant.props).toMatchObject({ accountRef: "account-1" });
+    }
+    const grant = relay.kv.json(grantOf(first.refresh_token)) as StoredGrant;
+    expect(grant.previousRefreshTokenId).toBeUndefined();
+  });
+
+  it("still ends after 90 days without use, as the person chose", async () => {
+    const relay = createRelay();
+    const clientId = await register(relay, "Gemini", GOOGLE_REDIRECT);
+    const tokens = await connect(relay, { clientId, userId: "account-1", lifetime: "inactive-90d", redirectUri: GOOGLE_REDIRECT });
+    await refreshOk(relay, clientId, tokens.refresh_token);
+    advanceDays(91);
+    expect((await refresh(relay, clientId, tokens.refresh_token)).status).toBe(400);
+  });
+
+  it("keeps a one-year connection's end date", async () => {
+    const relay = createRelay();
+    const clientId = await register(relay, "Gemini", GOOGLE_REDIRECT);
+    const connectedAt = nowSeconds();
+    const tokens = await connect(relay, { clientId, userId: "account-1", lifetime: "fixed-1y", redirectUri: GOOGLE_REDIRECT });
+    advanceDays(100);
+    expect((await refreshOk(relay, clientId, tokens.refresh_token)).refresh_token).toBe(tokens.refresh_token);
+    expect(relay.kv.json(grantOf(tokens.refresh_token))?.expiresAt).toBe(connectedAt + FIXED_LIFETIME_SECONDS);
+    advanceDays(266);
+    expect((await refresh(relay, clientId, tokens.refresh_token)).status).toBe(400);
+  });
+
+  it("keeps rotating for every other app", async () => {
+    const relay = createRelay();
+    const clientId = await register(relay);
+    const first = await connect(relay, { clientId, userId: "account-1", lifetime: "inactive-90d" });
+    const second = await refreshOk(relay, clientId, first.refresh_token);
+    expect(second.refresh_token).not.toBe(first.refresh_token);
+    const third = await refreshOk(relay, clientId, second.refresh_token);
+    expect(third.refresh_token).not.toBe(second.refresh_token);
+    // The token two rotations back no longer works.
+    expect((await refresh(relay, clientId, first.refresh_token)).status).toBe(400);
+  });
+
+  it("recognizes only clients whose every redirect is one of Google's OAuth hosts", () => {
+    expect(isGoogleClient({ redirectUris: [GOOGLE_REDIRECT] })).toBe(true);
+    expect(isGoogleClient({ redirectUris: ["https://oauth-redirect-sandbox.googleusercontent.com/r/x"] })).toBe(true);
+    expect(isGoogleClient({ redirectUris: [GOOGLE_REDIRECT, REDIRECT_URI] })).toBe(false);
+    expect(isGoogleClient({ redirectUris: ["https://evil.googleusercontent.com/r/x"] })).toBe(false);
+    expect(isGoogleClient({ redirectUris: [] })).toBe(false);
+    expect(isGoogleClient(null)).toBe(false);
   });
 });

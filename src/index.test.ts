@@ -651,3 +651,19 @@ describe("AR-ACT-02 error contract on the worker", () => {
     expect(env.OAUTH_KV.put).not.toHaveBeenCalled();
   });
 });
+
+// mcp.CLOUD_RELAY.23 — the square, circular-look icon for directory listings and consent screens.
+describe("brand icon", () => {
+  it("serves a square SVG of at least 500x500 without a sign-in", async () => {
+    const nextHandler = { fetch: vi.fn(async () => new Response("next")) };
+    const handler = createFetchHandler(nextHandler as any);
+    const { ctx } = createExecutionContext();
+    const response = await handler(new Request("https://mcp.kaptionai.com/brand/kaption-mcp-icon.svg"), createEnv(), ctx);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/^image\/svg\+xml/);
+    const svg = await response.text();
+    expect(svg).toMatch(/^<svg [^>]*width="512" height="512" viewBox="0 0 512 512"/);
+    expect(svg).toContain("<circle");
+    expect(nextHandler.fetch).not.toHaveBeenCalled();
+  });
+});

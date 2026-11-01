@@ -5,7 +5,8 @@
 
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CLOUD_TOOLS, PUBLIC_TOOL_OUTPUT_SCHEMA } from "./tools";
+import { CLOUD_TOOLS, PUBLIC_TOOL_OUTPUT_SCHEMA, routeToolCall } from "./tools";
+import { NO_ACCOUNT_TEXT, toolErrorText } from "./tool-errors";
 import { scrubInlineMedia } from "./media-scrub";
 import type { Env } from "./types";
 import { relayWithAliasSettled } from "./phone-alias";
@@ -53,28 +54,27 @@ export class RelayMCP extends McpAgent<Env> {
           const accountRef = this.getAccountRef();
           if (!accountRef) {
             return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: "Authentication error: no account reference in token. Re-authenticate via OTP.",
-                },
-              ],
+              content: [{ type: "text" as const, text: NO_ACCOUNT_TEXT }],
+              isError: true,
             };
           }
 
           // mcp-usage-accounting.RECORD.1 — every tool call is counted, whatever its outcome.
+          // mcp.TOOLS.19 — a read-only tool reaches the extension as its manage_* method and action, and is counted as
+          // that call, so usage reads the same for every Kaption version.
+          const routed = routeToolCall(tool.name, args);
           const started = Date.now();
-          const usage = this.usageContext(accountRef, tool.name, args, started);
+          const usage = this.usageContext(accountRef, routed.method, routed.params, started);
           let failure: unknown = null;
           try {
             // Sanitize args for DO RPC — the MCP SDK may inject non-serializable
             // properties (AbortSignal etc.) into the args object
-            const cleanArgs = JSON.parse(JSON.stringify(args));
+            const cleanArgs = JSON.parse(JSON.stringify(routed.params));
             const { sanitizeAccountRefForLog } = await import("./otp");
             console.log(
               `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)} app=${await this.appName(accountRef)}`,
             );
-            let result = await this.relayToExtension(accountRef, tool.name, cleanArgs);
+            let result = await this.relayToExtension(accountRef, routed.method, cleanArgs);
 
             // Inline media ONLY for an explicit download_media call.
             //   download_media (mcp.TOOLS.6 / mcp.CLOUD_RELAY.6): base64_data flows
@@ -104,7 +104,7 @@ export class RelayMCP extends McpAgent<Env> {
               content: [
                 {
                   type: "text" as const,
-                  text: `Error: ${err.message}`,
+                  text: toolErrorText(tool.name, err),
                 },
               ],
               isError: true,

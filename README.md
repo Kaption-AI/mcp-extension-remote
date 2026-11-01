@@ -85,23 +85,35 @@ AI Client (Claude/ChatGPT/Cursor)
 
 ## MCP Tools
 
-16 public tools are forwarded to the extension (the relay does not execute them):
+26 public tools are forwarded to the extension (the relay does not execute them).
+Reads and writes are separate tools: every read-only tool carries `readOnlyHint: true`, and the `manage_*`
+tools only write. The read tools for reminders, scheduled messages, chat lists and contact notes reach the
+extension as the matching `manage_*` call (`TOOL_ROUTES` in `src/tools.ts`), so every Kaption version answers them.
 
-| Tool | Description |
-|------|-------------|
-| `query` | Query conversations, contacts, messages, transcriptions, labels, communities, sessions |
-| `summarize_conversation` | Get or generate a conversation summary |
-| `manage_labels` | Add/remove/create/delete WhatsApp Business labels |
-| `manage_notes` | Get/set contact notes (Business accounts) |
-| `download_media` | Download image/video/audio/document from a message |
-| `manage_chat` | Archive, pin, mute, mark read/unread, set/clear draft |
-| `manage_reminders` | Create/list/complete/delete personal reminders |
-| `manage_scheduled_messages` | Schedule messages for future delivery — from Kaption's number (bot, default) or from your own number on this computer (`mode: "local"`, also to groups) |
-| `manage_lists` | Manage personal chat lists (custom categories) |
-| `list_contacts`, `get_contact`, `get_contact_groups` | Read contacts and their group memberships |
-| `list_groups`, `get_group` | Read cached or live group metadata |
-| `export_contacts` | Export contacts as CSV or JSON |
-| `get_analytics` | Analyze WhatsApp activity, rankings, response times, and exports |
+| Tool | Kind | Description |
+|------|------|-------------|
+| `query` | read | Query conversations, contacts, messages, transcriptions, labels, communities, sessions |
+| `summarize_conversation` | write (private cache) | Get or generate a conversation summary |
+| `download_media` | read | Download image/video/audio/document from a message |
+| `list_contacts`, `get_contact`, `get_contact_groups` | read | Read contacts and their group memberships |
+| `list_groups`, `get_group` | read | Read cached or live group metadata |
+| `export_contacts` | read | Export contacts as CSV or JSON |
+| `get_analytics` | read | Analyze WhatsApp activity, rankings, response times, and exports |
+| `call_recordings` | read | List, read and search call recordings and transcripts |
+| `list_reminders`, `get_reminder` | read | Read personal reminders |
+| `list_scheduled_messages`, `get_scheduled_message` | read | Read scheduled messages (both modes) |
+| `list_chat_lists`, `get_chat_list` | read | Read personal chat lists |
+| `get_contact_note` | read | Read a contact's note (Business accounts) |
+| `manage_labels` | write | Add/remove/create/delete WhatsApp Business labels |
+| `manage_notes` | write | Set a contact's note (Business accounts) |
+| `manage_chat` | write | Archive, pin, mute, mark read/unread, set/clear draft |
+| `manage_reminders` | write | Create/update/complete/delete personal reminders |
+| `manage_scheduled_messages` | write | Schedule, change or cancel messages — from Kaption's number (bot, default) or from your own number on this computer (`mode: "local"`, also to groups) |
+| `manage_lists` | write | Create/edit/delete personal chat lists and their chats |
+| `send_message` | write | Queue a message from your own number (needs sending from this computer turned on and consent in Kaption) |
+| `create_attachment_upload` | write | One-time upload slot for an attachment to send or schedule |
+
+The square brand icon for directory listings and consent screens is served at `/brand/kaption-mcp-icon.svg`.
 
 `get_api_info` is local-only and is deliberately excluded from the cloud
 surface because it returns private REST connection credentials.
