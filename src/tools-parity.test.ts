@@ -62,12 +62,19 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       query: { entity: "session" },
       summarize_conversation: { conversation_id: "abc@c.us" },
       manage_labels: { action: "add", label_name: "test", conversation_id: "abc@c.us" },
-      manage_notes: { action: "get", contact_id: "abc@c.us" },
+      manage_notes: { action: "set", contact_id: "abc@c.us", note: "VIP" },
       download_media: { message_id: "msg-1", conversation_id: "abc@c.us" },
       manage_chat: { action: "archive", conversation_id: "abc@c.us" },
-      manage_reminders: { action: "list" },
+      manage_reminders: { action: "complete", id: "rem_1" },
       manage_scheduled_messages: { action: "create", mode: "local", message: "hi", datetime: "2026-10-01T09:00:00Z", conversation_id: "120363000000000000@g.us" },
-      manage_lists: { action: "list" },
+      manage_lists: { action: "add_chat", name: "Family", conversation_id: "abc@c.us" },
+      list_reminders: { filter: "all" },
+      get_reminder: { id: "rem_1" },
+      list_scheduled_messages: { mode: "local" },
+      get_scheduled_message: { id: "m1", mode: "local" },
+      list_chat_lists: {},
+      get_chat_list: { name: "Family" },
+      get_contact_note: { contact_id: "abc@c.us" },
       get_api_info: {},
       call_recordings: { action: "search", search: "budget", limit: 5 },
     };
@@ -96,6 +103,10 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       manage_notes: { action: "get" },
       download_media: { message_id: "msg-1" },
       manage_chat: { action: "archive" },
+      manage_reminders: { action: "list" },
+      manage_scheduled_messages: { action: "get", id: "m1" },
+      manage_lists: { action: "list" },
+      get_reminder: {},
     };
 
     for (const [name, input] of Object.entries(invalidInputs)) {

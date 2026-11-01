@@ -27,6 +27,7 @@ import {
   parseConnectionLifetime,
   type ConnectionLifetime,
 } from "./connection-lifetime-options";
+import { KNOWN_CLIENT_HOSTS } from "./redirect-policy";
 
 const DAY_SECONDS = 24 * 3600;
 
@@ -80,7 +81,9 @@ export interface StoredGrant {
   createdAt: number;
   expiresAt?: number;
   refreshTokenId?: string;
+  refreshTokenWrappedKey?: string;
   previousRefreshTokenId?: string;
+  previousRefreshTokenWrappedKey?: string;
   metadata?: { lifetime?: string; lifetimeSince?: number; [key: string]: unknown } | null;
   [key: string]: unknown;
 }
@@ -168,6 +171,64 @@ export async function checkRefresh(
   return since > 0 && at - since > IDLE_LIMIT_SECONDS ? "idle-expired" : "allow";
 }
 
+/**
+ * mcp.CLOUD_RELAY.22 — Google's apps (Gemini custom connectors, Google Connected Apps) expect the refresh token they
+ * hold to stay the same: "do not rotate refresh tokens". A client counts as Google's when it registered only Google's
+ * OAuth redirect hosts (redirect-policy.ts). Everyone else keeps rotation.
+ */
+export function isGoogleClient(client: { redirectUris?: unknown } | null | undefined): boolean {
+  const uris = Array.isArray(client?.redirectUris) ? client.redirectUris : [];
+  if (uris.length === 0) return false;
+  return uris.every((uri) => {
+    try {
+      const url = new URL(String(uri));
+      return url.protocol === "https:" && (KNOWN_CLIENT_HOSTS as readonly string[]).includes(url.hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * mcp.CLOUD_RELAY.22 — after the library answered a refresh for a Google client, the grant goes back to the refresh
+ * token the client sent (the library always mints a new one and keeps the sent one only as "previous"), and the answer
+ * carries that same token. The connection's lifetime still runs as the person chose: "While I use it" restarts its
+ * 90-day clock on every refresh (recordActivity), which is the expiry extension Google asks for. Anything unexpected
+ * leaves the library's rotated answer as it was, which stays valid.
+ */
+export async function keepGoogleRefreshToken(
+  kv: KVNamespace,
+  ref: GrantRef,
+  refreshToken: string,
+  response: Response,
+  at = nowSeconds(),
+): Promise<Response> {
+  const grant = await kv.get<StoredGrant>(grantKey(ref), "json");
+  if (!grant) return response;
+  const client = await kv.get<{ redirectUris?: unknown }>(`client:${grant.clientId}`, "json");
+  if (!isGoogleClient(client)) return response;
+  if (grant.previousRefreshTokenId !== (await sha256Hex(refreshToken)) || !grant.previousRefreshTokenWrappedKey) {
+    return response;
+  }
+  const body = (await response.clone().json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body || typeof body.refresh_token !== "string") return response;
+
+  const restored: StoredGrant = {
+    ...grant,
+    refreshTokenId: grant.previousRefreshTokenId,
+    refreshTokenWrappedKey: grant.previousRefreshTokenWrappedKey,
+  };
+  delete restored.previousRefreshTokenId;
+  delete restored.previousRefreshTokenWrappedKey;
+  // Same KV expiration rule as the library (never below its 60 s floor plus margin).
+  const options = restored.expiresAt !== undefined ? { expiration: Math.max(restored.expiresAt, at + 120) } : {};
+  await kv.put(grantKey(ref), JSON.stringify(restored), options);
+
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  return new Response(JSON.stringify({ ...body, refresh_token: refreshToken }), { status: response.status, headers });
+}
+
 function invalidGrant(description: string): Response {
   return Response.json(
     { error: "invalid_grant", error_description: description },
@@ -218,8 +279,15 @@ export async function handleTokenRequest(
       }
       return invalidGrant(IDLE_EXPIRED_DESCRIPTION);
     }
-    const response = await forward(request);
-    if (response.ok && ref) ctx.waitUntil(recordActivity(env.OAUTH_KV, ref).catch(() => undefined));
+    let response = await forward(request);
+    if (response.ok && ref) {
+      ctx.waitUntil(recordActivity(env.OAUTH_KV, ref).catch(() => undefined));
+      try {
+        response = await keepGoogleRefreshToken(env.OAUTH_KV, ref, refreshToken, response);
+      } catch (error) {
+        console.error("[lifetime] keeping a Google refresh token failed:", error instanceof Error ? error.message : error);
+      }
+    }
     return response;
   }
 

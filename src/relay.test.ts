@@ -50,14 +50,21 @@ describe("Tool registration", () => {
     "get_api_info",
     "get_analytics",
     "call_recordings",
+    "list_reminders",
+    "get_reminder",
+    "list_scheduled_messages",
+    "get_scheduled_message",
+    "list_chat_lists",
+    "get_chat_list",
+    "get_contact_note",
   ];
 
-  it("exports exactly 20 tools", () => {
-    expect(TOOLS).toHaveLength(20);
+  it("exports exactly 27 tools", () => {
+    expect(TOOLS).toHaveLength(27);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(19);
+    expect(CLOUD_TOOLS).toHaveLength(26);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 
@@ -77,22 +84,22 @@ describe("Tool registration", () => {
     }
   });
 
-  it("query description contains HOW TO READ MESSAGES guidance", () => {
+  it("query description says how messages are read", () => {
     const queryTool = TOOLS.find((t) => t.name === "query")!;
-    expect(queryTool.description).toContain("HOW TO READ MESSAGES:");
-    expect(queryTool.description).toContain("pass its id");
-    expect(queryTool.description).toContain('Do NOT use entity="messages" for this');
+    expect(queryTool.description).toContain("Reading messages:");
+    expect(queryTool.description).toContain("Passing a conversation id");
+    expect(queryTool.description).toContain('entity="messages" is a global text search');
   });
 
-  it("query description contains AUDIO TRANSCRIPTIONS guidance", () => {
+  it("query description says how transcriptions are read", () => {
     const queryTool = TOOLS.find((t) => t.name === "query")!;
-    expect(queryTool.description).toContain("AUDIO TRANSCRIPTIONS:");
+    expect(queryTool.description).toContain("Audio transcriptions:");
     expect(queryTool.description).toContain('entity="transcriptions"');
   });
 
-  it("query description contains multi-account guidance", () => {
+  it("query description describes several accounts", () => {
     const queryTool = TOOLS.find((t) => t.name === "query")!;
-    expect(queryTool.description).toContain("Multiple WhatsApp accounts");
+    expect(queryTool.description).toContain("Several WhatsApp accounts");
     expect(queryTool.description).toContain('entity="session"');
     expect(queryTool.description).toContain("target_session");
   });
@@ -395,12 +402,9 @@ describe("manage_chat tool schema", () => {
 describe("manage_notes tool schema", () => {
   const tool = TOOLS.find((t) => t.name === "manage_notes")!;
 
-  it("accepts get action", () => {
-    const result = tool.inputSchema.safeParse({
-      action: "get",
-      contact_id: "abc@c.us",
-    });
-    expect(result.success).toBe(true);
+  it("is write-only: reading is get_contact_note (mcp.TOOLS.19)", () => {
+    expect(tool.inputSchema.safeParse({ action: "get", contact_id: "abc@c.us" }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ action: "set", contact_id: "abc@c.us" }).success).toBe(false);
   });
 
   it("accepts set action with note", () => {
@@ -413,7 +417,7 @@ describe("manage_notes tool schema", () => {
   });
 
   it("rejects missing contact_id", () => {
-    const result = tool.inputSchema.safeParse({ action: "get" });
+    const result = tool.inputSchema.safeParse({ action: "set", note: "x" });
     expect(result.success).toBe(false);
   });
 });
@@ -456,9 +460,9 @@ describe("download_media tool schema", () => {
 describe("manage_reminders tool schema", () => {
   const tool = TOOLS.find((t) => t.name === "manage_reminders")!;
 
-  it("accepts list action", () => {
-    const result = tool.inputSchema.safeParse({ action: "list" });
-    expect(result.success).toBe(true);
+  it("is write-only: reading is list_reminders / get_reminder (mcp.TOOLS.19)", () => {
+    expect(tool.inputSchema.safeParse({ action: "list" }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ action: "get", id: "r" }).success).toBe(false);
   });
 
   it("accepts create with all fields", () => {
@@ -467,14 +471,6 @@ describe("manage_reminders tool schema", () => {
       title: "Call back",
       datetime: "2026-03-15T10:00:00Z",
       notification_type: "whatsapp",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts filter parameter", () => {
-    const result = tool.inputSchema.safeParse({
-      action: "list",
-      filter: "active",
     });
     expect(result.success).toBe(true);
   });
@@ -498,9 +494,9 @@ describe("manage_reminders tool schema", () => {
 describe("manage_scheduled_messages tool schema", () => {
   const tool = TOOLS.find((t) => t.name === "manage_scheduled_messages")!;
 
-  it("accepts list action", () => {
-    const result = tool.inputSchema.safeParse({ action: "list" });
-    expect(result.success).toBe(true);
+  it("is write-only: reading is list_scheduled_messages / get_scheduled_message (mcp.TOOLS.19)", () => {
+    expect(tool.inputSchema.safeParse({ action: "list" }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ action: "get", id: "m" }).success).toBe(false);
   });
 
   it("accepts create with all fields", () => {
@@ -510,14 +506,6 @@ describe("manage_scheduled_messages tool schema", () => {
       message: "Follow up on proposal",
       datetime: "2026-03-15T10:00:00Z",
       notification_type: "extension",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts filter=pending", () => {
-    const result = tool.inputSchema.safeParse({
-      action: "list",
-      filter: "pending",
     });
     expect(result.success).toBe(true);
   });
@@ -537,8 +525,8 @@ describe("manage_scheduled_messages tool schema", () => {
       datetime: "2026-03-15T10:00:00Z",
     });
     expect(parsed.success && parsed.data).toMatchObject({ mode: "local", conversation_id: "120363000000000000@g.us" });
-    expect(tool.inputSchema.safeParse({ action: "list", mode: "bot" }).success).toBe(true);
-    expect(tool.inputSchema.safeParse({ action: "list", mode: "cloud" }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ action: "delete", id: "abc", mode: "bot" }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ action: "delete", id: "abc", mode: "cloud" }).success).toBe(false);
     for (const action of ["cancel", "remove", "send_now"]) {
       expect(tool.inputSchema.safeParse({ action, mode: "local", id: "abc" }).success).toBe(true);
     }
@@ -557,9 +545,9 @@ describe("manage_scheduled_messages tool schema", () => {
 describe("manage_lists tool schema", () => {
   const tool = TOOLS.find((t) => t.name === "manage_lists")!;
 
-  it("accepts list action", () => {
-    const result = tool.inputSchema.safeParse({ action: "list" });
-    expect(result.success).toBe(true);
+  it("is write-only: reading is list_chat_lists / get_chat_list (mcp.TOOLS.19)", () => {
+    expect(tool.inputSchema.safeParse({ action: "list" }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ action: "get", name: "Family" }).success).toBe(false);
   });
 
   it("accepts create with name", () => {

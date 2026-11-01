@@ -48,19 +48,15 @@ export const TOOLS: ToolDefinition[] = [
       "Query WhatsApp data: conversations, contacts, messages, transcriptions, labels, and communities.",
       "Supports listing, searching, filtering, and looking up by ID.",
       "",
-      "IMPORTANT: Multiple WhatsApp accounts may be connected (e.g. personal + business).",
-      'Always query entity="session" FIRST to see all connected accounts and their session IDs.',
-      "Then use target_session to route queries to the correct account.",
-      "Each account has different conversations, contacts, and messages.",
+      "Several WhatsApp accounts may be connected (e.g. personal + business), each with its own conversations, contacts and messages.",
+      'entity="session" lists the connected accounts and their session IDs; target_session routes a query to one of them.',
       "",
-      "HOW TO READ MESSAGES:",
-      '  To get messages from a specific conversation, pass its id (e.g. "5491157390064@c.us").',
-      "  This returns the conversation info WITH its messages. Use limit to control how many.",
-      '  Do NOT use entity="messages" for this — that is for global text search only.',
+      "Reading messages:",
+      '  Passing a conversation id (e.g. "5491157390064@c.us") returns the conversation with its messages; limit sets how many.',
+      '  entity="messages" is a global text search across conversations.',
       "",
-      "AUDIO TRANSCRIPTIONS:",
-      '  To get audio transcriptions, use entity="transcriptions" with an optional query.',
-      "  Or pass a conversation id to see messages (audio messages include transcription text).",
+      "Audio transcriptions:",
+      '  entity="transcriptions" (with an optional query) returns voice-note transcriptions; messages read by conversation id include the transcription text of audio messages.',
       "",
       "Examples:",
       '  List sessions: { entity: "session" }',
@@ -132,16 +128,16 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "manage_notes",
     description: [
-      "Manage contact notes. Requires a WhatsApp Business account with notes enabled.",
+      "Write or replace the note for a contact. Requires a WhatsApp Business account with notes enabled.",
+      "Reading a note is get_contact_note.",
       "",
       "Actions:",
-      "  get - Read the note for a contact",
       "  set - Write/update the note for a contact",
     ].join("\n"),
     inputSchema: z.object({
-      action: z.enum(["get", "set"]).describe("Note action to perform"),
+      action: z.enum(["set"]).describe("Note action to perform"),
       contact_id: z.string().describe("The contact ID"),
-      note: z.string().optional().describe('Note text (required for "set" action)'),
+      note: z.string().describe("Note text that replaces the contact's current note"),
     }),
   },
   {
@@ -189,11 +185,10 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "manage_reminders",
     description: [
-      "Manage personal reminders. Reminders are stored in the cloud and trigger notifications via the Kaption extension.",
+      "Create, change, complete or delete personal reminders. Reminders are stored in the cloud and trigger notifications via the Kaption extension.",
+      "Reading reminders is list_reminders and get_reminder.",
       "",
       "Actions:",
-      "  list       - List all reminders",
-      "  get        - Get a specific reminder by ID",
       "  create     - Create a new reminder (requires title + datetime)",
       "  update     - Update a reminder (requires id, optional title/datetime)",
       "  delete     - Delete a reminder (requires id)",
@@ -201,14 +196,12 @@ export const TOOLS: ToolDefinition[] = [
       "  uncomplete - Mark a reminder as not completed (requires id)",
       "",
       "Examples:",
-      '  List all: { action: "list" }',
       '  Create: { action: "create", title: "Follow up with client", datetime: "2026-03-07T14:00:00Z" }',
       '  Complete: { action: "complete", id: "rem_abc123" }',
     ].join("\n"),
     inputSchema: z.object({
-      action: z.enum(["list", "get", "create", "update", "delete", "complete", "uncomplete"]).describe("Reminder action to perform"),
-      filter: z.enum(["active", "completed", "all"]).optional().describe('Filter for list action. Default: "active" (non-completed only)'),
-      id: z.string().optional().describe("Reminder ID (required for get/update/delete/complete/uncomplete)"),
+      action: z.enum(["create", "update", "delete", "complete", "uncomplete"]).describe("Reminder action to perform"),
+      id: z.string().optional().describe("Reminder ID (required for update/delete/complete/uncomplete)"),
       title: z.string().optional().describe("Reminder text (required for create, optional for update)"),
       datetime: z.string().optional().describe("ISO 8601 datetime for the reminder (required for create, optional for update)"),
       notification_type: z.enum(["extension", "whatsapp", "automatic"]).optional().describe('How to notify. Default: "automatic"'),
@@ -228,7 +221,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'send_message',
-    description: 'Queue a WhatsApp message from this computer for the earliest permitted delivery. Needs a newer Kaption version, sending from this computer turned on for the account, and the user\'s consent in Kaption. Supports an existing person chat or eligible group (@g.us) and one image, document, audio or video attachment (8 MiB max). Message is optional with an attachment; audio cannot have captions. Returns queued plus a schedule ID, not proof of delivery. Existing ask-first prompts, 8/hour, 20/day, group limits and delays apply. An assistant cannot accept consent or confirmation. Computer and WhatsApp must remain open. Use manage_scheduled_messages with mode local to inspect or cancel the returned ID.',
+    description: 'Queue a WhatsApp message from this computer for the earliest permitted delivery. Needs a newer Kaption version, sending from this computer turned on for the account, and the user\'s consent in Kaption. Supports an existing person chat or eligible group (@g.us) and one image, document, audio or video attachment (8 MiB max). Message is optional with an attachment; audio cannot have captions. Returns queued plus a schedule ID, not proof of delivery. Existing ask-first prompts, 8/hour, 20/day, group limits and delays apply. An assistant cannot accept consent or confirmation. Computer and WhatsApp must remain open. The returned ID can be read with get_scheduled_message (mode local) and cancelled with manage_scheduled_messages (mode local).',
     inputSchema: z.object({
       conversation_id: z.string().min(1).describe('Existing person chat ID or eligible group ID ending @g.us'),
       message: z.string().max(2000).optional().describe('Message or attachment caption; omit for attachment-only sends'),
@@ -239,14 +232,14 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "manage_scheduled_messages",
     description: [
-      "Schedule WhatsApp messages to be sent automatically at a specific time, in one of two modes:",
+      "Schedule, change or cancel WhatsApp messages sent automatically at a specific time, in one of two modes:",
       "  bot (default) - sent from Kaption's WhatsApp number, not the user's own. Stored in Kaption's cloud and sent even when this computer is off. One-to-one chats only (no groups); one line, max 800 characters.",
       '  local ("From this computer") - sent from the user\'s own WhatsApp number, as them, while this computer and WhatsApp are open. Stays on this device. Kaption keeps it within safe limits automatically (a few messages an hour and a day, minutes apart, only to chats where the other person has written, at most 3 a day to groups) and refuses what does not fit. The only mode that can send to groups (ones the user can post in and posted in within 30 days). Supports one image, document, audio or video attachment (8 MiB max), when attachments from an assistant are turned on for the account and Kaption is up to date; audio captions are refused. A message whose time passes while this computer is off is missed, never sent late on its own.',
       'The local mode must first be turned on by the user in Kaption (its "From this computer" option, after reading the risks); an assistant cannot turn it on. A refused local request says why and ends with a reason code, e.g. "(reason: per-day)".',
       "",
+      "Reading scheduled messages is list_scheduled_messages and get_scheduled_message.",
+      "",
       "Actions:",
-      '  list     - List scheduled messages of both modes (each has "mode"); pass mode to list only one',
-      "  get      - Get a specific scheduled message by ID",
       "  create   - Schedule a new message (requires message + datetime + conversation_id)",
       "  update   - Change the message and/or datetime (requires id)",
       "  delete   - Cancel/delete a scheduled message (requires id); in local mode it cancels a waiting message and removes a finished one",
@@ -256,17 +249,15 @@ export const TOOLS: ToolDefinition[] = [
       'Pass mode "local" for every action on a local message.',
       "",
       "Examples:",
-      '  List all: { action: "list" }',
       '  Schedule (Kaption bot): { action: "create", message: "Hey, just following up!", datetime: "2026-03-07T09:00:00Z", conversation_id: "5491157390064@c.us" }',
       '  Schedule from the user\'s own number: { action: "create", mode: "local", message: "Running 10 min late", datetime: "2026-03-07T09:00:00-03:00", conversation_id: "5491157390064@c.us" }',
       '  Schedule to a group: { action: "create", mode: "local", message: "Standup moved to 10", datetime: "2026-03-07T09:00:00Z", conversation_id: "120363000000000000@g.us" }',
       '  Cancel: { action: "delete", id: "msg_abc123" }',
     ].join("\n"),
     inputSchema: z.object({
-      action: z.enum(["list", "get", "create", "update", "delete", "cancel", "remove", "send_now"]).describe('Scheduled message action to perform (cancel, remove and send_now need mode "local")'),
-      mode: z.enum(["bot", "local"]).optional().describe('"bot" (default): sent from Kaption\'s WhatsApp number. "local": sent from the user\'s own WhatsApp number while this computer and WhatsApp are open, within safe limits kept automatically; needed for groups. For list, omit to get both modes'),
-      filter: z.enum(["pending", "sent", "all"]).optional().describe('Filter for list action. Default: "pending" (not sent yet; in local mode also missed or failed ones waiting for the user)'),
-      id: z.string().optional().describe("Scheduled message ID (required for get/update/delete/cancel/remove/send_now)"),
+      action: z.enum(["create", "update", "delete", "cancel", "remove", "send_now"]).describe('Scheduled message action to perform (cancel, remove and send_now need mode "local")'),
+      mode: z.enum(["bot", "local"]).optional().describe('"bot" (default): sent from Kaption\'s WhatsApp number. "local": sent from the user\'s own WhatsApp number while this computer and WhatsApp are open, within safe limits kept automatically; needed for groups'),
+      id: z.string().optional().describe("Scheduled message ID (required for update/delete/cancel/remove/send_now)"),
       conversation_id: z.string().optional().describe('Chat to send the message to (required for create): a person, or a group with mode "local"'),
       message: z.string().optional().describe("Message text to send (required for create, optional for update). Bot: one line, max 800 characters. Local: text or caption up to 2000 characters; omit with an attachment"),
       attachment: localAttachmentSchema.nullable().optional().describe('Local create/update only. One attachment; null removes it on update. Omit message for attachment-only sends'),
@@ -278,13 +269,11 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "manage_lists",
     description: [
-      "Manage personal chat lists (custom lists). These are the personal account equivalent of Business labels.",
-      "Lists allow organizing chats into custom categories like \"Family\", \"Work\", etc.",
-      "Not available on all accounts — check with action \"list\" first to see if lists are enabled.",
+      "Create, edit or delete personal chat lists (custom lists), and add or remove their chats. These are the personal account equivalent of Business labels.",
+      "Lists organize chats into custom categories like \"Family\", \"Work\", etc. Not every account has lists; list_chat_lists says whether they are enabled.",
+      "Reading lists is list_chat_lists and get_chat_list.",
       "",
       "Actions:",
-      "  list        - List all custom lists (also shows if feature is enabled)",
-      "  get         - Get a list and its associated chats (requires id or name)",
       "  create      - Create a new list (requires name, optional conversation_id for initial chats)",
       "  edit        - Edit a list name or replace its chats (requires id or name)",
       "  delete      - Delete a list (requires id or name)",
@@ -292,13 +281,12 @@ export const TOOLS: ToolDefinition[] = [
       "  remove_chat - Remove conversation(s) from a list (requires id/name + conversation_id)",
       "",
       "Examples:",
-      '  List all: { action: "list" }',
       '  Create: { action: "create", name: "Family", conversation_id: ["number@c.us"] }',
       '  Add chat: { action: "add_chat", name: "Family", conversation_id: "number@c.us" }',
     ].join("\n"),
     inputSchema: z.object({
-      action: z.enum(["list", "get", "create", "edit", "delete", "add_chat", "remove_chat"]).describe("List action to perform"),
-      id: z.string().optional().describe("List ID (for get/edit/delete/add_chat/remove_chat)"),
+      action: z.enum(["create", "edit", "delete", "add_chat", "remove_chat"]).describe("List action to perform"),
+      id: z.string().optional().describe("List ID (for edit/delete/add_chat/remove_chat)"),
       name: z.string().optional().describe("List name (for create/edit, or to resolve by name)"),
       conversation_id: z.union([z.string(), z.array(z.string())]).optional().describe("Chat ID or array of IDs to add/remove"),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
@@ -307,7 +295,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "list_contacts",
     description: [
-      "List WhatsApp contacts from the encrypted DBR3 cache (no network).",
+      "List WhatsApp contacts from the encrypted local cache (no network).",
       "Results are deduplicated by phone number — the same person across multiple labels collapses to one row.",
       "Saved contacts sort before unsaved, then alphabetically by display name.",
       'WhatsApp "@lid" privacy identifiers (opaque, non-dialable) are always excluded — only real phone-backed contacts are returned.',
@@ -357,7 +345,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "list_groups",
     description: [
       "List all WhatsApp groups the user belongs to. Reads from the cache — no network.",
-      "For a live snapshot of a single group, use `get_group` (it forces a fresh GroupMetadata.update).",
+      "get_group returns one group with its membership fetched live from WhatsApp.",
       "",
       "Examples:",
       "  All groups: {}",
@@ -372,8 +360,8 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "get_group",
     description: [
-      "Fetch a single group with a LIVE participant list. Forces `Store.GroupMetadata.update()` against the WA backend before reading, so the result reflects current membership including recent joins/leaves.",
-      "Use this when accuracy matters; use `list_groups` for browsing.",
+      "Fetch a single group with a live participant list: membership is refreshed from WhatsApp before reading, so it includes recent joins and leaves.",
+      "list_groups lists every group from the cache instead.",
       "",
       "Examples:",
       '  Live group fetch: { jid: "120363421729019499@g.us" }',
@@ -413,7 +401,7 @@ export const TOOLS: ToolDefinition[] = [
       "Get WhatsApp analytics data: KPIs, activity patterns, rankings, response times, call stats, labels, emojis, words, countries, and more.",
       "Supports section-based drill-down, date range filtering, chat/label/community filters, pagination, and chat/contact exports.",
       "",
-      "Start with section=\"overview\" (default) for a compact summary, then drill into specific sections.",
+      "section=\"overview\" (default) is a compact summary; the other sections give detail.",
       "",
       "Sections:",
       "  overview              — High-level summary with top 5 chats (~5KB)",
@@ -500,7 +488,105 @@ export const TOOLS: ToolDefinition[] = [
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
+  // mcp.TOOLS.19 — read-only halves of the manage_* tools (Claude's and Google's directories require reads and writes
+  // in separate tools). They are answered by the same extension handlers: see TOOL_ROUTES.
+  {
+    name: "list_reminders",
+    description: [
+      "List the user's personal Kaption reminders (title, time, how they notify, completed or not).",
+      "",
+      "Examples:",
+      "  Active reminders: {}",
+      '  Everything: { filter: "all" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      filter: z.enum(["active", "completed", "all"]).optional().describe('Which reminders to list. Default: "active" (not completed)'),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "get_reminder",
+    description: "Get one personal Kaption reminder by its ID (from list_reminders).",
+    inputSchema: z.object({
+      id: z.string().describe("Reminder ID"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "list_scheduled_messages",
+    description: [
+      "List scheduled WhatsApp messages of both modes; each item says its mode:",
+      "  bot   - sent from Kaption's WhatsApp number, stored in Kaption's cloud",
+      '  local - "From this computer": sent from the user\'s own WhatsApp number while this computer and WhatsApp are open',
+      "",
+      "Examples:",
+      "  Waiting to be sent: {}",
+      '  Only local ones, any state: { mode: "local", filter: "all" }',
+    ].join("\n"),
+    inputSchema: z.object({
+      mode: z.enum(["bot", "local"]).optional().describe("Only this mode; omit to list both"),
+      filter: z.enum(["pending", "sent", "all"]).optional().describe('Default: "pending" (not sent yet; in local mode also missed or failed ones waiting for the user)'),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "get_scheduled_message",
+    description: 'Get one scheduled WhatsApp message by its ID (from list_scheduled_messages or send_message). Pass mode "local" for a message sent from this computer.',
+    inputSchema: z.object({
+      id: z.string().describe("Scheduled message ID"),
+      mode: z.enum(["bot", "local"]).optional().describe('"bot" (default) or "local"'),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "list_chat_lists",
+    description: "List the personal account's custom chat lists (e.g. \"Family\", \"Work\") with their chat counts, and whether lists are enabled on this account.",
+    inputSchema: z.object({
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "get_chat_list",
+    description: "Get one custom chat list and the chats in it, by ID or name.",
+    inputSchema: z.object({
+      id: z.string().optional().describe("List ID (from list_chat_lists)"),
+      name: z.string().optional().describe("List name, when the ID is not known"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "get_contact_note",
+    description: "Read the note saved for a contact. Requires a WhatsApp Business account with notes enabled.",
+    inputSchema: z.object({
+      contact_id: z.string().describe("The contact ID"),
+    }),
+  },
 ];
+
+/**
+ * mcp.TOOLS.19 — each read-only tool that is answered by a manage_* handler, and the action it runs there. Clients
+ * call the read tool; the relay (and the local hub) send the extension the manage_* call, so every Kaption version
+ * that answers manage_* answers these too.
+ */
+export const TOOL_ROUTES: Record<string, { method: string; action: string }> = {
+  list_reminders: { method: "manage_reminders", action: "list" },
+  get_reminder: { method: "manage_reminders", action: "get" },
+  list_scheduled_messages: { method: "manage_scheduled_messages", action: "list" },
+  get_scheduled_message: { method: "manage_scheduled_messages", action: "get" },
+  list_chat_lists: { method: "manage_lists", action: "list" },
+  get_chat_list: { method: "manage_lists", action: "get" },
+  get_contact_note: { method: "manage_notes", action: "get" },
+};
+
+/** The call the extension receives for a tool call: a routed read becomes its manage_* method and action. */
+export function routeToolCall(
+  name: string,
+  args: Record<string, unknown>,
+): { method: string; params: Record<string, unknown> } {
+  const route = TOOL_ROUTES[name];
+  if (!route) return { method: name, params: args };
+  return { method: route.method, params: { ...args, action: route.action } };
+}
 
 // mcp.TOOLS — human-readable titles and safety annotations advertised to MCP
 // clients. These values are also snapshotted by the OpenAI plugin review flow.
@@ -508,10 +594,12 @@ const TOOL_TITLES: Record<string, string> = {
   query: "Search WhatsApp",
   summarize_conversation: "Summarize conversation",
   manage_labels: "Manage business labels",
-  manage_notes: "Manage contact notes",
+  manage_notes: "Set contact note",
   download_media: "Download message media",
   manage_chat: "Manage chat",
   manage_reminders: "Manage reminders",
+  create_attachment_upload: "Create attachment upload",
+  send_message: "Send WhatsApp message",
   manage_scheduled_messages: "Manage scheduled messages",
   manage_lists: "Manage chat lists",
   list_contacts: "List contacts",
@@ -523,6 +611,13 @@ const TOOL_TITLES: Record<string, string> = {
   get_api_info: "Get local API information",
   get_analytics: "Analyze WhatsApp activity",
   call_recordings: "Read call recordings",
+  list_reminders: "List reminders",
+  get_reminder: "Get reminder",
+  list_scheduled_messages: "List scheduled messages",
+  get_scheduled_message: "Get scheduled message",
+  list_chat_lists: "List chat lists",
+  get_chat_list: "Get chat list",
+  get_contact_note: "Get contact note",
 };
 
 // Safety annotations use OpenAI's review definitions:
@@ -542,6 +637,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   download_media: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   manage_chat: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_reminders: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  create_attachment_upload: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   send_message: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_scheduled_messages: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   manage_lists: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
@@ -554,6 +650,13 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_api_info: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_analytics: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   call_recordings: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  list_reminders: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_reminder: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  list_scheduled_messages: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_scheduled_message: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  list_chat_lists: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_chat_list: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_contact_note: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };
 
 for (const tool of TOOLS) {
