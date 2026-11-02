@@ -109,6 +109,17 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       manage_status: { action: "schedule", datetime: "2026-12-01T09:00:00Z", text: "Open today", background_color: "#25D366", font: 2 },
       list_status_posts: { filter: "all" },
     };
+    // scheduled-status.MCP.9 — a status photo by upload ref (preferred) and the inline form, parsed the same.
+    const statusSamples = [
+      { action: "schedule", datetime: "2026-12-01T09:00:00Z", attachment: { ref: "a".repeat(64) }, caption: "Menu" },
+      { action: "schedule", datetime: "2026-12-01T09:00:00Z", attachment: { name: "menu.png", mime: "image/png", dataB64: "YWJj" } },
+    ];
+    for (const input of statusSamples) {
+      const cloud = CLOUD_TOOLS.find((t) => t.name === "manage_status")!.inputSchema.safeParse(input);
+      const local = LOCAL_TOOLS.find((t) => t.name === "manage_status")!.inputSchema.safeParse(input);
+      expect(cloud.success && local.success).toBe(true);
+      if (cloud.success && local.success) expect(cloud.data).toEqual(local.data);
+    }
 
     for (const [name, input] of Object.entries(sampleInputs)) {
       const cloudTool = CLOUD_TOOLS.find((t) => t.name === name)!;
@@ -145,6 +156,13 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       manage_status: { action: "post_now", text: "Hi" },
       list_status_posts: { filter: "later" },
     };
+
+    // scheduled-status.MCP.9 — a GIF, a malformed ref, a ref with extra fields and a path are refused by both.
+    for (const attachment of [{ name: "a.gif", mime: "image/gif", dataB64: "YWJj" }, { ref: "short" }, { ref: "a".repeat(64), name: "a.png" }, { path: "/tmp/a.png" }]) {
+      const input = { action: "schedule", datetime: "2026-12-01T09:00:00Z", attachment };
+      expect(CLOUD_TOOLS.find((t) => t.name === "manage_status")!.inputSchema.safeParse(input).success).toBe(false);
+      expect(LOCAL_TOOLS.find((t) => t.name === "manage_status")!.inputSchema.safeParse(input).success).toBe(false);
+    }
 
     for (const [name, input] of Object.entries(invalidInputs)) {
       const cloudTool = CLOUD_TOOLS.find((t) => t.name === name)!;
