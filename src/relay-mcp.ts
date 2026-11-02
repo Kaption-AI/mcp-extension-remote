@@ -14,6 +14,7 @@ import {
 } from "./tools";
 import { NO_ACCOUNT_TEXT, toolErrorText } from "./tool-errors";
 import { scrubInlineMedia } from "./media-scrub";
+import { takeUsageNotice } from "./usage-notice";
 import type { Env } from "./types";
 import { manageFeaturesWithAlias, relayWithAliasSettled } from "./phone-alias";
 import {
@@ -170,12 +171,17 @@ export class RelayMCP extends McpAgent<Env> {
             result = scrubInlineMedia(result);
           }
 
+          // mcp-usage-pricing.RELAY.1 — a usage warning from the extension becomes its own line after the result.
+          const marked = takeUsageNotice(result);
+          result = marked.result;
+
           return {
             content: [
               {
                 type: "text" as const,
                 text: typeof result === "string" ? result : JSON.stringify(result, null, 2),
               },
+              ...(marked.notice ? [{ type: "text" as const, text: marked.notice }] : []),
             ],
             structuredContent: (isPlans ? plansStructuredContent(result) : undefined) ?? { result },
           };
