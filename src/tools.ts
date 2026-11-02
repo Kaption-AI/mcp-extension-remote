@@ -52,6 +52,17 @@ const localAttachmentSchema = z.union([
   z.object({ ref: z.string().regex(/^[a-f0-9]{64}$/).describe('One-time attachmentRef returned by create_attachment_upload after PUT of the bytes') }).strict(),
 ]).describe('Exactly one attachment source: dataB64 or uploaded ref (paths are never accepted); max 8 MiB. Only when sending from this computer is turned on for the account');
 
+// scheduled-status.MCP.9 — a status file: an uploaded ref (preferred; resolved to bytes on the user's computer, once)
+// or the inline base64 kept for compatibility. Kept the same on the cloud relay and the local hub (tools-parity.test.ts).
+const statusAttachmentSchema = z.union([
+  z.object({ ref: z.string().regex(/^[a-f0-9]{64}$/).describe("One-time attachmentRef returned by create_attachment_upload after the PUT of the file (image/jpeg, image/png, image/webp or video/mp4)") }).strict(),
+  z.object({
+    name: z.string().min(1).max(200).describe("Filename without a path"),
+    mime: z.enum(["image/jpeg", "image/png", "image/webp", "video/mp4"]).describe("image/jpeg, image/png, image/webp or video/mp4"),
+    dataB64: z.string().min(4).max(11184812).describe("File bytes as base64 (8 MiB max)"),
+  }),
+]).describe("One image or MP4 video for a photo/video status: { ref } from create_attachment_upload (preferred), or inline { name, mime, dataB64 }");
+
 export const TOOLS: ToolDefinition[] = [
   {
     name: "query",
@@ -221,7 +232,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'create_attachment_upload',
-    description: 'Create a one-time attachment upload slot, authorized by your connected Kaption account (attachments from an assistant must be turned on for it). Returns uploadUrl, attachmentRef and expiresAt. PUT the raw file bytes to uploadUrl within 15 minutes (e.g. curl -T file.pdf), then pass attachment: {ref: attachmentRef} to send_message or a local schedule create/update within one hour. The extension consumes the ref once and stores the bytes locally. No third-party URLs. Needs a newer Kaption version; target_session selects the account.',
+    description: 'Create a one-time attachment upload slot, authorized by your connected Kaption account (attachments from an assistant must be turned on for it). Returns uploadUrl, attachmentRef and expiresAt. PUT the raw file bytes to uploadUrl within 15 minutes (e.g. curl -T file.pdf), then pass attachment: {ref: attachmentRef} to send_message, a local schedule create/update, or manage_status schedule (photo or video status) within one hour. The extension consumes the ref once and stores the bytes locally. No third-party URLs. Needs a newer Kaption version; target_session selects the account.',
     inputSchema: z.object({
       name: attachmentName.describe('Filename without paths or control characters, max 200 characters'),
       mime: attachmentMime.describe('Allowed image, document, audio or video MIME type'),
@@ -658,13 +669,13 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "manage_status",
     description: [
-      "Schedule a post to the user's WhatsApp Status (stories) for a future date and time, or cancel a scheduled status post. The post is made later by the user's own WhatsApp on this computer; to post right now the user uses WhatsApp itself, so there is no post-now action. Only when status posts are turned on for the account; needs the \"From this computer\" scheduled mode and its consent in Kaption (an assistant cannot accept consent). A status is either text (max 700 characters) on a background colour (#RRGGBB) with a font (0-7), or one image (JPG/PNG/WebP) or MP4 video with an optional caption (max 1024). Who sees it follows the user's WhatsApp status privacy setting. WhatsApp must be open on this computer at posting time: the Kaption bot and cloud templates cannot post statuses. datetime must be in the future. Each post counts as one scheduled item in the plan's scheduling quota, and the mode's limits (per hour, per day, pending) still apply; scheduling is not a delivery confirmation.",
+      "Schedule a post to the user's WhatsApp Status (stories) for a future date and time, or cancel a scheduled status post. The post is made later by the user's own WhatsApp on this computer; to post right now the user uses WhatsApp itself, so there is no post-now action. Only when status posts are turned on for the account; needs the \"From this computer\" scheduled mode and its consent in Kaption (an assistant cannot accept consent). A status is either text (max 700 characters) on a background colour (#RRGGBB) with a font (0-7), or one image (JPG/PNG/WebP) or MP4 video with an optional caption (max 1024). Images and videos need create_attachment_upload: call it with the file's name, mime and size, PUT the raw file bytes to its uploadUrl, then call manage_status schedule with attachment: { ref: attachmentRef } (one use, within an hour). The inline attachment { name, mime, dataB64 } is still accepted. Who sees it follows the user's WhatsApp status privacy setting. WhatsApp must be open on this computer at posting time: the Kaption bot and cloud templates cannot post statuses. datetime must be in the future. Each post counts as one scheduled item in the plan's scheduling quota, and the mode's limits (per hour, per day, pending) still apply; scheduling is not a delivery confirmation.",
       "",
       "Reading status posts is list_status_posts.",
       "",
       "Actions:",
       '  schedule: { action: "schedule", datetime: "2026-10-27T09:00:00-03:00", text: "Open today 9-18", background_color: "#25D366", font: 2 }',
-      '  schedule (photo/video): { action: "schedule", datetime: "2026-10-27T09:00:00-03:00", attachment: { name, mime, dataB64 }, caption: "New menu" }',
+      '  schedule (photo/video): create_attachment_upload { name: "menu.jpg", mime: "image/jpeg", size: 245760 }, PUT the bytes to its uploadUrl, then { action: "schedule", datetime: "2026-10-27T09:00:00-03:00", attachment: { ref: "<attachmentRef>" }, caption: "New menu" }',
       '  cancel: { action: "cancel", id: "<status item id>" }',
     ].join("\n"),
     inputSchema: z.object({
@@ -672,11 +683,7 @@ export const TOOLS: ToolDefinition[] = [
       text: z.string().max(700).optional().describe("Text status (max 700 characters). Omit when posting an attachment."),
       background_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe("Text status background as #RRGGBB (default #7ACCA5)"),
       font: z.number().int().min(0).max(7).optional().describe("Text status font index 0-7 (default 0)"),
-      attachment: z.object({
-        name: z.string().min(1).max(200).describe("Filename without a path"),
-        mime: z.enum(["image/jpeg", "image/png", "image/webp", "video/mp4"]).describe("image/jpeg, image/png, image/webp or video/mp4"),
-        dataB64: z.string().min(4).max(11184812).describe("File bytes as base64 (8 MiB max)"),
-      }).optional().describe("One image or MP4 video for a photo/video status"),
+      attachment: statusAttachmentSchema.optional(),
       caption: z.string().max(1024).optional().describe("Caption for an image or video status (max 1024 characters)"),
       datetime: z.string().optional().describe("ISO 8601 date-time in the future to post at (required for schedule)"),
       id: z.string().optional().describe("Status item ID (cancel)"),
