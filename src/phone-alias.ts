@@ -20,6 +20,7 @@
 import { deriveAccountRef, normalizeAndValidatePhone } from "./otp";
 import type { Env } from "./types";
 import type { ManageFeatures } from "./manage-kaption";
+import type { RelayCallExtra } from "./relay-room";
 
 const BR_WITH_NINE = /^55([1-9][1-9])9([6-9]\d{7})$/;
 const BR_WITHOUT_NINE = /^55([1-9][1-9])([6-9]\d{7})$/;
@@ -113,8 +114,9 @@ export async function relayWithAliasSettled(
   accountRef: string,
   method: string,
   params: Record<string, unknown>,
+  extra: RelayCallExtra = {},
 ): Promise<unknown> {
-  const call = (ref: string) => env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(ref)).handleMcpRequestSettled(method, params);
+  const call = (ref: string) => env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(ref)).handleMcpRequestSettled(method, params, extra);
   let settled = await call(accountRef);
   if (!settled.ok && NOT_CONNECTED.test((settled as { message: string }).message)) {
     const alias = await aliasedRoom(env.OAUTH_KV, accountRef).catch(() => null);
@@ -139,4 +141,15 @@ export async function manageFeaturesWithAlias(
   if (own) return own;
   const alias = await aliasedRoom(env.OAUTH_KV, accountRef).catch(() => null);
   return alias ? env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(alias)).watchManage(watcherId) : null;
+}
+
+/**
+ * business-plans.MCP_LEDGER.16 — the phone of the extension that answers `accountRef`'s calls (its own room's, else its
+ * Brazilian other form's, as relayWithAlias routes), for the usage ledger's questions to rest-api. null when none.
+ */
+export async function meteringPhoneWithAlias(env: Pick<Env, "RELAY_ROOM" | "OAUTH_KV">, accountRef: string): Promise<string | null> {
+  const own = await env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(accountRef)).meteringPhone();
+  if (own) return own;
+  const alias = await aliasedRoom(env.OAUTH_KV, accountRef).catch(() => null);
+  return alias ? env.RELAY_ROOM.get(env.RELAY_ROOM.idFromName(alias)).meteringPhone() : null;
 }

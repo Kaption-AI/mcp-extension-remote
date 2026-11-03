@@ -16,7 +16,8 @@ import { NO_ACCOUNT_TEXT, toolErrorText } from "./tool-errors";
 import { scrubInlineMedia } from "./media-scrub";
 import { takeUsageNotice } from "./usage-notice";
 import type { Env } from "./types";
-import { manageFeaturesWithAlias, relayWithAliasSettled } from "./phone-alias";
+import { manageFeaturesWithAlias, meteringPhoneWithAlias, relayWithAliasSettled } from "./phone-alias";
+import { REFUSED_CODE, meterCall, meterRefusalText, releaseCharge, type MeterDecision } from "./meter";
 import {
   installManageResources,
   MANAGE_TOOL_FEATURE,
@@ -148,6 +149,18 @@ export class RelayMCP extends McpAgent<Env> {
         const started = Date.now();
         const usage = this.usageContext(accountRef, routed.method, routed.params, started);
         let failure: unknown = null;
+        // business-plans.MCP_LEDGER.4-7 — with the switches on, the account's ledger takes this call's slot (and charges
+        // it past the allowance) before it is relayed; a refused charge refuses the call here.
+        const meter = await this.meterCloudCall(usage, routed.method);
+        if (meter.decision.metered && !meter.decision.allowed) {
+          failure = { code: REFUSED_CODE };
+          this.recordUsage(usage, failure, Date.now() - started);
+          return {
+            content: [{ type: "text" as const, text: `Error: ${meterRefusalText(meter.decision.reason, meter.decision.allowance)}` }],
+            isError: true,
+          };
+        }
+        if (meter.decision.metered) usage.settle = meter.actionId;
         try {
           // Sanitize args for DO RPC — the MCP SDK may inject non-serializable
           // properties (AbortSignal etc.) into the args object
@@ -156,7 +169,7 @@ export class RelayMCP extends McpAgent<Env> {
           console.log(
             `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)} app=${await this.appName(accountRef)}`,
           );
-          let result = await this.relayToExtension(accountRef, routed.method, cleanArgs);
+          let result = await this.relayToExtension(accountRef, routed.method, cleanArgs, meter.decision.metered);
 
           // Inline media ONLY for an explicit download_media call.
           //   download_media (mcp.TOOLS.6 / mcp.CLOUD_RELAY.6): base64_data flows
@@ -243,7 +256,45 @@ export class RelayMCP extends McpAgent<Env> {
       kind: usageKind(tool, args),
       at,
       repeat: this.repeats.isRepeat(tool, args, at).catch(() => false),
+      /** business-plans.MCP_LEDGER.8 — the metered call's action id: its hold is settled when the call is recorded. */
+      settle: undefined as string | undefined,
+      // The phone the meter asked rest-api with (kept in memory for this call only, to give a charge back).
+      phone: null as string | null,
     };
+  }
+
+  /**
+   * business-plans.MCP_LEDGER.1-7, .15 — the ledger's decision for one cloud call, in the ledger of the account the
+   * call is recorded in. Off (switch, no ledger, recording off) or any failure of the ledger itself: not metered.
+   */
+  private async meterCloudCall(
+    usage: ReturnType<RelayMCP["usageContext"]>,
+    tool: string,
+  ): Promise<{ actionId: string; decision: MeterDecision }> {
+    const actionId = `cloud:${crypto.randomUUID()}`;
+    if (this.env.MCP_OVERAGE_LEDGER !== "on" || this.env.USAGE_LEDGER_ENABLED === "off" || !this.env.USAGE_LEDGER) {
+      return { actionId, decision: { metered: false } };
+    }
+    try {
+      const decision = await meterCall(
+        this.env,
+        ledgerFor(this.env, usage.accountRef),
+        {
+          actionId,
+          path: "cloud",
+          connection: this.getGrantId() ?? "unknown",
+          app: await this.appName(usage.accountRef),
+          tool,
+          kind: usage.kind,
+        },
+        async () => (usage.phone = await meteringPhoneWithAlias(this.env, usage.accountRef)),
+        usage.at,
+      );
+      return { actionId, decision };
+    } catch (error) {
+      console.error("[meter] reserve failed:", error instanceof Error ? error.message : error);
+      return { actionId, decision: { metered: false } };
+    }
   }
 
   /** mcp-usage-accounting.RECORD.1-6 — one cell into the account's ledger, after the answer; never fails the call. */
@@ -262,7 +313,17 @@ export class RelayMCP extends McpAgent<Env> {
         calls: 1,
         repeats: (await usage.repeat) ? 1 : 0,
       };
-      await ledgerFor(this.env, usage.accountRef).record([cell], { accountTag: usage.accountRef });
+      const recorded = await ledgerFor(this.env, usage.accountRef).record([cell], {
+        accountTag: usage.accountRef,
+        ...(usage.settle ? { settle: usage.settle } : {}),
+      });
+      // business-plans.MCP_LEDGER.8 — a charged call that failed is credited back (keyed: once).
+      if (usage.settle && cell.outcome !== "ok" && recorded.settled?.charged) {
+        const phone = usage.phone ?? (await meteringPhoneWithAlias(this.env, usage.accountRef).catch(() => null));
+        if (!phone || !(await releaseCharge(this.env, phone, usage.settle))) {
+          console.error("[meter] release failed for a charged call that failed");
+        }
+      }
     })().catch((error) => console.error("[usage] record failed:", error instanceof Error ? error.message : error));
     try {
       (this as any).ctx?.waitUntil?.(work);
@@ -285,8 +346,9 @@ export class RelayMCP extends McpAgent<Env> {
     accountRef: string,
     method: string,
     params: Record<string, unknown>,
+    metered = false,
   ): Promise<unknown> {
     // mcp.CLOUD_RELAY.17 — follows a Brazilian number's other form when this account has no extension.
-    return relayWithAliasSettled(this.env, accountRef, method, params);
+    return relayWithAliasSettled(this.env, accountRef, method, params, metered ? { metered: true } : {});
   }
 }

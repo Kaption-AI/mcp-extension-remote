@@ -10,6 +10,8 @@ vi.mock("./otp", () => ({
   deriveAccountRef: vi.fn(async () => "acct_test"),
   validateExtensionSession: vi.fn(async () => null),
   sanitizeAccountRefForLog: (ref: string) => ref,
+  sealState: vi.fn(async (data: unknown) => `sealed:${JSON.stringify(data)}`),
+  openState: vi.fn(async (token: string) => (token.startsWith("sealed:") ? JSON.parse(token.slice(7)) : null)),
 }));
 
 vi.mock("./phone-alias", () => ({ rememberPhoneAlias: vi.fn(async () => undefined) }));
@@ -147,5 +149,38 @@ describe("mcp.CLOUD_RELAY.17 the extension's sign-in records its phone's other B
     await r.webSocketMessage(fresh as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
     await flush();
     expect(rememberPhoneAlias).toHaveBeenCalledWith(undefined, "15555550123", "acct_test", "y");
+  });
+});
+
+describe("business-plans.MCP_LEDGER.9, MCP_LEDGER.16 the metered marker and the phone the ledger asks with", () => {
+  const meteredRoom = (sockets: ReturnType<typeof socket>[], on: boolean) => {
+    const ctx = { getWebSockets: () => sockets, acceptWebSocket: () => undefined };
+    return new RelayRoom(ctx as any, { JWT_SECRET: "x", PHONE_REF_SECRET: "y", EPHEMERAL_STATE_SECRET: "z", ...(on ? { MCP_OVERAGE_LEDGER: "on" } : {}) } as any);
+  };
+
+  it("business-plans.MCP_LEDGER.9 — a metered call carries kaption.metered beside its params; others carry nothing new", async () => {
+    const ext = socket({ authenticated: true, accountRef: "acct_test", room: "acct_test", authAt: 1 });
+    const r = meteredRoom([ext], true);
+    void r.handleMcpRequest("query", { entity: "messages" }, { metered: true });
+    void r.handleMcpRequest("query", { entity: "messages" });
+    const sent = ext.sent.map((m) => JSON.parse(m));
+    expect(sent[0]).toMatchObject({ method: "query", params: { entity: "messages" }, kaption: { metered: true } });
+    expect(sent[1]).not.toHaveProperty("kaption");
+  });
+
+  it("business-plans.MCP_LEDGER.16 — the signed-in phone is sealed into the socket only with the switch on", async () => {
+    const on = socket({ authenticated: false, accountRef: null, room: "acct_test", openedAt: Date.now() });
+    const r = meteredRoom([on], true);
+    await r.webSocketMessage(on as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
+    await flush();
+    expect((on.attachment as any).phoneSeal).toMatch(/^sealed:/);
+    expect(await r.meteringPhone()).toBe("15555550123");
+
+    const off = socket({ authenticated: false, accountRef: null, room: "acct_test", openedAt: Date.now() });
+    const r2 = meteredRoom([off], false);
+    await r2.webSocketMessage(off as any, JSON.stringify({ type: "auth", jwt: "a.b.c" }));
+    await flush();
+    expect((off.attachment as any).phoneSeal).toBeUndefined();
+    expect(await r2.meteringPhone()).toBeNull();
   });
 });

@@ -76,6 +76,9 @@
     "INTERNAL_API_BASE_URL": "https://api.kaptionai.com",
     // mcp-usage-accounting.STORE.4 — "off" stops recording Claude and ChatGPT usage (kill switch).
     "USAGE_LEDGER_ENABLED": "on",
+    // business-plans.MCP_LEDGER.1 — "on" lets the ledger meter Claude and ChatGPT overage (rest-api must also answer
+    // metered for the account). Off: nothing is reserved, charged or marked.
+    "MCP_OVERAGE_LEDGER": "off",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },
