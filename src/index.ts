@@ -63,7 +63,15 @@ import {
 } from "./otp";
 import type { Env } from "./types";
 import { accountRefsForPhone } from "./phone-alias";
-import { DEFAULT_ALLOWANCE_TTL_S, isActionId, meterCall, releaseCharge } from "./meter";
+import {
+  DEFAULT_ALLOWANCE_TTL_S,
+  LEASE_SETTLE_MAX,
+  isActionId,
+  leaseCall,
+  meterCall,
+  releaseCharge,
+  type LeaseItem,
+} from "./meter";
 import {
   connectDeps,
   pollConnectPairing,
@@ -462,7 +470,9 @@ async function mergedLedgers(env: Env, userIds: string[], month: string) {
   const rows: DayRow[] = reports.flatMap((r) => r.rows);
   const connections: ConnectionRow[] = reports.flatMap((r) => r.connections);
   const since = reports.map((r) => r.since).filter((d): d is string => !!d).sort()[0] ?? null;
-  return { rows, connections, since };
+  // business-plans.MCP_ASYNC.8 — actions that ran but could not be charged (0 for every account until metering is on).
+  const uncharged = reports.reduce((n, r) => n + (r.uncharged ?? 0), 0);
+  return { rows, connections, since, uncharged };
 }
 
 /** mcp-usage-accounting.REPORT.2 — this month's calls per connection, for Connected apps. */
@@ -492,12 +502,12 @@ outerApp.get("/ext/usage", async (c) => {
     return problem({ status: 400, code: "invalid_month", detail: "month must be YYYY-MM.", headers: USAGE_CORS });
   }
   try {
-    const [{ rows, connections, since }, grants] = await Promise.all([
+    const [{ rows, connections, since, uncharged }, grants] = await Promise.all([
       mergedLedgers(c.env, userIds, month),
       activeGrantIds(c.env, userIds),
     ]);
     const report = buildReport(month, rows, connections, since, grants, now);
-    return c.json(report, 200, { ...USAGE_CORS, "Cache-Control": "no-store" });
+    return c.json(uncharged > 0 ? { ...report, uncharged } : report, 200, { ...USAGE_CORS, "Cache-Control": "no-store" });
   } catch (e: any) {
     console.error("[usage] report failed:", e?.message || e);
     return problem({ status: 500, code: "internal_error", detail: "Could not load usage", headers: USAGE_CORS });
@@ -542,6 +552,7 @@ outerApp.post("/ext/usage/local", async (c) => {
 
 outerApp.options("/ext/usage/meter", () => new Response(null, { status: 204, headers: USAGE_CORS }));
 outerApp.options("/ext/usage/meter/settle", () => new Response(null, { status: 204, headers: USAGE_CORS }));
+outerApp.options("/ext/usage/meter/lease", () => new Response(null, { status: 204, headers: USAGE_CORS }));
 
 /** The phone and own account of a Kaption JWT (the local bridge's), or null. */
 async function meterCaller(c: { req: { header(name: string): string | undefined }; env: Env }) {
@@ -626,6 +637,88 @@ outerApp.post("/ext/usage/meter/settle", async (c) => {
   } catch (e: any) {
     console.error("[meter] local settle failed:", e?.message || e);
     return problem({ status: 500, code: "internal_error", detail: "Could not settle usage", headers: USAGE_CORS });
+  }
+});
+
+/**
+ * business-plans.MCP_ASYNC.10-15 — the local bridge's lease: {leaseId, settle?: [{actionId, tool, kind?, client?,
+ * outcome, latency, extra}], keep?, client?} → {metered false, ttl_seconds} | {metered true, lease {id, included, extra,
+ * price_millicents, expires_in_s, allowance, used} | null, settled}. The device runs local calls on the lease with no
+ * network wait and settles them here in batches; the calls past the allowance are charged in the background.
+ */
+outerApp.post("/ext/usage/meter/lease", async (c) => {
+  const caller = await meterCaller(c);
+  if (!caller) return unauthorizedConnections();
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  const { leaseId } = body;
+  const raw = Array.isArray(body.settle) ? body.settle : [];
+  const client = typeof body.client === "string" ? body.client.slice(0, 64) : "";
+  const items: LeaseItem[] = [];
+  for (const entry of raw.slice(0, LEASE_SETTLE_MAX + 1)) {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    const outcome = OUTCOMES.includes(row.outcome as UsageOutcome) ? (row.outcome as UsageOutcome) : null;
+    if (!isActionId(row.actionId) || !isToolName(row.tool) || !outcome) {
+      items.length = 0;
+      break;
+    }
+    const latency = LATENCY_BUCKETS.includes(row.latency as LatencyBucket) ? (row.latency as LatencyBucket) : latencyBucket(Number(row.latency_ms));
+    const app = normalizeLocalApp(typeof row.client === "string" ? row.client.slice(0, 64) : client);
+    items.push({ actionId: row.actionId, tool: row.tool, kind: knownKind(row.tool, row.kind), app, outcome, latency, extra: row.extra === true });
+  }
+  if (!isActionId(leaseId) || items.length !== raw.length || raw.length > LEASE_SETTLE_MAX) {
+    return problem({ status: 400, code: "invalid_lease_request", detail: "leaseId and valid settle rows (at most 100) are required.", headers: USAGE_CORS });
+  }
+  if (meterOff(c)) {
+    // business-plans.MCP_ASYNC.1, .13 — switched off while a device still had calls to settle: they are recorded as
+    // plain calls (counted, never charged), so no call is lost. Nothing else is done.
+    if (items.length && c.env.USAGE_LEDGER && c.env.USAGE_LEDGER_ENABLED !== "off") {
+      const now = Date.now();
+      const cells = items.map((i) => ({
+        hour: hourOf(now), path: "local" as const, connection: localConnectionId(i.app), app: i.app, tool: i.tool, kind: i.kind,
+        outcome: i.outcome, latency: i.latency, calls: 1, repeats: 0,
+      }));
+      await ledgerFor(c.env, caller.accountRef).record(cells, { accountTag: caller.accountRef, batchId: `lease:${leaseId}:${items[0].actionId}` }).catch(() => undefined);
+    }
+    return c.json({ metered: false, ttl_seconds: DEFAULT_ALLOWANCE_TTL_S }, 200, USAGE_CORS);
+  }
+  try {
+    const ledger = ledgerFor(c.env, caller.accountRef);
+    const decision = await leaseCall(
+      c.env,
+      ledger,
+      { leaseId, app: normalizeLocalApp(client), items, keep: body.keep !== false },
+      async () => caller.phone,
+      Date.now(),
+    );
+    if ("unavailable" in decision) {
+      return problem({ status: 503, code: "unavailable", detail: "Could not check usage", headers: USAGE_CORS });
+    }
+    if (!decision.metered) return c.json({ metered: false, ttl_seconds: decision.ttlSeconds, settled: decision.settled }, 200, USAGE_CORS);
+    try {
+      c.executionCtx.waitUntil(decision.charging);
+    } catch {
+      // No execution context (tests): the promise still runs.
+    }
+    const l = decision.lease;
+    return c.json(
+      {
+        metered: true,
+        settled: decision.settled,
+        lease: l
+          ? { id: l.id, included: l.included, extra: l.extra, price_millicents: l.priceMc, expires_in_s: l.expiresInS, allowance: l.allowance, used: l.used }
+          : null,
+      },
+      200,
+      USAGE_CORS,
+    );
+  } catch (e: any) {
+    console.error("[meter] lease failed:", e?.message || e);
+    return problem({ status: 500, code: "internal_error", detail: "Could not lease usage", headers: USAGE_CORS });
   }
 });
 
