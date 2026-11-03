@@ -41,6 +41,11 @@ export interface Allowance {
   allowance: number | null;
   priceMillicents: number | null;
   ttlSeconds: number;
+  /**
+   * business-plans.TEST_ACCOUNT.3 — a test account: metered exactly the same, but rest-api charges its separate test
+   * balance (never real money). Kept so the usage report can say so.
+   */
+  test?: boolean;
 }
 
 export interface HoldInput {
@@ -149,6 +154,26 @@ interface LeaseRow {
 export class MeterStore {
   constructor(private sql: SqlLike) {
     for (const statement of METER_SCHEMA) sql.exec(statement);
+    // business-plans.TEST_ACCOUNT.3 — added after the table shipped: an older ledger gets the column once.
+    let hasTest = false;
+    try {
+      hasTest = sql.exec(`PRAGMA table_info(meter_allowance)`).toArray().some((r) => String(r.name) === "test");
+    } catch {
+      /* no PRAGMA: try the ALTER, which fails harmlessly when the column is there */
+    }
+    if (!hasTest) {
+      try {
+        sql.exec(`ALTER TABLE meter_allowance ADD COLUMN test INTEGER NOT NULL DEFAULT 0`);
+      } catch {
+        /* already there */
+      }
+    }
+  }
+
+  /** business-plans.TEST_ACCOUNT.3 — the last allowance answer this month said test (kept past its ttl for the report). */
+  isTest(month: string): boolean {
+    const row = this.sql.exec(`SELECT test, month FROM meter_allowance WHERE id = 1`).toArray()[0];
+    return !!row && String(row.month) === month && Number(row.test) === 1;
   }
 
   /** mcp-usage-accounting.COUNT.1 — this month's calls answered without error, both paths. */
@@ -234,15 +259,16 @@ export class MeterStore {
       allowance: row.allowance == null ? null : Number(row.allowance),
       priceMillicents: row.price_mc == null ? null : Number(row.price_mc),
       ttlSeconds: Number(row.ttl_s),
+      ...(Number(row.test) === 1 ? { test: true } : {}),
     };
   }
 
   setAllowance(a: Allowance, now: number): void {
     this.sql.exec(
-      `INSERT INTO meter_allowance (id, month, fetched_at, ttl_s, metered, plan, allowance, price_mc) VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO meter_allowance (id, month, fetched_at, ttl_s, metered, plan, allowance, price_mc, test) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET month = excluded.month, fetched_at = excluded.fetched_at, ttl_s = excluded.ttl_s,
-         metered = excluded.metered, plan = excluded.plan, allowance = excluded.allowance, price_mc = excluded.price_mc`,
-      monthOf(now), now, a.ttlSeconds, a.metered ? 1 : 0, a.plan, a.allowance, a.priceMillicents,
+         metered = excluded.metered, plan = excluded.plan, allowance = excluded.allowance, price_mc = excluded.price_mc, test = excluded.test`,
+      monthOf(now), now, a.ttlSeconds, a.metered ? 1 : 0, a.plan, a.allowance, a.priceMillicents, a.test === true ? 1 : 0,
     );
   }
 
@@ -532,6 +558,7 @@ export async function fetchAllowance(env: MeterRestEnv, phone: string, fetchImpl
     allowance,
     priceMillicents: whole(d.price_millicents, 1, 1_000_000) ? d.price_millicents : null,
     ttlSeconds: whole(d.ttl_seconds, 30, 86_400) ? d.ttl_seconds : DEFAULT_ALLOWANCE_TTL_S,
+    ...(d.test === true ? { test: true } : {}),
   };
 }
 

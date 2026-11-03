@@ -472,7 +472,9 @@ async function mergedLedgers(env: Env, userIds: string[], month: string) {
   const since = reports.map((r) => r.since).filter((d): d is string => !!d).sort()[0] ?? null;
   // business-plans.MCP_ASYNC.8 — actions that ran but could not be charged (0 for every account until metering is on).
   const uncharged = reports.reduce((n, r) => n + (r.uncharged ?? 0), 0);
-  return { rows, connections, since, uncharged };
+  // business-plans.TEST_ACCOUNT.3 — either written form of the line marked test.
+  const test = reports.some((r) => r.test === true);
+  return { rows, connections, since, uncharged, test };
 }
 
 /** mcp-usage-accounting.REPORT.2 — this month's calls per connection, for Connected apps. */
@@ -502,12 +504,13 @@ outerApp.get("/ext/usage", async (c) => {
     return problem({ status: 400, code: "invalid_month", detail: "month must be YYYY-MM.", headers: USAGE_CORS });
   }
   try {
-    const [{ rows, connections, since, uncharged }, grants] = await Promise.all([
+    const [{ rows, connections, since, uncharged, test }, grants] = await Promise.all([
       mergedLedgers(c.env, userIds, month),
       activeGrantIds(c.env, userIds),
     ]);
     const report = buildReport(month, rows, connections, since, grants, now);
-    return c.json(uncharged > 0 ? { ...report, uncharged } : report, 200, { ...USAGE_CORS, "Cache-Control": "no-store" });
+    // business-plans.TEST_ACCOUNT.10 — a test account's report says so (the screens show the test note).
+    return c.json({ ...report, ...(uncharged > 0 ? { uncharged } : {}), ...(test ? { test: true } : {}) }, 200, { ...USAGE_CORS, "Cache-Control": "no-store" });
   } catch (e: any) {
     console.error("[usage] report failed:", e?.message || e);
     return problem({ status: 500, code: "internal_error", detail: "Could not load usage", headers: USAGE_CORS });
