@@ -9,6 +9,52 @@ mcp-ext.kaptionai.com (backward-compatible alias for existing connections)
 
 The relay **cannot read your messages**. It forwards MCP tool calls between the AI client and the Kaption browser extension, which processes everything locally in your browser. Its source code is public (BUSL-1.1), so you can verify it yourself.
 
+## Use with Cursor / Claude Code
+
+This repository is also a Cursor plugin (the [Open Plugins](https://open-plugins.com) layout):
+
+| File | What it is |
+|------|------------|
+| [`.cursor-plugin/plugin.json`](./.cursor-plugin/plugin.json) | Plugin manifest |
+| [`mcp.json`](./mcp.json) | The Kaption MCP server, `https://mcp.kaptionai.com/mcp` (remote, OAuth) |
+| [`skills/kaption-whatsapp/SKILL.md`](./skills/kaption-whatsapp/SKILL.md) | Agent skill: when to use the tools, examples and limits |
+| [`rules/kaption-whatsapp-safety.mdc`](./rules/kaption-whatsapp-safety.mdc) | Cursor rule: ask before sending, no bulk sends, keep chats private |
+
+Before you start, install Kaption from [kaptionai.com](https://kaptionai.com/) and keep WhatsApp Web
+(with the extension) or the Kaption desktop app open.
+
+**Cursor.** Add the server to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project):
+
+```json
+{
+  "mcpServers": {
+    "kaption": {
+      "type": "http",
+      "url": "https://mcp.kaptionai.com/mcp"
+    }
+  }
+}
+```
+
+Cursor opens the Kaption sign-in in your browser the first time a tool runs. Prove your number
+with the code Kaption sends to your WhatsApp, or with a connect code from Kaption. To add the skill,
+copy `skills/kaption-whatsapp/` into `.cursor/skills/` (or `~/.cursor/skills/`), and the rule into
+`.cursor/rules/`.
+
+**Claude Code.**
+
+```bash
+claude mcp add --transport http kaption https://mcp.kaptionai.com/mcp
+# then run /mcp in Claude Code and choose "kaption" to sign in
+
+# optional: the skill, for all your projects
+mkdir -p ~/.claude/skills && cp -R skills/kaption-whatsapp ~/.claude/skills/
+```
+
+Kaption never does bulk sends. Sending is one message to one existing chat, after you say yes, within
+the limits Kaption enforces (sending from your number must first be turned on in Kaption). See the
+[skill](./skills/kaption-whatsapp/SKILL.md) for the full list of tools and limits.
+
 ## Architecture
 
 ```
