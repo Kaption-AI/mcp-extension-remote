@@ -36,7 +36,17 @@ import {
   dayOf,
   monthOf,
   monthRange,
+  isToolName,
+  knownKind,
+  latencyBucket,
+  localConnectionId,
+  normalizeLocalApp,
   parseLocalBatch,
+  hourOf,
+  LATENCY_BUCKETS,
+  OUTCOMES,
+  type LatencyBucket,
+  type UsageOutcome,
   type ConnectionRow,
   type DayRow,
 } from "./usage";
@@ -53,6 +63,7 @@ import {
 } from "./otp";
 import type { Env } from "./types";
 import { accountRefsForPhone } from "./phone-alias";
+import { DEFAULT_ALLOWANCE_TTL_S, isActionId, meterCall, releaseCharge } from "./meter";
 import {
   connectDeps,
   pollConnectPairing,
@@ -524,6 +535,97 @@ outerApp.post("/ext/usage/local", async (c) => {
   } catch (e: any) {
     console.error("[usage] local batch failed:", e?.message || e);
     return problem({ status: 500, code: "internal_error", detail: "Could not record usage", headers: USAGE_CORS });
+  }
+});
+
+// ─── Claude and ChatGPT overage on the ledger: local-hub calls (business-plans.MCP_LEDGER.10-12) ─────
+
+outerApp.options("/ext/usage/meter", () => new Response(null, { status: 204, headers: USAGE_CORS }));
+outerApp.options("/ext/usage/meter/settle", () => new Response(null, { status: 204, headers: USAGE_CORS }));
+
+/** The phone and own account of a Kaption JWT (the local bridge's), or null. */
+async function meterCaller(c: { req: { header(name: string): string | undefined }; env: Env }) {
+  const auth = c.req.header("Authorization");
+  const phone = auth?.startsWith("Bearer ") ? await validateJwt(c.env.JWT_SECRET, auth.slice(7)) : null;
+  if (!phone) return null;
+  const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
+  return accountRef ? { phone, accountRef } : null;
+}
+
+const meterOff = (c: { env: Env }) => c.env.MCP_OVERAGE_LEDGER !== "on" || c.env.USAGE_LEDGER_ENABLED === "off" || !c.env.USAGE_LEDGER;
+
+/**
+ * business-plans.MCP_LEDGER.10-11 — before a local-hub call runs: {actionId, tool, kind?, client?} → {metered false,
+ * ttl_seconds} | {metered true, allowed true, included} | {metered true, allowed false, reason}.
+ */
+outerApp.post("/ext/usage/meter", async (c) => {
+  const caller = await meterCaller(c);
+  if (!caller) return unauthorizedConnections();
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  const { actionId, tool } = body;
+  const client = typeof body.client === "string" ? body.client.slice(0, 64) : "";
+  if (!isActionId(actionId) || !isToolName(tool)) {
+    return problem({ status: 400, code: "invalid_meter_request", detail: "actionId and tool are required.", headers: USAGE_CORS });
+  }
+  if (meterOff(c)) return c.json({ metered: false, ttl_seconds: DEFAULT_ALLOWANCE_TTL_S }, 200, USAGE_CORS);
+  try {
+    const ledger = ledgerFor(c.env, caller.accountRef);
+    const app = normalizeLocalApp(client);
+    const decision = await meterCall(
+      c.env,
+      ledger,
+      { actionId: `local:${actionId}`, path: "local", connection: localConnectionId(app), app, tool, kind: knownKind(tool, body.kind) },
+      async () => caller.phone,
+      Date.now(),
+    );
+    if (!decision.metered) {
+      const cached = await ledger.meterAllowance();
+      return c.json({ metered: false, ttl_seconds: cached?.ttlSeconds ?? DEFAULT_ALLOWANCE_TTL_S }, 200, USAGE_CORS);
+    }
+    if (!decision.allowed) return c.json({ metered: true, allowed: false, reason: decision.reason, allowance: decision.allowance }, 200, USAGE_CORS);
+    return c.json({ metered: true, allowed: true, included: !decision.charged, used: decision.used, allowance: decision.allowance }, 200, USAGE_CORS);
+  } catch (e: any) {
+    console.error("[meter] local reserve failed:", e?.message || e);
+    return problem({ status: 500, code: "internal_error", detail: "Could not check usage", headers: USAGE_CORS });
+  }
+});
+
+/**
+ * business-plans.MCP_LEDGER.12 — after a metered local call: {actionId, outcome, latency, tool?, client?}. The call is
+ * recorded here (the device leaves it out of its batch) and its hold goes away; a failed charged call is credited back.
+ */
+outerApp.post("/ext/usage/meter/settle", async (c) => {
+  const caller = await meterCaller(c);
+  if (!caller) return unauthorizedConnections();
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  const { actionId } = body;
+  const outcome = OUTCOMES.includes(body.outcome as UsageOutcome) ? (body.outcome as UsageOutcome) : null;
+  const latency = LATENCY_BUCKETS.includes(body.latency as LatencyBucket) ? (body.latency as LatencyBucket) : latencyBucket(Number(body.latency_ms));
+  if (!isActionId(actionId) || !outcome) {
+    return problem({ status: 400, code: "invalid_meter_settle", detail: "actionId and outcome are required.", headers: USAGE_CORS });
+  }
+  if (meterOff(c)) return c.json({ ok: true, settled: false }, 200, USAGE_CORS);
+  try {
+    const id = `local:${actionId}`;
+    const settled = await ledgerFor(c.env, caller.accountRef).meterSettle(id, outcome, latency, caller.accountRef);
+    // business-plans.MCP_LEDGER.8 — a charged call that failed is credited back (keyed: once).
+    if (settled?.charged && outcome !== "ok" && !(await releaseCharge(c.env, caller.phone, id))) {
+      console.error("[meter] release failed for a charged local call that failed");
+    }
+    return c.json({ ok: true, settled: !!settled }, 200, USAGE_CORS);
+  } catch (e: any) {
+    console.error("[meter] local settle failed:", e?.message || e);
+    return problem({ status: 500, code: "internal_error", detail: "Could not settle usage", headers: USAGE_CORS });
   }
 });
 
@@ -1005,7 +1107,8 @@ function createRouter(nextHandler: WorkerHandler) {
       return outerApp.fetch(request, env, ctx);
     }
     // mcp-usage-accounting.REPORT.1, LOCAL.5, ADMIN.1
-    if (url.pathname === "/ext/usage" || url.pathname === "/ext/usage/local" || url.pathname === "/admin/usage") {
+    // business-plans.MCP_LEDGER.10-12 — the local bridge's meter.
+    if (url.pathname === "/ext/usage" || url.pathname === "/ext/usage/local" || url.pathname === "/admin/usage" || url.pathname.startsWith("/ext/usage/meter")) {
       return outerApp.fetch(request, env, ctx);
     }
     // Store phone hint by IP for pre-filling the authorize form.

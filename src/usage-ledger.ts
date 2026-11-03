@@ -17,6 +17,7 @@ import { DurableObject } from "cloudflare:workers";
 import {
   DAY_MS,
   dayOf,
+  hourOf,
   monthRange,
   type ConnectionRow,
   type DayRow,
@@ -24,6 +25,7 @@ import {
   type UsagePath,
 } from "./usage";
 import type { Env } from "./types";
+import { MeterStore, type Allowance, type HoldInput, type Reservation } from "./meter";
 
 export const HOURLY_RETENTION_DAYS = 45;
 export const DAILY_RETENTION_DAYS = 400;
@@ -238,25 +240,93 @@ async function ensureDailyAlarm(state: DoState, now: number): Promise<void> {
 
 export class UsageLedger extends DurableObject<Env> {
   private store: LedgerStore;
+  private meter: MeterStore;
   private state: DoState;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.state = ctx as unknown as DoState;
     this.store = new LedgerStore(this.state.storage.sql);
+    this.meter = new MeterStore(this.state.storage.sql);
+  }
+
+  /**
+   * business-plans.MCP_LEDGER.4, MCP_LEDGER.12 — one slot for a call, decided and taken in one transaction (stale
+   * local holds are recorded first, so the count is what it will be).
+   */
+  async meterReserve(input: HoldInput, now = Date.now()): Promise<Reservation> {
+    return this.state.storage.transactionSync(() => {
+      const stale = this.meter.sweep(now);
+      if (stale.length) this.store.add(stale, now);
+      return this.meter.reserve(input, now);
+    });
+  }
+
+  /** business-plans.MCP_LEDGER.3 */
+  async meterSetAllowance(a: Allowance, now = Date.now()): Promise<void> {
+    this.meter.setAllowance(a, now);
+  }
+
+  /** business-plans.MCP_LEDGER.5 */
+  async meterCharged(actionId: string): Promise<void> {
+    this.meter.markCharged(actionId);
+  }
+
+  /** business-plans.MCP_LEDGER.6-7 */
+  async meterDrop(actionId: string): Promise<{ charged: boolean } | null> {
+    return this.meter.drop(actionId);
+  }
+
+  /**
+   * business-plans.MCP_LEDGER.12 — a metered local call finished: its hold goes and the call is recorded (as the hold
+   * says: tool, kind, app) in one transaction. null when there was no hold (already settled or swept).
+   */
+  async meterSettle(
+    actionId: string,
+    outcome: UsageCell["outcome"],
+    latency: UsageCell["latency"],
+    accountTag: string,
+  ): Promise<{ charged: boolean } | null> {
+    const now = Date.now();
+    let cell: UsageCell | null = null;
+    const hold = this.state.storage.transactionSync(() => {
+      const h = this.meter.settle(actionId);
+      if (!h) return null;
+      cell = { hour: hourOf(now), path: h.path, connection: h.conn, app: h.app, tool: h.tool, kind: h.kind, outcome, latency, calls: 1, repeats: 0 };
+      this.store.add([cell], now);
+      return h;
+    });
+    const totals = this.env.USAGE_TOTALS;
+    if (cell && totals) {
+      this.state.waitUntil(
+        totals.get(totals.idFromName("global")).add([cell], accountTag.slice(0, 16)).catch(() => undefined),
+      );
+    }
+    return hold ? { charged: hold.charged } : null;
+  }
+
+  /** business-plans.MCP_LEDGER.11 — the cached allowance (the meter's "not metered" answer carries its ttl). */
+  async meterAllowance(now = Date.now()): Promise<Allowance | null> {
+    return this.meter.allowance(now);
   }
 
   /**
    * mcp-usage-accounting.RECORD.1, LOCAL.6 — adds cells (one call, or a local batch). With a batch id, a batch seen
-   * before is not added again. `accountTag` feeds the global totals' distinct-account count.
+   * before is not added again. `accountTag` feeds the global totals' distinct-account count. With `settle`, the
+   * metered call's hold goes away in the same transaction (business-plans.MCP_LEDGER.8) and is answered back.
    */
   async record(
     cells: UsageCell[],
-    options: { batchId?: string; accountTag?: string } = {},
-  ): Promise<{ accepted: number; duplicate: boolean }> {
+    options: { batchId?: string; accountTag?: string; settle?: string } = {},
+  ): Promise<{ accepted: number; duplicate: boolean; settled?: { charged: boolean } | null }> {
     const now = Date.now();
+    let settled: { charged: boolean } | null = null;
     const accepted = this.state.storage.transactionSync(() => {
       if (options.batchId && !this.store.claimBatch(options.batchId, now)) return -1;
+      if (options.settle) {
+        const hold = this.meter.settle(options.settle);
+        settled = hold ? { charged: hold.charged } : null;
+      }
       this.store.add(cells, now);
       return cells.length;
     });
@@ -272,7 +342,7 @@ export class UsageLedger extends DurableObject<Env> {
       );
     }
     this.state.waitUntil(ensureDailyAlarm(this.state, now).catch(() => undefined));
-    return { accepted, duplicate: false };
+    return { accepted, duplicate: false, ...(options.settle ? { settled } : {}) };
   }
 
   /** mcp-usage-accounting.REPORT.1 — the month's rows, the account's connections and the first counted day. */
@@ -287,6 +357,11 @@ export class UsageLedger extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const now = Date.now();
     this.store.prune(now);
+    this.state.storage.transactionSync(() => {
+      const stale = this.meter.sweep(now);
+      if (stale.length) this.store.add(stale, now);
+      this.meter.prune(now);
+    });
     await this.state.storage.setAlarm(now + DAY_MS);
   }
 }

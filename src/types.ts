@@ -13,6 +13,11 @@ export interface Env {
   USAGE_TOTALS?: DurableObjectNamespace<UsageTotals>;
   /** mcp-usage-accounting.STORE.4 — "off" stops recording (kill switch); anything else records. */
   USAGE_LEDGER_ENABLED?: string;
+  /**
+   * business-plans.MCP_LEDGER.1 — "on" lets the ledger meter Claude and ChatGPT overage (rest-api still has to answer
+   * metered for the account); anything else: nothing is reserved, charged or marked, as before.
+   */
+  MCP_OVERAGE_LEDGER?: string;
   OAUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
   INTERNAL_API_BASE_URL: string;

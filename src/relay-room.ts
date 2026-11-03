@@ -19,7 +19,9 @@ import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./types";
 import {
   deriveAccountRef,
+  openState,
   sanitizeAccountRefForLog,
+  sealState,
   validateExtensionSession,
   validateJwt,
 } from "./otp";
@@ -45,6 +47,16 @@ interface WsAttachment {
   room?: string | null;
   /** mcp-manage-kaption.LIST.1 — the manage families this client said in its auth message (absent: said nothing). */
   features?: ManageFeatures;
+  /**
+   * business-plans.MCP_LEDGER.16 — the signed-in phone, sealed with EPHEMERAL_STATE_SECRET, only while this socket
+   * lives, so the ledger can ask rest-api about the account. Never stored anywhere else.
+   */
+  phoneSeal?: string;
+}
+
+/** business-plans.MCP_LEDGER.9 — what the relay adds beside a call's params (the extension's cloud bridge reads it). */
+export interface RelayCallExtra {
+  metered?: boolean;
 }
 
 /** mcp-manage-kaption.LIST.2 — MCP sessions (RelayMCP Durable Object ids) told when this room's manage tools change. */
@@ -149,9 +161,10 @@ export class RelayRoom extends DurableObject<Env> {
   async handleMcpRequestSettled(
     method: string,
     params: Record<string, unknown>,
+    extra: RelayCallExtra = {},
   ): Promise<{ ok: true; result: unknown } | { ok: false; message: string; code: number | string | null }> {
     try {
-      return { ok: true, result: await this.handleMcpRequest(method, params) };
+      return { ok: true, result: await this.handleMcpRequest(method, params, extra) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const code = (err as { code?: unknown })?.code;
@@ -166,6 +179,7 @@ export class RelayRoom extends DurableObject<Env> {
   async handleMcpRequest(
     method: string,
     params: Record<string, unknown>,
+    extra: RelayCallExtra = {},
   ): Promise<unknown> {
     // Restore state from hibernation if needed
     this.restoreFromHibernation();
@@ -204,6 +218,8 @@ export class RelayRoom extends DurableObject<Env> {
             id,
             method,
             params,
+            // business-plans.MCP_LEDGER.9 — the ledger already decided this call: the cloud bridge must not charge it.
+            ...(extra.metered ? { kaption: { metered: true } } : {}),
           }),
         );
       } catch (err) {
@@ -472,6 +488,32 @@ export class RelayRoom extends DurableObject<Env> {
           : { type: "auth_ok" },
       ),
     );
+    if (session.phone) await this.rememberPhoneSeal(ws, session.phone);
+  }
+
+  /** business-plans.MCP_LEDGER.16 — seals the phone into the socket's attachment (only when metering is on). */
+  private async rememberPhoneSeal(ws: WebSocket | null, phone: string): Promise<void> {
+    if (!ws || this.env.MCP_OVERAGE_LEDGER !== "on" || !this.env.EPHEMERAL_STATE_SECRET) return;
+    try {
+      const seal = await sealState({ phone }, 7 * 24 * 3600, this.env.EPHEMERAL_STATE_SECRET);
+      const current = this.readWsAttachment(ws);
+      if (current?.authenticated) this.setWsAttachment(ws, { ...current, phoneSeal: seal });
+    } catch (e) {
+      console.error("[RelayRoom] phone seal failed:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  /**
+   * business-plans.MCP_LEDGER.16 — the phone of the extension that serves this room's calls, for the usage ledger's
+   * questions to rest-api; null when none is connected (or it signed in without a phone).
+   */
+  async meteringPhone(): Promise<string | null> {
+    this.restoreFromHibernation();
+    const target = this.servingSocket();
+    const seal = target ? this.readWsAttachment(target)?.phoneSeal : undefined;
+    if (!seal || !this.env.EPHEMERAL_STATE_SECRET) return null;
+    const opened = await openState<{ phone?: string }>(seal, this.env.EPHEMERAL_STATE_SECRET).catch(() => null);
+    return typeof opened?.phone === "string" ? opened.phone : null;
   }
 
   /**
@@ -528,6 +570,7 @@ export class RelayRoom extends DurableObject<Env> {
     this.manageMaybeChanged();
     this.rememberAlias(phone, accountRef);
     ws?.send(JSON.stringify({ type: "auth_ok", phone }));
+    await this.rememberPhoneSeal(ws, phone);
   }
 
   /** mcp.CLOUD_RELAY.17 — connections made with this phone's other Brazilian form find this room. Never blocks auth. */
