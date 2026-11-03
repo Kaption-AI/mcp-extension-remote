@@ -17,7 +17,7 @@ import { scrubInlineMedia } from "./media-scrub";
 import { takeUsageNotice } from "./usage-notice";
 import type { Env } from "./types";
 import { manageFeaturesWithAlias, meteringPhoneWithAlias, relayWithAliasSettled } from "./phone-alias";
-import { REFUSED_CODE, meterCall, meterRefusalText, releaseCharge, type MeterDecision } from "./meter";
+import { CloudMeter, REFUSED_CODE, meterRefusalText, type CloudGate } from "./meter";
 import {
   installManageResources,
   MANAGE_TOOL_FEATURE,
@@ -57,6 +57,9 @@ export class RelayMCP extends McpAgent<Env> {
       this.registerCloudTool(tool);
     }
     await this.refreshManageVisibility();
+    // business-plans.MCP_ASYNC.2 — the session's view of its ledger, seeded in the background (switch on only).
+    const seedRef = this.getAccountRef();
+    if (seedRef && this.meterOn()) this.cloudMeter(seedRef).seed();
     // mcp-manage-kaption.HELP.3, PROMPTS.2, UI.1 — guides and prompts through kaption_help, plus the plans page.
     installManageResources(this.server.server, {
       visible: async () => {
@@ -149,18 +152,18 @@ export class RelayMCP extends McpAgent<Env> {
         const started = Date.now();
         const usage = this.usageContext(accountRef, routed.method, routed.params, started);
         let failure: unknown = null;
-        // business-plans.MCP_LEDGER.4-7 — with the switches on, the account's ledger takes this call's slot (and charges
-        // it past the allowance) before it is relayed; a refused charge refuses the call here.
-        const meter = await this.meterCloudCall(usage, routed.method);
-        if (meter.decision.metered && !meter.decision.allowed) {
+        // business-plans.MCP_LEDGER.4-7, MCP_ASYNC.1-6 — with the switches on, the account's ledger takes this call's
+        // slot (and charges it past the allowance). In the common case the call is relayed at once and the reservation
+        // runs beside it; it waits only when the session's view cannot tell. A known refusal refuses the call here.
+        usage.gate = this.meterOn() ? await this.meterCloudCall(usage, routed.method) : null;
+        if (usage.gate?.refusal) {
           failure = { code: REFUSED_CODE };
           this.recordUsage(usage, failure, Date.now() - started);
           return {
-            content: [{ type: "text" as const, text: `Error: ${meterRefusalText(meter.decision.reason, meter.decision.allowance)}` }],
+            content: [{ type: "text" as const, text: `Error: ${meterRefusalText(usage.gate.refusal.reason, usage.gate.refusal.allowance)}` }],
             isError: true,
           };
         }
-        if (meter.decision.metered) usage.settle = meter.actionId;
         try {
           // Sanitize args for DO RPC — the MCP SDK may inject non-serializable
           // properties (AbortSignal etc.) into the args object
@@ -169,7 +172,7 @@ export class RelayMCP extends McpAgent<Env> {
           console.log(
             `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)} app=${await this.appName(accountRef)}`,
           );
-          let result = await this.relayToExtension(accountRef, routed.method, cleanArgs, meter.decision.metered);
+          let result = await this.relayToExtension(accountRef, routed.method, cleanArgs, usage.gate?.metered ?? false);
 
           // Inline media ONLY for an explicit download_media call.
           //   download_media (mcp.TOOLS.6 / mcp.CLOUD_RELAY.6): base64_data flows
@@ -256,44 +259,54 @@ export class RelayMCP extends McpAgent<Env> {
       kind: usageKind(tool, args),
       at,
       repeat: this.repeats.isRepeat(tool, args, at).catch(() => false),
-      /** business-plans.MCP_LEDGER.8 — the metered call's action id: its hold is settled when the call is recorded. */
-      settle: undefined as string | undefined,
-      // The phone the meter asked rest-api with (kept in memory for this call only, to give a charge back).
-      phone: null as string | null,
+      /** business-plans.MCP_LEDGER.8, MCP_ASYNC.9 — the meter's gate: the call is recorded once its reservation is known. */
+      gate: null as CloudGate | null,
     };
   }
 
-  /**
-   * business-plans.MCP_LEDGER.1-7, .15 — the ledger's decision for one cloud call, in the ledger of the account the
-   * call is recorded in. Off (switch, no ledger, recording off) or any failure of the ledger itself: not metered.
-   */
-  private async meterCloudCall(
-    usage: ReturnType<RelayMCP["usageContext"]>,
-    tool: string,
-  ): Promise<{ actionId: string; decision: MeterDecision }> {
-    const actionId = `cloud:${crypto.randomUUID()}`;
-    if (this.env.MCP_OVERAGE_LEDGER !== "on" || this.env.USAGE_LEDGER_ENABLED === "off" || !this.env.USAGE_LEDGER) {
-      return { actionId, decision: { metered: false } };
-    }
-    try {
-      const decision = await meterCall(
-        this.env,
-        ledgerFor(this.env, usage.accountRef),
-        {
-          actionId,
-          path: "cloud",
-          connection: this.getGrantId() ?? "unknown",
-          app: await this.appName(usage.accountRef),
-          tool,
-          kind: usage.kind,
+  /** business-plans.MCP_LEDGER.1, MCP_ASYNC.1 — the relay's own switch, checked before anything else. */
+  private meterOn(): boolean {
+    return this.env.MCP_OVERAGE_LEDGER === "on" && this.env.USAGE_LEDGER_ENABLED !== "off" && !!this.env.USAGE_LEDGER;
+  }
+
+  private meter: CloudMeter | null = null;
+
+  /** business-plans.MCP_ASYNC.2, MCP_LEDGER.15-16 — this session's meter, on the ledger the calls are recorded in. */
+  private cloudMeter(accountRef: string): CloudMeter {
+    if (!this.meter) {
+      this.meter = new CloudMeter({
+        env: this.env,
+        ledger: () => ledgerFor(this.env, accountRef) as any,
+        phone: () => meteringPhoneWithAlias(this.env, accountRef),
+        background: (p) => {
+          try {
+            (this as any).ctx?.waitUntil?.(p);
+          } catch {
+            // The Durable Object stays alive while the promise runs.
+          }
         },
-        async () => (usage.phone = await meteringPhoneWithAlias(this.env, usage.accountRef)),
-        usage.at,
-      );
-      return { actionId, decision };
+      });
+    }
+    return this.meter;
+  }
+
+  /**
+   * business-plans.MCP_LEDGER.1-7, .15, MCP_ASYNC.3-5 — the meter's gate for one cloud call, in the ledger of the account
+   * the call is recorded in. Any failure of the ledger itself: not metered.
+   */
+  private async meterCloudCall(usage: ReturnType<RelayMCP["usageContext"]>, tool: string): Promise<CloudGate | null> {
+    try {
+      return await this.cloudMeter(usage.accountRef).begin({
+        actionId: `cloud:${crypto.randomUUID()}`,
+        path: "cloud",
+        connection: this.getGrantId() ?? "unknown",
+        app: await this.appName(usage.accountRef),
+        tool,
+        kind: usage.kind,
+      });
     } catch (error) {
-      console.error("[meter] reserve failed:", error instanceof Error ? error.message : error);
-      return { actionId, decision: { metered: false } };
+      console.error("[meter] gate failed:", error instanceof Error ? error.message : error);
+      return null;
     }
   }
 
@@ -313,17 +326,13 @@ export class RelayMCP extends McpAgent<Env> {
         calls: 1,
         repeats: (await usage.repeat) ? 1 : 0,
       };
-      const recorded = await ledgerFor(this.env, usage.accountRef).record([cell], {
-        accountTag: usage.accountRef,
-        ...(usage.settle ? { settle: usage.settle } : {}),
-      });
-      // business-plans.MCP_LEDGER.8 — a charged call that failed is credited back (keyed: once).
-      if (usage.settle && cell.outcome !== "ok" && recorded.settled?.charged) {
-        const phone = usage.phone ?? (await meteringPhoneWithAlias(this.env, usage.accountRef).catch(() => null));
-        if (!phone || !(await releaseCharge(this.env, phone, usage.settle))) {
-          console.error("[meter] release failed for a charged call that failed");
-        }
+      // business-plans.MCP_LEDGER.8, MCP_ASYNC.8-9 — a metered call is recorded once its reservation is known (its
+      // hold settled in the same transaction, a failed charged call credited back once).
+      if (usage.gate?.metered && this.meter) {
+        await this.meter.finish(usage.gate, cell, usage.accountRef);
+        return;
       }
+      await ledgerFor(this.env, usage.accountRef).record([cell], { accountTag: usage.accountRef });
     })().catch((error) => console.error("[usage] record failed:", error instanceof Error ? error.message : error));
     try {
       (this as any).ctx?.waitUntil?.(work);

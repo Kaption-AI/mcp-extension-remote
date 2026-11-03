@@ -84,7 +84,7 @@ describe("the ledger's slots (business-plans.MCP_LEDGER.3-4, .8, .12)", () => {
   it("business-plans.MCP_LEDGER.1 — an account answered not metered holds nothing", () => {
     const { meter } = stores();
     meter.setAllowance({ ...ALLOW, metered: false }, NOW);
-    expect(meter.reserve(hold("a-00000001"), NOW)).toEqual({ state: "off" });
+    expect(meter.reserve(hold("a-00000001"), NOW)).toMatchObject({ state: "off" });
     expect(meter.held("2026-11")).toBe(0);
   });
 
@@ -93,8 +93,8 @@ describe("the ledger's slots (business-plans.MCP_LEDGER.3-4, .8, .12)", () => {
     meter.setAllowance(ALLOW, NOW);
     ledger.add([okCell(), okCell({ path: "local", connection: "local-claude-desktop", app: "Claude Desktop (local)" }), okCell({ outcome: "error" })], NOW);
     expect(meter.counted("2026-11")).toBe(2);
-    expect(meter.reserve(hold("a-00000001"), NOW)).toEqual({ state: "included", used: 3, allowance: 3 });
-    expect(meter.reserve(hold("a-00000002"), NOW)).toEqual({ state: "charge", used: 4, allowance: 3, charged: false });
+    expect(meter.reserve(hold("a-00000001"), NOW)).toMatchObject({ state: "included", used: 3, allowance: 3 });
+    expect(meter.reserve(hold("a-00000002"), NOW)).toMatchObject({ state: "charge", used: 4, allowance: 3, charged: false });
     // A repeated action id answers the same decision and holds no second slot.
     expect(meter.reserve(hold("a-00000002"), NOW)).toMatchObject({ state: "charge" });
     expect(meter.held("2026-11")).toBe(2);
@@ -152,7 +152,7 @@ describe("meterCall (business-plans.MCP_LEDGER.2, .5-7, .16)", () => {
   it("business-plans.MCP_LEDGER.6 — a refused charge refuses the call and gives the slot back", async () => {
     const ledger = ledgerOf();
     const rest = restApi({ allowance: { metered: true, allowance: 0 }, charge: () => ({ status: 402, body: { allowed: false, reason: "no_credit" } }) });
-    expect(await meterCall(REST, ledger, hold("a-00000001"), async () => "1737", NOW, rest.impl)).toEqual({ metered: true, allowed: false, reason: "no_credit", allowance: 0 });
+    expect(await meterCall(REST, ledger, hold("a-00000001"), async () => "1737", NOW, rest.impl)).toMatchObject({ metered: true, allowed: false, reason: "no_credit", allowance: 0 });
     expect(await ledger.meterDrop("a-00000001")).toBeNull();
     for (const reason of ["cap_reached", "cap_zero"] as const) {
       const r = restApi({ allowance: { metered: true, allowance: 0 }, charge: () => ({ status: 402, body: { allowed: false, reason } }) });
@@ -172,9 +172,9 @@ describe("meterCall (business-plans.MCP_LEDGER.2, .5-7, .16)", () => {
   it("business-plans.MCP_LEDGER.18, NOT_ENFORCED.2 — a switch off after the allowance was cached: the call runs unmetered and the account is not metered again", async () => {
     const ledger = ledgerOf();
     const rest = restApi({ allowance: { metered: true, allowance: 0 }, charge: () => ({ status: 200, body: { allowed: true, metered: false, reason: "not_enforced", ttl_seconds: 600 } }) });
-    expect(await meterCall(REST, ledger, hold("a-00000001"), async () => "1737", NOW, rest.impl)).toEqual({ metered: false });
+    expect(await meterCall(REST, ledger, hold("a-00000001"), async () => "1737", NOW, rest.impl)).toMatchObject({ metered: false });
     expect(await ledger.meterDrop("a-00000001")).toBeNull();
-    expect(await meterCall(REST, ledger, hold("a-00000002"), async () => "1737", NOW + 1000, rest.impl)).toEqual({ metered: false });
+    expect(await meterCall(REST, ledger, hold("a-00000002"), async () => "1737", NOW + 1000, rest.impl)).toMatchObject({ metered: false });
     expect(rest.calls.filter((c) => c.path.endsWith("/charge"))).toHaveLength(1);
     expect(rest.calls.filter((c) => c.path.endsWith("/allowance"))).toHaveLength(1);
   });
@@ -182,7 +182,7 @@ describe("meterCall (business-plans.MCP_LEDGER.2, .5-7, .16)", () => {
   it("business-plans.MCP_LEDGER.16 — no phone, or rest-api unable to say the allowance: not metered", async () => {
     expect(await meterCall(REST, ledgerOf(), hold("a-00000001"), async () => null, NOW, restApi().impl)).toEqual({ metered: false });
     expect(await meterCall(REST, ledgerOf(), hold("a-00000001"), async () => "1737", NOW, restApi({ allowanceStatus: 500 }).impl)).toEqual({ metered: false });
-    expect(await meterCall(REST, ledgerOf(), hold("a-00000001"), async () => "1737", NOW, restApi({ allowance: { metered: false, allowance: null } }).impl)).toEqual({ metered: false });
+    expect(await meterCall(REST, ledgerOf(), hold("a-00000001"), async () => "1737", NOW, restApi({ allowance: { metered: false, allowance: null } }).impl)).toMatchObject({ metered: false });
   });
 
   it("business-plans.MCP_LEDGER.10 — two devices (cloud and a local app) share one allowance", async () => {

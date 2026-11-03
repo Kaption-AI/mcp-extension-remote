@@ -25,7 +25,7 @@ import {
   type UsagePath,
 } from "./usage";
 import type { Env } from "./types";
-import { MeterStore, type Allowance, type HoldInput, type Reservation } from "./meter";
+import { MeterStore, type Allowance, type HoldInput, type LeaseAnswer, type LeaseRequest, type Peek, type Reservation } from "./meter";
 
 export const HOURLY_RETENTION_DAYS = 45;
 export const DAILY_RETENTION_DAYS = 400;
@@ -267,14 +267,51 @@ export class UsageLedger extends DurableObject<Env> {
     this.meter.setAllowance(a, now);
   }
 
-  /** business-plans.MCP_LEDGER.5 */
-  async meterCharged(actionId: string): Promise<void> {
+  /** business-plans.MCP_LEDGER.5, MCP_ASYNC.2 — with the headroom the charge answer showed. */
+  async meterCharged(actionId: string, headroomMc?: number | null, now = Date.now()): Promise<void> {
     this.meter.markCharged(actionId);
+    if (headroomMc !== undefined) this.meter.setHeadroom(headroomMc, now);
   }
 
-  /** business-plans.MCP_LEDGER.6-7 */
-  async meterDrop(actionId: string): Promise<{ charged: boolean } | null> {
+  /** business-plans.MCP_LEDGER.6-7, MCP_ASYNC.6 */
+  async meterDrop(actionId: string, headroomMc?: number | null, now = Date.now()): Promise<{ charged: boolean } | null> {
+    if (headroomMc !== undefined) this.meter.setHeadroom(headroomMc, now);
     return this.meter.drop(actionId);
+  }
+
+  /** business-plans.MCP_ASYNC.2 — a session's view, without taking a slot (stale local holds recorded first). */
+  async meterPeek(now = Date.now()): Promise<Peek> {
+    return this.state.storage.transactionSync(() => {
+      const stale = this.meter.sweep(now);
+      if (stale.length) this.store.add(stale, now);
+      return this.meter.peek(now);
+    });
+  }
+
+  /** business-plans.MCP_ASYNC.8, .14 — after a background charge. */
+  async meterAfterCharge(actionId: string, headroomMc: number | null | undefined, uncharged: boolean, now = Date.now()): Promise<void> {
+    this.state.storage.transactionSync(() => {
+      if (headroomMc !== undefined) this.meter.setHeadroom(headroomMc, now);
+      if (uncharged) this.meter.markUncharged(actionId, now);
+    });
+  }
+
+  /** business-plans.MCP_ASYNC.10-15 — one lease request (settles, then the lease topped up or closed). */
+  async meterLease(req: LeaseRequest, now = Date.now(), accountTag = ""): Promise<LeaseAnswer> {
+    let added: UsageCell[] = [];
+    const answer = this.state.storage.transactionSync(() => {
+      const stale = this.meter.sweep(now);
+      if (stale.length) this.store.add(stale, now);
+      return this.meter.lease(req, now, (cells) => {
+        this.store.add(cells, now);
+        added = cells;
+      });
+    });
+    const totals = this.env.USAGE_TOTALS;
+    if (added.length && totals) {
+      this.state.waitUntil(totals.get(totals.idFromName("global")).add(added, accountTag.slice(0, 16)).catch(() => undefined));
+    }
+    return answer;
   }
 
   /**
@@ -317,7 +354,7 @@ export class UsageLedger extends DurableObject<Env> {
    */
   async record(
     cells: UsageCell[],
-    options: { batchId?: string; accountTag?: string; settle?: string } = {},
+    options: { batchId?: string; accountTag?: string; settle?: string; uncharged?: string } = {},
   ): Promise<{ accepted: number; duplicate: boolean; settled?: { charged: boolean } | null }> {
     const now = Date.now();
     let settled: { charged: boolean } | null = null;
@@ -327,6 +364,8 @@ export class UsageLedger extends DurableObject<Env> {
         const hold = this.meter.settle(options.settle);
         settled = hold ? { charged: hold.charged } : null;
       }
+      // business-plans.MCP_ASYNC.8 — ran before its reservation answered, and the charge was refused afterwards.
+      if (options.uncharged) this.meter.markUncharged(options.uncharged, now);
       this.store.add(cells, now);
       return cells.length;
     });
@@ -346,8 +385,9 @@ export class UsageLedger extends DurableObject<Env> {
   }
 
   /** mcp-usage-accounting.REPORT.1 — the month's rows, the account's connections and the first counted day. */
-  async report(month: string): Promise<{ rows: DayRow[]; connections: ConnectionRow[]; since: string | null }> {
-    return { rows: this.store.monthRows(month), connections: this.store.connections(), since: this.store.since() };
+  async report(month: string): Promise<{ rows: DayRow[]; connections: ConnectionRow[]; since: string | null; uncharged: number }> {
+    // business-plans.MCP_ASYNC.8 — the month's actions that ran and could not be charged.
+    return { rows: this.store.monthRows(month), connections: this.store.connections(), since: this.store.since(), uncharged: this.meter.uncharged(month) };
   }
 
   async hours(from: number, to: number): Promise<Record<string, unknown>[]> {
