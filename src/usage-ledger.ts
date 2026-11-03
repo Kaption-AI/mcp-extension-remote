@@ -385,9 +385,10 @@ export class UsageLedger extends DurableObject<Env> {
   }
 
   /** mcp-usage-accounting.REPORT.1 — the month's rows, the account's connections and the first counted day. */
-  async report(month: string): Promise<{ rows: DayRow[]; connections: ConnectionRow[]; since: string | null; uncharged: number }> {
+  async report(month: string): Promise<{ rows: DayRow[]; connections: ConnectionRow[]; since: string | null; uncharged: number; test: boolean }> {
     // business-plans.MCP_ASYNC.8 — the month's actions that ran and could not be charged.
-    return { rows: this.store.monthRows(month), connections: this.store.connections(), since: this.store.since(), uncharged: this.meter.uncharged(month) };
+    // business-plans.TEST_ACCOUNT.3 — and whether rest-api said this is a test account (charged on a test balance).
+    return { rows: this.store.monthRows(month), connections: this.store.connections(), since: this.store.since(), uncharged: this.meter.uncharged(month), test: this.meter.isTest(month) };
   }
 
   async hours(from: number, to: number): Promise<Record<string, unknown>[]> {
