@@ -292,6 +292,23 @@ describe("the local bridge's meter routes (business-plans.MCP_LEDGER.10-12)", ()
     expect(report.rows.reduce((n, r) => n + r.calls, 0)).toBe(2);
   });
 
+  it("mcp.WEBMCP.8 — a WebMCP call is metered on the webmcp path against the same allowance as local calls", async () => {
+    const relay = relayWith({ MCP_OVERAGE_LEDGER: "on" });
+    const jwt = await kaptionJwt(PHONE);
+    const first = await relay.post("/ext/usage/meter", { actionId: "act-00000011", tool: "summarize_conversation", client: "webmcp", source: "webmcp" }, jwt);
+    expect(await first.json()).toMatchObject({ metered: true, allowed: true, included: true, allowance: 1 });
+    await relay.post("/ext/usage/meter/settle", { actionId: "act-00000011", outcome: "ok", latency: "<1s" }, jwt);
+    // The allowance (1) is shared: the next call, from a local app, is past it and charged.
+    const second = await relay.post("/ext/usage/meter", { actionId: "act-00000012", tool: "query", client: "claude-ai" }, jwt);
+    expect(await second.json()).toMatchObject({ metered: true, allowed: true, included: false });
+    await relay.post("/ext/usage/meter/settle", { actionId: "act-00000012", outcome: "ok", latency: "<1s" }, jwt);
+    const account = (await deriveAccountRef(PHONE, PHONE_REF_SECRET))!;
+    const report = await relay.ledgers.get(`usage:${account}`)!.report("2026-11");
+    expect(report.rows.map((r) => [r.tool, r.path, r.app])).toEqual(
+      expect.arrayContaining([["summarize_conversation", "webmcp", "WebMCP (browser)"], ["query", "local", "Claude Desktop (local)"]]),
+    );
+  });
+
   it("business-plans.MCP_PAY.5 — the balance is a hard limit: no credit refuses with the reason", async () => {
     vi.stubGlobal("fetch", restApi({ allowance: { metered: true, allowance: 0 }, charge: () => ({ status: 402, body: { allowed: false, reason: "no_credit" } }) }).impl);
     const relay = relayWith({ MCP_OVERAGE_LEDGER: "on" });
