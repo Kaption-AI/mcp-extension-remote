@@ -42,6 +42,7 @@ import {
   localConnectionId,
   normalizeLocalApp,
   parseLocalBatch,
+  devicePath,
   hourOf,
   LATENCY_BUCKETS,
   OUTCOMES,
@@ -589,11 +590,12 @@ outerApp.post("/ext/usage/meter", async (c) => {
   if (meterOff(c)) return c.json({ metered: false, ttl_seconds: DEFAULT_ALLOWANCE_TTL_S }, 200, USAGE_CORS);
   try {
     const ledger = ledgerFor(c.env, caller.accountRef);
-    const app = normalizeLocalApp(client);
+    // mcp.WEBMCP.8 — a WebMCP call (source "webmcp") is metered on its own path, against the same allowance.
+    const { path, app, connection } = devicePath(body.source, client);
     const decision = await meterCall(
       c.env,
       ledger,
-      { actionId: `local:${actionId}`, path: "local", connection: localConnectionId(app), app, tool, kind: knownKind(tool, body.kind) },
+      { actionId: `local:${actionId}`, path, connection, app, tool, kind: knownKind(tool, body.kind) },
       async () => caller.phone,
       Date.now(),
     );

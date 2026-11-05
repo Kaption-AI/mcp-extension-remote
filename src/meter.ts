@@ -470,11 +470,12 @@ export class MeterStore {
     const cells: UsageCell[] = [];
     for (const h of stale) {
       this.sql.exec(`DELETE FROM meter_hold WHERE action_id = ?`, h.action_id);
-      if (String(h.path) !== "local" || !isToolName(h.tool)) continue;
+      // mcp.WEBMCP.8 — a WebMCP hold is a device's call too.
+      if ((String(h.path) !== "local" && String(h.path) !== "webmcp") || !isToolName(h.tool)) continue;
       const at = Number(h.at);
       cells.push({
         hour: Math.floor(at / 3_600_000) * 3_600_000,
-        path: "local",
+        path: String(h.path) as UsagePath,
         connection: String(h.conn),
         app: String(h.app),
         tool: String(h.tool),

@@ -188,6 +188,16 @@ describe("local batches (mcp-usage-accounting.LOCAL.8)", () => {
     expect(parseLocalBatch({ batchId: "batch_0001", rows: Array(501).fill(row) }, now)).toHaveProperty("error");
   });
 
+  it("mcp.WEBMCP.8 — a row with source webmcp is its own path, app and connection; an unknown source refuses the batch", () => {
+    const parsed = parseLocalBatch({ batchId: "batch_0002", rows: [{ ...row, client: "webmcp", source: "webmcp", tool: "summarize_conversation", kind: "" }, row] }, now);
+    expect("cells" in parsed && parsed.cells.map((c) => [c.path, c.app, c.connection])).toEqual([
+      ["webmcp", "WebMCP (browser)", "webmcp-browser"],
+      ["local", "Claude Desktop (local)", "local-claude-desktop"],
+    ]);
+    expect(parseLocalBatch({ batchId: "batch_0002", rows: [{ ...row, source: "cloud" }] }, now)).toHaveProperty("error");
+    expect(parseLocalBatch({ batchId: "batch_0002", rows: [{ ...row, source: "local" }] }, now)).not.toHaveProperty("error");
+  });
+
   it("drops a kind that is not one of the tool's enum values", () => {
     const parsed = parseLocalBatch({ batchId: "batch_0001", rows: [{ ...row, kind: "secret" }] }, now);
     expect("cells" in parsed && parsed.cells[0].kind).toBe("");

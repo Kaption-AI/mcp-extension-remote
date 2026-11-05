@@ -8,7 +8,22 @@
  * arguments, message text, chat ids, contacts or media (mcp-usage-accounting.PRIVACY.1).
  */
 
-export type UsagePath = "cloud" | "local";
+export type UsagePath = "cloud" | "local" | "webmcp";
+
+/**
+ * mcp.WEBMCP.8 (kaptionai kext/features/mcp/mcp.feature.yaml) — a call made by a browser agent through WebMCP, the
+ * browser's own tool API in the WhatsApp page. The extension reports it like a local-hub call with `source: "webmcp"`;
+ * it is its own path with one app and one connection, and counts toward the same allowance as every other call.
+ */
+export const WEBMCP_APP = "WebMCP (browser)";
+export const WEBMCP_CONNECTION = "webmcp-browser";
+
+/** mcp.WEBMCP.8 — the path, app and connection of a device-reported call: WebMCP when `source` says so, else local. */
+export function devicePath(source: unknown, client: string | null | undefined): { path: UsagePath; app: string; connection: string } {
+  if (source === "webmcp") return { path: "webmcp", app: WEBMCP_APP, connection: WEBMCP_CONNECTION };
+  const app = normalizeLocalApp(client);
+  return { path: "local", app, connection: localConnectionId(app) };
+}
 export type UsageOutcome = "ok" | "error" | "refused" | "offline" | "timeout";
 export type LatencyBucket = "<1s" | "1-3s" | "3-10s" | "10-30s" | ">30s";
 
@@ -209,11 +224,13 @@ export function parseLocalBatch(body: unknown, now: number): LocalBatch | { erro
     if (typeof repeats !== "number" || !Number.isInteger(repeats) || repeats < 0 || repeats > calls) {
       return { error: `rows[${i}].repeats must be 0–calls.` };
     }
-    const app = normalizeLocalApp(client);
+    if (row.source !== undefined && row.source !== "local" && row.source !== "webmcp") return { error: `rows[${i}].source is invalid.` };
+    // mcp.WEBMCP.8 — a WebMCP row is its own path.
+    const { path, app, connection } = devicePath(row.source, client);
     cells.push({
       hour,
-      path: "local",
-      connection: localConnectionId(app),
+      path,
+      connection,
       app,
       tool: row.tool,
       kind: knownKind(row.tool, kind),
@@ -358,7 +375,7 @@ export function buildReport(
         calls: 0,
         ok: 0,
         lastAt: lastAt.get(row.connection) ?? null,
-        active: row.path === "local" || activeGrants.has(row.connection),
+        active: row.path !== "cloud" || activeGrants.has(row.connection),
       }),
       row,
     );
