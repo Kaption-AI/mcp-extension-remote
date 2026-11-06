@@ -81,7 +81,8 @@
     "MCP_OVERAGE_LEDGER": "off",
     // disabled-gating.SWITCH.3-4 (owner 2026-11-06) — tool calls of these phones are checked against rest-api's
     // disabled-account answer; "*" = everyone, empty = nobody. Widen together with rest-api's DISABLED_FULL_GATING_PHONES.
-    "DISABLED_FULL_GATING_PHONES": "17373427172,17374202658",
+    // Launch 2026-11-06 (owner go): every account. Rollback: set back to "17373427172,17374202658" and merge.
+    "DISABLED_FULL_GATING_PHONES": "*",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },
