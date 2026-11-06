@@ -37,6 +37,7 @@ import {
   type UsageCell,
 } from "./usage";
 import { ledgerFor } from "./usage-ledger";
+import { DISABLED_CODE, DisabledGate } from "./disabled-gate";
 
 export class RelayMCP extends McpAgent<Env> {
   server = new McpServer({
@@ -152,6 +153,17 @@ export class RelayMCP extends McpAgent<Env> {
         const started = Date.now();
         const usage = this.usageContext(accountRef, routed.method, routed.params, started);
         let failure: unknown = null;
+        // disabled-gating.MCP.1-2 — a blocked Kaption account's call is refused before it reaches the extension or the
+        // meter; the plans, checkout and help tools keep answering. Unlisted phones: nothing asked (SWITCH.4).
+        const disabledText = await this.disabledRefusal(tool.name);
+        if (disabledText) {
+          failure = { code: DISABLED_CODE };
+          this.recordUsage(usage, failure, Date.now() - started);
+          return {
+            content: [{ type: "text" as const, text: `Error: ${disabledText}` }],
+            isError: true,
+          };
+        }
         // business-plans.MCP_LEDGER.4-7, MCP_ASYNC.1-6 — with the switches on, the account's ledger takes this call's
         // slot (and charges it past the allowance). In the common case the call is relayed at once and the reservation
         // runs beside it; it waits only when the session's view cannot tell. A known refusal refuses the call here.
@@ -262,6 +274,21 @@ export class RelayMCP extends McpAgent<Env> {
       /** business-plans.MCP_LEDGER.8, MCP_ASYNC.9 — the meter's gate: the call is recorded once its reservation is known. */
       gate: null as CloudGate | null,
     };
+  }
+
+  private disabledGate: DisabledGate | null = null;
+
+  /** disabled-gating.MCP.1, MCP.5 — the refusal text for this call, or null; any failure lets the call run. */
+  private async disabledRefusal(tool: string): Promise<string | null> {
+    const accountRef = this.getAccountRef();
+    if (!accountRef) return null;
+    this.disabledGate ??= new DisabledGate({ env: this.env, phone: () => meteringPhoneWithAlias(this.env, accountRef) });
+    try {
+      return await this.disabledGate.refusal(tool);
+    } catch (error) {
+      console.error("[disabled-gate] check failed:", error instanceof Error ? error.message : error);
+      return null;
+    }
   }
 
   /** business-plans.MCP_LEDGER.1, MCP_ASYNC.1 — the relay's own switch, checked before anything else. */
