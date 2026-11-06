@@ -18,6 +18,11 @@ export interface Env {
    * metered for the account); anything else: nothing is reserved, charged or marked, as before.
    */
   MCP_OVERAGE_LEDGER?: string;
+  /**
+   * disabled-gating.SWITCH.4 — phones whose tool calls are checked against rest-api's disabled-account answer
+   * ("*" = every account; unset or empty = nobody, every call runs as before). rest-api's own switch still decides.
+   */
+  DISABLED_FULL_GATING_PHONES?: string;
   OAUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
   INTERNAL_API_BASE_URL: string;

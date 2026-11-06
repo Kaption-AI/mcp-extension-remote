@@ -79,6 +79,9 @@
     // business-plans.MCP_LEDGER.1 — "on" lets the ledger meter Claude and ChatGPT overage (rest-api must also answer
     // metered for the account). Off: nothing is reserved, charged or marked.
     "MCP_OVERAGE_LEDGER": "off",
+    // disabled-gating.SWITCH.3-4 (owner 2026-11-06) — tool calls of these phones are checked against rest-api's
+    // disabled-account answer; "*" = everyone, empty = nobody. Widen together with rest-api's DISABLED_FULL_GATING_PHONES.
+    "DISABLED_FULL_GATING_PHONES": "17373427172",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },
