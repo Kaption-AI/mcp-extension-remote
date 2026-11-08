@@ -38,6 +38,7 @@ import {
 } from "./usage";
 import { ledgerFor } from "./usage-ledger";
 import { DISABLED_CODE, DisabledGate } from "./disabled-gate";
+import { beginUse, refundUse, usageConfigured, usageLine, usageMeta, type UseAnswer } from "./weekly-usage";
 
 export class RelayMCP extends McpAgent<Env> {
   server = new McpServer({
@@ -164,6 +165,18 @@ export class RelayMCP extends McpAgent<Env> {
             isError: true,
           };
         }
+        // weekly-plan-limits.SERVER.13 — a listed phone's call is counted on rest-api's weekly ledger before it runs
+        // (refused at the limit); mcp-usage-pricing.USAGE.5 — a usage phone also learns what is left. Unlisted: nothing.
+        const weekly = await this.weeklyUse(accountRef, tool.name);
+        if (weekly?.state === "refused") {
+          failure = { code: REFUSED_CODE };
+          this.recordUsage(usage, failure, Date.now() - started);
+          return {
+            content: [{ type: "text" as const, text: `Error: ${weekly.message}` }],
+            isError: true,
+            ...(weekly.usage ? { _meta: usageMeta(weekly.usage)! } : {}),
+          };
+        }
         // business-plans.MCP_LEDGER.4-7, MCP_ASYNC.1-6 — with the switches on, the account's ledger takes this call's
         // slot (and charges it past the allowance). In the common case the call is relayed at once and the reservation
         // runs beside it; it waits only when the session's view cannot tell. A known refusal refuses the call here.
@@ -210,11 +223,17 @@ export class RelayMCP extends McpAgent<Env> {
                 text: typeof result === "string" ? result : JSON.stringify(result, null, 2),
               },
               ...(marked.notice ? [{ type: "text" as const, text: marked.notice }] : []),
+              // mcp-usage-pricing.USAGE.7 — one short line when little is left or overage is being spent.
+              ...(weekly?.usage && usageLine(weekly.usage, weekly.lang) ? [{ type: "text" as const, text: usageLine(weekly.usage, weekly.lang)! }] : []),
             ],
             structuredContent: (isPlans ? plansStructuredContent(result) : undefined) ?? { result },
+            // mcp-usage-pricing.USAGE.6 — what is left, on every result (only while MCP_USAGE_IN_RESULTS is on).
+            ...(weekly?.usage ? { _meta: usageMeta(weekly.usage)! } : {}),
           };
         } catch (err: any) {
           failure = err ?? new Error("Tool call failed");
+          // weekly-plan-limits.LIMITS.14 — a failed call gives its weekly slot (or its charge) back.
+          if (weekly?.state === "run" && weekly.counted) this.refundWeeklyUse(accountRef, weekly.actionId);
           return {
             content: [
               {
@@ -288,6 +307,32 @@ export class RelayMCP extends McpAgent<Env> {
     } catch (error) {
       console.error("[disabled-gate] check failed:", error instanceof Error ? error.message : error);
       return null;
+    }
+  }
+
+  /**
+   * weekly-plan-limits.SERVER.13, mcp-usage-pricing.USAGE.5 — count this call on the weekly ledger and/or fetch what is
+   * left. Null (the call runs as before) when both switches are unset, the phone is not listed, or anything fails.
+   */
+  private async weeklyUse(accountRef: string, tool: string): Promise<UseAnswer | null> {
+    if (!usageConfigured(this.env)) return null;
+    try {
+      const phone = await meteringPhoneWithAlias(this.env, accountRef);
+      return await beginUse(this.env, phone, tool, crypto.randomUUID());
+    } catch (error) {
+      console.error("[weekly-usage] check failed:", error instanceof Error ? error.message : error);
+      return null;
+    }
+  }
+
+  private refundWeeklyUse(accountRef: string, actionId: string): void {
+    const work = meteringPhoneWithAlias(this.env, accountRef)
+      .then((phone) => (phone ? refundUse(this.env, phone, actionId) : undefined))
+      .catch(() => undefined);
+    try {
+      (this as any).ctx?.waitUntil?.(work);
+    } catch {
+      // The Durable Object stays alive while the promise runs.
     }
   }
 

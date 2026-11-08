@@ -82,6 +82,7 @@ import {
 import { acceptsHtml, ensureProblemJson, problem } from "./problem";
 import { checkClientRegistration, isAllowedRedirectUri } from "./redirect-policy";
 import { rateLimitHeaders, tooManyRequests } from "./rate-limit";
+import { withUsageHeaders } from "./weekly-usage";
 import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
@@ -93,7 +94,7 @@ export { InternalRelay } from "./internal-relay";
 // Pass directly to OAuthProvider as apiHandlers so ctx.props (set by
 // the OAuthProvider after token validation) flows through correctly.
 const sseHandler = withConnectionProps(RelayMCP.serveSSE("/sse") as unknown as WorkerHandler);
-const mcpHandler = withConnectionProps(RelayMCP.serve("/mcp") as unknown as WorkerHandler);
+const mcpHandler = withUsageResponseHeaders(withConnectionProps(RelayMCP.serve("/mcp") as unknown as WorkerHandler));
 
 /**
  * mcp-usage-accounting.RECORD.7 — adds the connection (OAuth grant id) to the session's props, so each call is
@@ -118,6 +119,16 @@ function withConnectionProps(handler: WorkerHandler): WorkerHandler {
         // Counting never stands in the way of a call.
       }
       return handler.fetch(request, env, ctx);
+    },
+  };
+}
+
+/** mcp-usage-pricing.USAGE.6 — the X-Kaption-Usage-* headers on a JSON /mcp tool result (unset switch: untouched). */
+function withUsageResponseHeaders(handler: WorkerHandler): WorkerHandler {
+  return {
+    async fetch(request: Request, env: any, ctx: any) {
+      const response = await handler.fetch(request, env, ctx);
+      return withUsageHeaders(response, env);
     },
   };
 }
