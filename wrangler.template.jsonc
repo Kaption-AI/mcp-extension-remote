@@ -85,9 +85,11 @@
     "DISABLED_FULL_GATING_PHONES": "*",
     // weekly-plan-limits.SERVER.13 (monorepo) — phones whose cloud calls are counted on rest-api's weekly ledger; "*" =
     // everyone, empty = nobody. Turn on together with rest-api's WEEKLY_PLAN_LIMITS_PHONES (owner test: "17373427172").
-    "WEEKLY_PLAN_LIMITS_PHONES": "",
+    // Owner test 2026-11-08: 17373427172 only (never 17374202658). Rollback: "" and merge.
+    "WEEKLY_PLAN_LIMITS_PHONES": "17373427172",
     // mcp-usage-pricing.USAGE.5-8 — "on"/"*" or a phone list: tool results say what is left. Empty/"off": unchanged.
-    "MCP_USAGE_IN_RESULTS": "",
+    // Owner test 2026-11-08: 17373427172 only. Rollback: "" and merge.
+    "MCP_USAGE_IN_RESULTS": "17373427172",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },
