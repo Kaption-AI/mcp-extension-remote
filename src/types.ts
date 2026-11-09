@@ -23,6 +23,16 @@ export interface Env {
    * ("*" = every account; unset or empty = nobody, every call runs as before). rest-api's own switch still decides.
    */
   DISABLED_FULL_GATING_PHONES?: string;
+  /**
+   * weekly-plan-limits.SERVER.13 (Kaption-AI monorepo) — phones whose cloud calls are counted on rest-api's weekly ledger
+   * ("*" = every account; unset or empty = nobody, every call runs as before). rest-api's own switch still decides.
+   */
+  WEEKLY_PLAN_LIMITS_PHONES?: string;
+  /**
+   * mcp-usage-pricing.USAGE.5-8 — "on"/"*" or a phone list: tool results carry what is left (_meta.kaption.usage, the
+   * X-Kaption-Usage-* headers, a short line near the limit). Unset or "off": responses are byte-for-byte unchanged.
+   */
+  MCP_USAGE_IN_RESULTS?: string;
   OAUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
   INTERNAL_API_BASE_URL: string;

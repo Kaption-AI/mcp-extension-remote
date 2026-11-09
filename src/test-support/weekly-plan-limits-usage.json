@@ -1,0 +1,5015 @@
+{
+ "source": "Kaption-AI/kaptionai kaption-core/fixtures/stateless/weekly-plan-limits.json (usage section) at 44a6ef1a1",
+ "usage": [
+  {
+   "value": null,
+   "lang": "en",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": null,
+   "lang": "es",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": null,
+   "lang": "pt",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": null,
+   "lang": "pt-BR",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": null,
+   "lang": "fr",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": null,
+   "lang": null,
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": "x",
+   "lang": "en",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": "x",
+   "lang": "es",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": "x",
+   "lang": "pt",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": "x",
+   "lang": "pt-BR",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": "x",
+   "lang": "fr",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": "x",
+   "lang": null,
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": [],
+   "lang": "en",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": [],
+   "lang": "es",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": [],
+   "lang": "pt",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": [],
+   "lang": "pt-BR",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": [],
+   "lang": "fr",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": [],
+   "lang": null,
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {},
+   "lang": "en",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {},
+   "lang": "es",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": {},
+   "lang": "pt",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {},
+   "lang": "pt-BR",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {},
+   "lang": "fr",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {},
+   "lang": null,
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "day"
+   },
+   "lang": "en",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "day"
+   },
+   "lang": "es",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "day"
+   },
+   "lang": "pt",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "day"
+   },
+   "lang": "pt-BR",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "day"
+   },
+   "lang": "fr",
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "day"
+   },
+   "lang": null,
+   "normalized": null,
+   "meta": null,
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 3 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 4,
+      "limit": 20,
+      "left": 16,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 4,
+      "limit": 20,
+      "left": 16,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 4,
+      "limit": 20,
+      "left": 16,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 4,
+      "limit": 20,
+      "left": 16,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 4,
+      "limit": 20,
+      "left": 16,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 4,
+    "limit": 20,
+    "left": 16,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 4,
+      "limit": 20,
+      "left": 16,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 16,
+      "limit": 20,
+      "left": 4,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 4 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 16,
+      "limit": 20,
+      "left": 4,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 4 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 16,
+      "limit": 20,
+      "left": 4,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 4 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 16,
+      "limit": 20,
+      "left": 4,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 4 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 16,
+      "limit": 20,
+      "left": 4,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 4 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 16,
+    "limit": 20,
+    "left": 4,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 16,
+      "limit": 20,
+      "left": 4,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 4 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 19,
+      "limit": 20,
+      "left": 1,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 1 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 19,
+      "limit": 20,
+      "left": 1,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: queda 1 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 19,
+      "limit": 20,
+      "left": 1,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: resta 1 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 19,
+      "limit": 20,
+      "left": 1,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: resta 1 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 19,
+      "limit": 20,
+      "left": 1,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 1 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 19,
+    "limit": 20,
+    "left": 1,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 19,
+      "limit": 20,
+      "left": 1,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 1 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 20,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 20,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 0 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 20,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 0 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 20,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 0 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 20,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 20,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 20,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 3 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 99,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 20,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 99,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 20,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 99,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 20,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 99,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 20,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 99,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 20,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 99,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 20,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 20,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 3 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "other",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "other",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 3 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "other",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "other",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "other",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "other",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "device",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "device",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 240,
+      "limit": 250,
+      "left": 10,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 10 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 240,
+      "limit": 250,
+      "left": 10,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 10 de 250 acciones de Claude y ChatGPT este mes (se renueva el día 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 240,
+      "limit": 250,
+      "left": 10,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 10 de 250 ações do Claude e ChatGPT neste mês (renova no dia 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 240,
+      "limit": 250,
+      "left": 10,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 10 de 250 ações do Claude e ChatGPT neste mês (renova no dia 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 240,
+      "limit": 250,
+      "left": 10,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 10 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 240,
+    "limit": 250,
+    "left": 10,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 240,
+      "limit": 250,
+      "left": 10,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 10 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 100,
+      "limit": 250,
+      "left": 150,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 100,
+      "limit": 250,
+      "left": 150,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 100,
+      "limit": 250,
+      "left": 150,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 100,
+      "limit": 250,
+      "left": 150,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 100,
+      "limit": 250,
+      "left": 150,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 100,
+    "limit": 250,
+    "left": 150,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 100,
+      "limit": 250,
+      "left": 150,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 0 de 250 acciones de Claude y ChatGPT este mes (se renueva el día 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 0 de 250 ações do Claude e ChatGPT neste mês (renova no dia 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 0 de 250 ações do Claude e ChatGPT neste mês (renova no dia 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 370,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 120,
+       "cap": 1000,
+       "balance": 880
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this month's 250 actions; $1.20 of your $10 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 370,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 120,
+       "cap": 1000,
+       "balance": 880
+      }
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: superaste las 250 acciones de este mes; usaste US$1,20 de tus US$10."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 370,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 120,
+       "cap": 1000,
+       "balance": 880
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: você passou das 250 ações deste mês; usou US$1,20 dos seus US$10."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 370,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 120,
+       "cap": 1000,
+       "balance": 880
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: você passou das 250 ações deste mês; usou US$1,20 dos seus US$10."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 370,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 120,
+       "cap": 1000,
+       "balance": 880
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this month's 250 actions; $1.20 of your $10 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 370,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 120,
+     "cap": 1000,
+     "balance": 880
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 370,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 120,
+       "cap": 1000,
+       "balance": 880
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this month's 250 actions; $1.20 of your $10 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 300,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 50,
+       "cap": null,
+       "balance": null
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this month's 250 actions; $0.50 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 300,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 50,
+       "cap": null,
+       "balance": null
+      }
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: superaste las 250 acciones de este mes; usaste US$0,50."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 300,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 50,
+       "cap": null,
+       "balance": null
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: você passou das 250 ações deste mês; usou US$0,50."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 300,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 50,
+       "cap": null,
+       "balance": null
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: você passou das 250 ações deste mês; usou US$0,50."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 300,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 50,
+       "cap": null,
+       "balance": null
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this month's 250 actions; $0.50 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 300,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 50,
+     "cap": null,
+     "balance": null
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 300,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 50,
+       "cap": null,
+       "balance": null
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this month's 250 actions; $0.50 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 0,
+       "cap": 1000,
+       "balance": 1000
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 0,
+       "cap": 1000,
+       "balance": 1000
+      }
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 0 de 250 acciones de Claude y ChatGPT este mes (se renueva el día 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 0,
+       "cap": 1000,
+       "balance": 1000
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 0 de 250 ações do Claude e ChatGPT neste mês (renova no dia 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 0,
+       "cap": 1000,
+       "balance": 1000
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 0 de 250 ações do Claude e ChatGPT neste mês (renova no dia 1)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 0,
+       "cap": 1000,
+       "balance": 1000
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 250,
+    "limit": 250,
+    "left": 0,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 0,
+     "cap": 1000,
+     "balance": 1000
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 250,
+      "limit": 250,
+      "left": 0,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 0,
+       "cap": 1000,
+       "balance": 1000
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 0 of 250 Claude and ChatGPT actions left this month (resets on the 1st)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3.7
+    }
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 25,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 625,
+       "cap": 2000,
+       "balance": -3
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this week's 20 actions; $6.25 of your $20 used."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3.7
+    }
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 25,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 625,
+       "cap": 2000,
+       "balance": -3
+      }
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: superaste las 20 acciones de esta semana; usaste US$6,25 de tus US$20."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3.7
+    }
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 25,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 625,
+       "cap": 2000,
+       "balance": -3
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: você passou das 20 ações desta semana; usou US$6,25 dos seus US$20."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3.7
+    }
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 25,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 625,
+       "cap": 2000,
+       "balance": -3
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: você passou das 20 ações desta semana; usou US$6,25 dos seus US$20."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3.7
+    }
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 25,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 625,
+       "cap": 2000,
+       "balance": -3
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this week's 20 actions; $6.25 of your $20 used."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3.7
+    }
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 25,
+    "limit": 20,
+    "left": 0,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 625,
+     "cap": 2000,
+     "balance": -3
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 25,
+      "limit": 20,
+      "left": 0,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 625,
+       "cap": 2000,
+       "balance": -3
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: past this week's 20 actions; $6.25 of your $20 used."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": "x"
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": "x"
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: quedan 3 de 20 acciones de Claude y ChatGPT esta semana (se renueva el lunes)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": "x"
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": "x"
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": "x"
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": "x"
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 17,
+    "limit": 20,
+    "left": 3,
+    "resetsAt": "2026-11-16T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 17,
+      "limit": 20,
+      "left": 3,
+      "resetsAt": "2026-11-16T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: 3 of 20 Claude and ChatGPT actions left this week (resets Monday)."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 1,
+       "cap": 100,
+       "balance": 99
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: extra Claude and ChatGPT actions; $0.01 of your $1 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 1,
+       "cap": 100,
+       "balance": 99
+      }
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": "Kaption: acciones extra de Claude y ChatGPT; usaste US$0,01 de tus US$1."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 1,
+       "cap": 100,
+       "balance": 99
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: ações extras do Claude e ChatGPT; usou US$0,01 dos seus US$1."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 1,
+       "cap": 100,
+       "balance": 99
+      }
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": "Kaption: ações extras do Claude e ChatGPT; usou US$0,01 dos seus US$1."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 1,
+       "cap": 100,
+       "balance": 99
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: extra Claude and ChatGPT actions; $0.01 of your $1 used."
+  },
+  {
+   "value": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "lang": null,
+   "normalized": {
+    "period": "month",
+    "used": 900,
+    "limit": null,
+    "left": null,
+    "resetsAt": "2026-12-01T00:00:00.000Z",
+    "source": "ledger",
+    "overage": {
+     "enabled": true,
+     "spent": 1,
+     "cap": 100,
+     "balance": 99
+    }
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "month",
+      "used": 900,
+      "limit": null,
+      "left": null,
+      "resetsAt": "2026-12-01T00:00:00.000Z",
+      "source": "ledger",
+      "overage": {
+       "enabled": true,
+       "spent": 1,
+       "cap": 100,
+       "balance": 99
+      }
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": "Kaption: extra Claude and ChatGPT actions; $0.01 of your $1 used."
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": -2,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": 5,
+    "source": "ledger"
+   },
+   "lang": "en",
+   "normalized": {
+    "period": "week",
+    "used": 0,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": "",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 0,
+      "limit": 0,
+      "left": 0,
+      "resetsAt": "",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": -2,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": 5,
+    "source": "ledger"
+   },
+   "lang": "es",
+   "normalized": {
+    "period": "week",
+    "used": 0,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": "",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 0,
+      "limit": 0,
+      "left": 0,
+      "resetsAt": "",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "es",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": -2,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": 5,
+    "source": "ledger"
+   },
+   "lang": "pt",
+   "normalized": {
+    "period": "week",
+    "used": 0,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": "",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 0,
+      "limit": 0,
+      "left": 0,
+      "resetsAt": "",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": -2,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": 5,
+    "source": "ledger"
+   },
+   "lang": "pt-BR",
+   "normalized": {
+    "period": "week",
+    "used": 0,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": "",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 0,
+      "limit": 0,
+      "left": 0,
+      "resetsAt": "",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "pt",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": -2,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": 5,
+    "source": "ledger"
+   },
+   "lang": "fr",
+   "normalized": {
+    "period": "week",
+    "used": 0,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": "",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 0,
+      "limit": 0,
+      "left": 0,
+      "resetsAt": "",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  },
+  {
+   "value": {
+    "period": "week",
+    "used": -2,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": 5,
+    "source": "ledger"
+   },
+   "lang": null,
+   "normalized": {
+    "period": "week",
+    "used": 0,
+    "limit": 0,
+    "left": 0,
+    "resetsAt": "",
+    "source": "ledger",
+    "overage": null
+   },
+   "meta": {
+    "kaption": {
+     "usage": {
+      "period": "week",
+      "used": 0,
+      "limit": 0,
+      "left": 0,
+      "resetsAt": "",
+      "source": "ledger",
+      "overage": null
+     }
+    }
+   },
+   "langUsed": "en",
+   "result": null
+  }
+ ]
+}
