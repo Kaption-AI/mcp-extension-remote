@@ -315,10 +315,13 @@ export class RelayMCP extends McpAgent<Env> {
    * left. Null (the call runs as before) when both switches are unset, the phone is not listed, or anything fails.
    */
   private async weeklyUse(accountRef: string, tool: string): Promise<UseAnswer | null> {
-    if (!usageConfigured(this.env)) return null;
+    // lifetime-local.HOLDER.7 — rest-api's /access (the disabled gate's cached answer) says this account counts by the
+    // week (every Lifetime account): its cloud calls are counted on the weekly ledger like a listed phone's.
+    const weekly = this.disabledGate?.weekly() === true;
+    if (!usageConfigured(this.env) && !weekly) return null;
     try {
       const phone = await meteringPhoneWithAlias(this.env, accountRef);
-      return await beginUse(this.env, phone, tool, crypto.randomUUID());
+      return await beginUse(this.env, phone, tool, crypto.randomUUID(), fetch, { weekly });
     } catch (error) {
       console.error("[weekly-usage] check failed:", error instanceof Error ? error.message : error);
       return null;

@@ -48,6 +48,12 @@ export interface AccessAnswer {
   blocked: boolean;
   message: string | null;
   ttlSeconds: number;
+  /**
+   * lifetime-local.HOLDER.7 (Kaption-AI monorepo) — rest-api counts this account's Claude/ChatGPT calls by the week
+   * (`weekly: true`, or a weekly-limit-reached refusal): every Lifetime account, and free/lifetime inside
+   * WEEKLY_PLAN_LIMITS. The relay then counts each cloud call on the weekly ledger (weekly-usage.ts beginUse).
+   */
+  weekly: boolean;
 }
 
 /** disabled-gating.MCP.3 — rest-api's answer, or null when it cannot answer (MCP.5). */
@@ -61,10 +67,11 @@ export async function fetchAccess(env: GateEnv, phone: string, fetchImpl: typeof
       signal: AbortSignal.timeout(5_000),
     });
     if (res.status !== 200) return null;
-    const d = (await res.json().catch(() => null)) as { blocked?: unknown; message?: unknown; ttl_seconds?: unknown } | null;
+    const d = (await res.json().catch(() => null)) as { blocked?: unknown; message?: unknown; ttl_seconds?: unknown; weekly?: unknown; code?: unknown } | null;
     if (!d || typeof d.blocked !== "boolean") return null;
     const ttl = typeof d.ttl_seconds === "number" && Number.isInteger(d.ttl_seconds) && d.ttl_seconds >= 30 && d.ttl_seconds <= 86_400 ? d.ttl_seconds : DEFAULT_TTL_S;
-    return { blocked: d.blocked, message: typeof d.message === "string" && d.message ? d.message : null, ttlSeconds: ttl };
+    const weekly = d.weekly === true || d.code === "weekly-limit-reached";
+    return { blocked: d.blocked, message: typeof d.message === "string" && d.message ? d.message : null, ttlSeconds: ttl, weekly };
   } catch {
     return null;
   }
@@ -99,13 +106,22 @@ export class DisabledGate {
     if (!phone) return null;
     if (!gatedPhone(phone, this.deps.env)) {
       // Outside the rollout: nothing is asked; the room is not looked up again for a while.
-      this.view = { answer: { blocked: false, message: null, ttlSeconds: DEFAULT_TTL_S }, until: now + DEFAULT_TTL_S * 1000 };
+      this.view = { answer: { blocked: false, message: null, ttlSeconds: DEFAULT_TTL_S, weekly: false }, until: now + DEFAULT_TTL_S * 1000 };
       return null;
     }
     const answer = await fetchAccess(this.deps.env, phone, this.deps.fetch ?? fetch);
     if (!answer) return null;
     this.view = { answer, until: now + answer.ttlSeconds * 1000 };
     return this.text(answer);
+  }
+
+  /**
+   * lifetime-local.HOLDER.7 — whether rest-api's last answer (still within its ttl) said this account is counted by the
+   * week. False before any answer, after the ttl, or outside the rollout.
+   */
+  weekly(): boolean {
+    const now = (this.deps.now ?? Date.now)();
+    return !!this.view && this.view.until > now && this.view.answer.weekly;
   }
 
   private text(answer: AccessAnswer): string | null {

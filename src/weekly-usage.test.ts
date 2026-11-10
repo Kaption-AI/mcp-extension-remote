@@ -152,6 +152,59 @@ describe("weekly-plan-limits.SERVER.13 the relay counts cloud calls on the weekl
   });
 });
 
+describe("lifetime-local.HOLDER.7 every Lifetime account is counted by the week (rest-api's /access says weekly)", () => {
+  /** rest-api for a Lifetime holder outside the relay's WEEKLY_PLAN_LIMITS_PHONES: /access says weekly, /use counts 20 a week. */
+  function lifetimeApi(left: number) {
+    const posts: { path: string; body: any }[] = [];
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      const path = String(url).replace("https://api.test/__internal/mcp-ledger/", "");
+      const body = JSON.parse(String(init?.body));
+      posts.push({ path, body });
+      if (path === "access") {
+        return Response.json(left > 0
+          ? { blocked: false, weekly: true, remaining: left, limit: 20, ttl_seconds: 60 }
+          : { blocked: true, code: "weekly-limit-reached", message: REFUSAL, resets_at: "2026-11-16T00:00:00.000Z", ttl_seconds: 60 });
+      }
+      if (body.change === "refund") { left++; return Response.json({ allowed: true, counted: true, refunded: true }); }
+      if (left <= 0) return Response.json({ allowed: false, code: "weekly-limit-reached", message: REFUSAL }, { status: 402 });
+      left--;
+      return Response.json({ allowed: true, counted: true, duplicate: false });
+    });
+    return { fetcher, posts };
+  }
+
+  it("lifetime-local.HOLDER.7 a Lifetime phone not in WEEKLY_PLAN_LIMITS_PHONES: 20 calls are reserved, the 21st is refused", async () => {
+    const rest = lifetimeApi(20);
+    vi.stubGlobal("fetch", rest.fetcher);
+    const { client, room } = await session({ DISABLED_FULL_GATING_PHONES: "*", WEEKLY_PLAN_LIMITS_PHONES: "15555550101" });
+    for (let i = 0; i < 20; i++) expect((await call(client, "query", { action: "chats" })).isError).toBeFalsy();
+    expect(rest.posts.filter((p) => p.path === "use" && p.body.change === "reserve")).toHaveLength(20);
+    const res = await call(client, "query", { action: "chats" });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toBe(`Error: ${REFUSAL}`);
+    expect(room.calls).toHaveLength(20);
+  });
+
+  it("lifetime-local.HOLDER.7 a failed Lifetime call gives its slot back", async () => {
+    const rest = lifetimeApi(5);
+    vi.stubGlobal("fetch", rest.fetcher);
+    const { client, waits } = await session({ DISABLED_FULL_GATING_PHONES: "*" }, true);
+    expect((await call(client, "query", { action: "chats" })).isError).toBe(true);
+    await Promise.all(waits);
+    const uses = rest.posts.filter((p) => p.path === "use");
+    expect(uses.map((p) => p.body.change)).toEqual(["reserve", "refund"]);
+    expect(uses[1].body.actionId).toBe(uses[0].body.actionId);
+  });
+
+  it("lifetime-local.HOLDER.7 an account /access does not call weekly (Pro, Business, Free outside the switch) is never counted", async () => {
+    const rest = restApi();
+    vi.stubGlobal("fetch", rest.fetcher);
+    const { client } = await session({ DISABLED_FULL_GATING_PHONES: "*" });
+    expect((await call(client, "query", { action: "chats" })).isError).toBeFalsy();
+    expect(rest.posts.map((p) => p.path)).toEqual(["access"]);
+  });
+});
+
 describe("mcp-usage-pricing.USAGE.5-7 what is left, in every tool result", () => {
   it("mcp-usage-pricing.USAGE.6 _meta.kaption.usage on the result, from the ledger answer; the line only near the limit", async () => {
     const rest = restApi({ left: 5 });

@@ -182,13 +182,17 @@ async function postLedger(env: UsageEnv, path: string, body: unknown, fetchImpl:
 }
 
 /**
- * weekly-plan-limits.SERVER.13, COUNT.10; mcp-usage-pricing.USAGE.5 — before one cloud call: count it (listed phones)
+ * weekly-plan-limits.SERVER.13, COUNT.10; mcp-usage-pricing.USAGE.5 — before one cloud call: count it (listed phones, or
+ * opts.weekly: rest-api's /access said the account is counted by the week — lifetime-local.HOLDER.7)
  * and/or fetch what is left (usage phones). Null = nothing to do (both switches off for this phone, an uncounted tool,
  * or rest-api could not answer: the call runs as before).
  */
-export async function beginUse(env: UsageEnv, phone: string | null, tool: string, actionId: string, fetchImpl: typeof fetch = fetch): Promise<UseAnswer | null> {
+export async function beginUse(env: UsageEnv, phone: string | null, tool: string, actionId: string, fetchImpl: typeof fetch = fetch,
+  opts: { weekly?: boolean } = {}): Promise<UseAnswer | null> {
   if (!phone || UNCOUNTED_TOOLS.has(tool)) return null;
-  const count = weeklyPhone(phone, env);
+  // lifetime-local.HOLDER.7 — also counted when rest-api's /access said the account is weekly (every Lifetime account,
+  // whatever WEEKLY_PLAN_LIMITS_PHONES says here); rest-api still decides at /use.
+  const count = weeklyPhone(phone, env) || opts.weekly === true;
   const show = usagePhone(phone, env);
   if (!count && !show) return null;
   // Usage only: /access answers it without counting anything.
