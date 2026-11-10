@@ -122,6 +122,15 @@ const KIND_FIELDS: Record<string, { field: string; values: readonly string[] }> 
   },
   manage_lists: { field: "action", values: ["list", "get", "create", "edit", "delete", "add_chat", "remove_chat"] },
   call_recordings: { field: "action", values: ["list", "get", "search"] },
+  // whatsapp-channels-communities.LEDGER.1 — the action of a channel or community call (its credit class is the extension's).
+  manage_channels: {
+    field: "action",
+    values: ["list", "get", "scheduled", "create", "update", "post", "schedule", "cross_post", "cancel"],
+  },
+  manage_communities: {
+    field: "action",
+    values: ["list", "get", "digest", "create", "add_groups", "remove_groups", "announce", "schedule_announcement", "cancel"],
+  },
 };
 
 export function usageKind(tool: string, args: unknown): string {

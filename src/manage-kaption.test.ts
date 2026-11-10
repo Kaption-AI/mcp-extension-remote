@@ -32,6 +32,8 @@ import { RelayMCP } from "./relay-mcp";
 import { RelayRoom } from "./relay-room";
 import { MANAGE_KAPTION_TOOLS, readManageFeatures, visibleManageTools, type ManageFeatures } from "./manage-kaption";
 import { PLANS_UI_HTML } from "./plans-ui";
+import { TOOLS, getToolsForMCP } from "./tools";
+import channelsCanonical from "./test-support/mcp-channels-communities-tools.json";
 import { FakeKV } from "./test-support/fake-kv";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -162,6 +164,109 @@ describe("scheduled-status.MCP the status tools on the relay", () => {
   });
 });
 
+const CHANNEL_TOOLS = ["manage_channels", "manage_communities", "list_channels", "get_channel", "list_communities", "get_community"];
+
+// The relay's object schemas carry additionalProperties: false and the SDK adds $schema and lists a union as anyOf.
+function normalized(v: any): any {
+  if (Array.isArray(v)) return v.map(normalized);
+  if (!v || typeof v !== "object") return v;
+  const out: any = {};
+  for (const [k, x] of Object.entries(v)) {
+    if ((k === "additionalProperties" && x === false) || k === "$schema") continue;
+    out[k === "anyOf" ? "oneOf" : k] = normalized(x);
+  }
+  return out;
+}
+
+describe("whatsapp-channels-communities.HUB the channels and communities tools on the relay", () => {
+  it("HUB.2 are the pinned kaptionai definitions, verbatim", async () => {
+    expect(TOOLS.slice(-CHANNEL_TOOLS.length).map((t) => t.name)).toEqual(channelsCanonical.map((t: any) => t.name));
+    const exported = getToolsForMCP();
+    for (const want of channelsCanonical as any[]) {
+      const got = exported.find((t) => t.name === want.name)!;
+      expect({ name: got.name, title: got.title, description: got.description, inputSchema: normalized(got.inputSchema), annotations: got.annotations }).toEqual(want);
+    }
+    const listed = (await (await session(fakeRoom({ channels_communities: true }))).client.listTools()).tools;
+    for (const want of channelsCanonical as any[]) {
+      const got = listed.find((t) => t.name === want.name)!;
+      expect(got.title).toBe(want.title);
+      expect(got.description).toBe(want.description);
+      expect(got.annotations).toEqual(want.annotations);
+      expect(normalized(got.inputSchema)).toEqual(want.inputSchema);
+    }
+  });
+
+  it("HUB.1 the key: only channels_communities true shows them", () => {
+    expect([...visibleManageTools([{ channels_communities: true }])]).toEqual(CHANNEL_TOOLS);
+    expect([...visibleManageTools([{ manage_kaption: true, business_agent: true, plans: true, scheduled_status: true }])].filter((n) => CHANNEL_TOOLS.includes(n))).toEqual([]);
+    expect(readManageFeatures({ channels_communities: true, local_send: true })).toEqual({ channels_communities: true });
+    expect(readManageFeatures({ channels_communities: "true" })).toEqual({});
+  });
+
+  it("HUB.1 hidden for an older extension (no key) and when it is false; listed when true", async () => {
+    for (const features of [{}, { manage_kaption: true, scheduled_status: true }, { channels_communities: false }]) {
+      const names = (await (await session(fakeRoom(features))).client.listTools()).tools.map((t) => t.name);
+      for (const name of CHANNEL_TOOLS) expect(names).not.toContain(name);
+      expect(names).toContain("query");
+    }
+    expect(await (await session(fakeRoom({ channels_communities: true }))).manage()).toEqual(CHANNEL_TOOLS);
+  });
+
+  it("follows a change of the feature with list_changed", async () => {
+    const room = fakeRoom({ manage_kaption: true });
+    const s = await session(room);
+    room.features = { manage_kaption: true, channels_communities: true };
+    await s.agent.refreshManageVisibility();
+    await flush();
+    expect(await s.manage()).toEqual([...visibleManageTools([{ manage_kaption: true }]), ...CHANNEL_TOOLS]);
+    expect(s.changed.tools).toBeGreaterThan(0);
+  });
+
+  it("MCP_ROUTES.3 reads are relayed as manage_* list / get; writes as is; a hidden one never reaches the extension", async () => {
+    const hiddenRoom = fakeRoom({ manage_kaption: true, scheduled_status: true });
+    const hidden: any = await (await session(hiddenRoom)).client.callTool({ name: "list_channels", arguments: {} });
+    expect(hidden.isError).toBe(true);
+    expect(hiddenRoom.calls).toEqual([]);
+
+    const room = fakeRoom({ channels_communities: true });
+    const s = await session(room);
+    const cross = { action: "cross_post", text: "Closed", targets: ["1@newsletter", { id: "2@g.us", text: "Closed Friday" }] };
+    const digest = { action: "digest", id: "2@g.us", since: "2026-11-08T00:00:00-03:00" };
+    for (const [name, args] of [
+      ["list_channels", {}], ["get_channel", { id: "1@newsletter" }], ["list_communities", {}], ["get_community", { id: "2@g.us" }],
+      ["manage_channels", cross], ["manage_communities", digest],
+    ] as Array<[string, Record<string, unknown>]>) {
+      const res: any = await s.client.callTool({ name, arguments: args });
+      expect(res.isError, name).toBeFalsy();
+    }
+    expect(room.calls).toEqual([
+      { method: "manage_channels", params: { action: "list" } },
+      { method: "manage_channels", params: { id: "1@newsletter", action: "get" } },
+      { method: "manage_communities", params: { action: "list" } },
+      { method: "manage_communities", params: { id: "2@g.us", action: "get" } },
+      { method: "manage_channels", params: cross },
+      { method: "manage_communities", params: digest },
+    ]);
+  });
+
+  it("refuses unknown actions and more than 14 posts / 10 targets / 20 groups before the extension", async () => {
+    const room = fakeRoom({ channels_communities: true });
+    const s = await session(room);
+    const post = { text: "x", datetime: "2026-11-16T09:00:00-03:00" };
+    for (const [name, args] of [
+      ["manage_channels", { action: "delete", id: "a@newsletter" }],
+      ["manage_channels", { action: "schedule", id: "a@newsletter", posts: Array(15).fill(post) }],
+      ["manage_channels", { action: "cross_post", text: "x", targets: Array(11).fill("a@newsletter") }],
+      ["manage_communities", { action: "add_groups", id: "c@g.us", group_ids: Array(21).fill("g@g.us") }],
+      ["get_community", {}],
+    ] as Array<[string, Record<string, unknown>]>) {
+      const res: any = await s.client.callTool({ name, arguments: args });
+      expect(res.isError, name).toBe(true);
+    }
+    expect(room.calls).toEqual([]);
+  });
+});
+
 describe("mcp-manage-kaption.LIST.2 an MCP session lists the manage tools from its extension's features", () => {
   it("hidden for an extension that said nothing, or when none is connected", async () => {
     expect(await (await session(fakeRoom({}))).manage()).toEqual([]);
@@ -176,7 +281,7 @@ describe("mcp-manage-kaption.LIST.2 an MCP session lists the manage tools from i
     expect(room.watchers).toEqual(["ab".repeat(32)]);
     expect(await s.manage()).toEqual(["get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug"]);
 
-    room.features = { manage_kaption: true, business_agent: true, plans: true, scheduled_status: true };
+    room.features = { manage_kaption: true, business_agent: true, plans: true, scheduled_status: true, channels_communities: true };
     await s.agent.refreshManageVisibility();
     await flush();
     expect(await s.manage()).toEqual(MANAGE_KAPTION_TOOLS);

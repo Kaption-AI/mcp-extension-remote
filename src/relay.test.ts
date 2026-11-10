@@ -68,14 +68,20 @@ describe("Tool registration", () => {
     "create_kaption_checkout_link",
     "manage_status",
     "list_status_posts",
+    "manage_channels",
+    "manage_communities",
+    "list_channels",
+    "get_channel",
+    "list_communities",
+    "get_community",
   ];
 
-  it("exports exactly 38 tools", () => {
-    expect(TOOLS).toHaveLength(38);
+  it("exports exactly 44 tools", () => {
+    expect(TOOLS).toHaveLength(44);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(37);
+    expect(CLOUD_TOOLS).toHaveLength(43);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 

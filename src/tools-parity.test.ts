@@ -38,6 +38,7 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
   it("same annotations and _meta for the manage tools (mcp-manage-kaption.LIST.2, UI.1)", () => {
     for (const name of [
       "get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug", "get_business_agent", "manage_business_agent", "kaption_plans", "create_kaption_checkout_link", "manage_status", "list_status_posts",
+      "manage_channels", "manage_communities", "list_channels", "get_channel", "list_communities", "get_community",
     ]) {
       const cloud = CLOUD_TOOLS.find((t) => t.name === name)!;
       const local = LOCAL_TOOLS.find((t) => t.name === name)!;
@@ -108,6 +109,12 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       create_kaption_checkout_link: { plan: "pro", period: "monthly", method: "card" },
       manage_status: { action: "schedule", datetime: "2026-12-01T09:00:00Z", text: "Open today", background_color: "#25D366", font: 2 },
       list_status_posts: { filter: "all" },
+      manage_channels: { action: "cross_post", text: "Closed on Friday", targets: ["1@newsletter", { id: "2@g.us", text: "Closed Friday" }] },
+      manage_communities: { action: "create", name: "Neighbours", group_ids: ["3@g.us"] },
+      list_channels: {},
+      get_channel: { id: "1@newsletter" },
+      list_communities: {},
+      get_community: { id: "2@g.us" },
     };
     // scheduled-status.MCP.9 — a status photo by upload ref (preferred) and the inline form, parsed the same.
     const statusSamples = [
@@ -155,6 +162,10 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       create_kaption_checkout_link: { plan: "free" },
       manage_status: { action: "post_now", text: "Hi" },
       list_status_posts: { filter: "later" },
+      manage_channels: { action: "schedule", id: "1@newsletter", posts: Array(15).fill({ text: "x", datetime: "2026-12-01T09:00:00Z" }) },
+      manage_communities: { action: "delete", id: "2@g.us" },
+      get_channel: {},
+      get_community: {},
     };
 
     // scheduled-status.MCP.9 — a GIF, a malformed ref, a ref with extra fields and a path are refused by both.

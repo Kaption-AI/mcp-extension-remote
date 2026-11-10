@@ -25,6 +25,9 @@ export interface ManageFeatures {
   plans?: boolean;
   /** scheduled-status.MCP — SCHEDULED_STATUS_POSTS on for this account (manage_status, list_status_posts). */
   scheduled_status?: boolean;
+  /** whatsapp-channels-communities.HUB.1 — MCP_CHANNELS_COMMUNITIES on for this account (manage_channels, manage_communities
+   * and their read tools). */
+  channels_communities?: boolean;
 }
 
 /** mcp-manage-kaption.LIST.2 — which `features` key shows each tool. */
@@ -40,11 +43,17 @@ export const MANAGE_TOOL_FEATURE: Readonly<Record<string, keyof ManageFeatures>>
   create_kaption_checkout_link: 'plans',
   manage_status: 'scheduled_status',
   list_status_posts: 'scheduled_status',
+  manage_channels: 'channels_communities',
+  manage_communities: 'channels_communities',
+  list_channels: 'channels_communities',
+  get_channel: 'channels_communities',
+  list_communities: 'channels_communities',
+  get_community: 'channels_communities',
 });
 
 export const MANAGE_KAPTION_TOOLS: readonly string[] = Object.freeze(Object.keys(MANAGE_TOOL_FEATURE));
 
-const FEATURE_KEYS: Array<keyof ManageFeatures> = ['manage_kaption', 'business_agent', 'plans', 'scheduled_status'];
+const FEATURE_KEYS: Array<keyof ManageFeatures> = ['manage_kaption', 'business_agent', 'plans', 'scheduled_status', 'channels_communities'];
 
 /** Only booleans are kept; anything else (missing, "yes", 1) is unknown, which counts as no. */
 export function readManageFeatures(features: unknown): ManageFeatures {
