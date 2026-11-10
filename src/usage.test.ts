@@ -118,6 +118,10 @@ describe("usage vocabulary (mcp-usage-accounting.RECORD)", () => {
     expect(usageKind("query", { entity: "Alice" })).toBe("");
     expect(usageKind("manage_chat", { action: "archive", chat_id: "123@c.us" })).toBe("archive");
     expect(usageKind("send_message", { to: "123", text: "hi" })).toBe("");
+    // whatsapp-channels-communities.LEDGER.1 — the channel and community actions are kept, ids never.
+    expect(usageKind("manage_channels", { action: "cross_post", text: "secret" })).toBe("cross_post");
+    expect(usageKind("manage_communities", { action: "schedule_announcement", id: "1@g.us" })).toBe("schedule_announcement");
+    expect(usageKind("manage_channels", { action: "1@newsletter" })).toBe("");
   });
 
   it("buckets latency coarsely (RECORD.3)", () => {

@@ -1,0 +1,313 @@
+[
+  {
+    "name": "manage_channels",
+    "title": "Manage WhatsApp channels",
+    "description": "Manage the user's WhatsApp Channels: list the channels they own, administer or follow (followers, verified), read one with its latest posts, create a channel, change its name or description, and post or schedule text updates to a channel they own or administer, one at a time, a plan of up to 14 posts, or the same post across up to 10 channels and communities (cross_post, spaced 2 minutes apart). Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Assistants can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; check with action \"scheduled\". To plan a week of posts: read the channel with get (its latest posts show the tone), draft the posts and their times, show the user the whole plan, and after a yes call schedule with posts; at most 14 posts wait per channel. Text only (max 2000 characters). Channel ids end in @newsletter; community ids end in @g.us (a community means its announcement group).\n\nReading channels is list_channels and get_channel.\n\nActions:\n  list: { action: \"list\" }\n  get: { action: \"get\", id: \"120363000000000001@newsletter\" }\n  scheduled: { action: \"scheduled\", filter: \"pending\" | \"all\" | \"sent\" }\n  create: { action: \"create\", name: \"Store news\", description: \"Offers and opening hours\" }\n  update: { action: \"update\", id: \"120363000000000001@newsletter\", description: \"New hours: 9-18\" }\n  post: { action: \"post\", id: \"120363000000000001@newsletter\", text: \"We open at 10 today\" }\n  schedule: { action: \"schedule\", id: \"120363000000000001@newsletter\", text: \"Weekly menu\", datetime: \"2026-11-16T09:00:00-03:00\" }\n  schedule a week: { action: \"schedule\", id: \"120363000000000001@newsletter\", posts: [{ text: \"Monday offer\", datetime: \"2026-11-16T09:00:00-03:00\" }, { text: \"Tuesday offer\", datetime: \"2026-11-17T09:00:00-03:00\" }] }\n  cross_post: { action: \"cross_post\", text: \"Closed on Friday\", datetime: \"2026-11-20T08:00:00-03:00\", targets: [\"120363000000000001@newsletter\", \"120363000000000002@g.us\"] }\n  cancel: { action: \"cancel\", id: \"<scheduled post id>\" }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "scheduled",
+            "create",
+            "update",
+            "post",
+            "schedule",
+            "cross_post",
+            "cancel"
+          ],
+          "description": "list, get, scheduled, create, update, post, schedule, cross_post or cancel"
+        },
+        "id": {
+          "type": "string",
+          "description": "Channel id (…@newsletter), or the scheduled post id (cancel)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Channel name, 1-100 characters (create, update)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Channel description, up to 2048 characters (create, update)"
+        },
+        "text": {
+          "type": "string",
+          "description": "The post (max 2000 characters) (post, schedule, cross_post)"
+        },
+        "datetime": {
+          "type": "string",
+          "description": "ISO 8601 date-time in the future (schedule; optional for cross_post: omit to post as soon as the limits allow)"
+        },
+        "posts": {
+          "type": "array",
+          "maxItems": 14,
+          "description": "Up to 14 posts to schedule in one call, each { text, datetime } (instead of text + datetime)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "The post (max 2000 characters)"
+              },
+              "datetime": {
+                "type": "string",
+                "description": "ISO 8601 date-time in the future"
+              }
+            },
+            "required": [
+              "text",
+              "datetime"
+            ]
+          }
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 10,
+          "description": "cross_post: up to 10 channel ids (…@newsletter) or community ids (…@g.us), or { id, text } for a per-target text",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Channel or community id"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Channel or community id"
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "This target's text"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            ]
+          }
+        },
+        "filter": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "all",
+            "sent"
+          ],
+          "description": "scheduled: default \"pending\" (waiting, missed or failed)"
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "annotations": {
+      "title": "Manage WhatsApp channels",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "manage_communities",
+    "title": "Manage WhatsApp communities",
+    "description": "Manage the user's WhatsApp Communities: list them, read one with its announcement group and linked groups, get a digest of recent activity per group (message counts and the latest texts, to summarise), create a community, add or remove groups, and post or schedule announcements (up to 14 in one call) to the announcement group of a community the user administers. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Assistants can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; check with action \"scheduled\". To summarise a community, call digest and write the summary from what it returns. Announcements count as group messages: a few a day at most. Text only (max 2000 characters). Community and group ids end in @g.us.\n\nReading communities is list_communities and get_community.\n\nActions:\n  list: { action: \"list\" }\n  get: { action: \"get\", id: \"120363000000000002@g.us\" }\n  digest: { action: \"digest\", id: \"120363000000000002@g.us\", since: \"2026-11-08T00:00:00-03:00\" }\n  create: { action: \"create\", name: \"Neighbours\", description: \"Street news\", group_ids: [\"120363000000000003@g.us\"] }\n  add_groups: { action: \"add_groups\", id: \"120363000000000002@g.us\", group_ids: [\"120363000000000004@g.us\"] }\n  remove_groups: { action: \"remove_groups\", id: \"120363000000000002@g.us\", group_ids: [\"120363000000000004@g.us\"] }\n  announce: { action: \"announce\", id: \"120363000000000002@g.us\", text: \"Meeting moved to 19:00\" }\n  schedule_announcement: { action: \"schedule_announcement\", id: \"120363000000000002@g.us\", text: \"Reminder: meeting today\", datetime: \"2026-11-16T18:00:00-03:00\" }\n  cancel: { action: \"cancel\", id: \"<scheduled announcement id>\" }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "digest",
+            "create",
+            "add_groups",
+            "remove_groups",
+            "announce",
+            "schedule_announcement",
+            "cancel"
+          ],
+          "description": "list, get, digest, create, add_groups, remove_groups, announce, schedule_announcement or cancel"
+        },
+        "id": {
+          "type": "string",
+          "description": "Community id (…@g.us), or the scheduled announcement id (cancel)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Community name, 1-100 characters (create)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Community description, up to 2048 characters (create)"
+        },
+        "group_ids": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "description": "Group id (…@g.us)"
+          },
+          "description": "Up to 20 groups the user administers (create, add_groups, remove_groups)"
+        },
+        "text": {
+          "type": "string",
+          "description": "The announcement (max 2000 characters) (announce, schedule_announcement)"
+        },
+        "datetime": {
+          "type": "string",
+          "description": "ISO 8601 date-time in the future (schedule_announcement)"
+        },
+        "posts": {
+          "type": "array",
+          "maxItems": 14,
+          "description": "Up to 14 posts to schedule in one call, each { text, datetime } (instead of text + datetime)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "The post (max 2000 characters)"
+              },
+              "datetime": {
+                "type": "string",
+                "description": "ISO 8601 date-time in the future"
+              }
+            },
+            "required": [
+              "text",
+              "datetime"
+            ]
+          }
+        },
+        "since": {
+          "type": "string",
+          "description": "digest: ISO 8601 start (default 24 hours ago, at most 7 days)"
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "annotations": {
+      "title": "Manage WhatsApp communities",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "list_channels",
+    "title": "List WhatsApp channels",
+    "description": "List the WhatsApp Channels the user owns, administers or follows: id, name, role, followers, verified, and how many posts are waiting to be posted. Changes nothing.\n\nExample: {}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      }
+    },
+    "annotations": {
+      "title": "List WhatsApp channels",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_channel",
+    "title": "Get WhatsApp channel",
+    "description": "Read one WhatsApp Channel: its details, the latest posts WhatsApp has loaded (text and time) and its waiting scheduled posts. Changes nothing.\n\nExample: { id: \"120363000000000001@newsletter\" }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Channel id (…@newsletter)"
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "annotations": {
+      "title": "Get WhatsApp channel",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_communities",
+    "title": "List WhatsApp communities",
+    "description": "List the user's WhatsApp Communities: id, name, announcement group, number of groups, whether the user is an admin, and how many announcements are waiting. Changes nothing.\n\nExample: {}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      }
+    },
+    "annotations": {
+      "title": "List WhatsApp communities",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_community",
+    "title": "Get WhatsApp community",
+    "description": "Read one WhatsApp Community: its announcement group, its linked groups (members, whether the user can post) and its waiting announcements. Changes nothing.\n\nExample: { id: \"120363000000000002@g.us\" }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Community id (…@g.us)"
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "annotations": {
+      "title": "Get WhatsApp community",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]
