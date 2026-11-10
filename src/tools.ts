@@ -706,20 +706,17 @@ export const TOOLS: ToolDefinition[] = [
   },
   // whatsapp-channels-communities.HUB (kaptionai features/kext/whatsapp-channels-communities.feature.yaml) — WhatsApp
   // Channels and Communities. Listed only while a connected extension said features.channels_communities
-  // (manage-kaption.ts). manage_channels / manage_communities write; list_channels, get_channel, list_communities and
-  // get_community read through TOOL_ROUTES. Verbatim from kaptionai kext/scripts/mcp-channels-communities-tools.json
+  // (manage-kaption.ts). manage_channels / manage_communities only write; list_channels, get_channel,
+  // list_scheduled_channel_posts, list_communities, get_community and get_community_digest read through TOOL_ROUTES. Verbatim from kaptionai kext/scripts/mcp-channels-communities-tools.json
   // (channelsCommunitiesTools test); the same on the local hub and the cloud relay (tools-parity.test.ts).
   {
     name: "manage_channels",
     description: [
-      "Manage the user's WhatsApp Channels: list the channels they own, administer or follow (followers, verified), read one with its latest posts, create a channel, change its name or description, and post or schedule text updates to a channel they own or administer, one at a time, a plan of up to 14 posts, or the same post across up to 10 channels and communities (cross_post, spaced 2 minutes apart). Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Assistants can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; check with action \"scheduled\". To plan a week of posts: read the channel with get (its latest posts show the tone), draft the posts and their times, show the user the whole plan, and after a yes call schedule with posts; at most 14 posts wait per channel. Text only (max 2000 characters). Channel ids end in @newsletter; community ids end in @g.us (a community means its announcement group).",
+      "Change the user's WhatsApp Channels: create a channel, change its name or description, and post or schedule text updates to a channel they own or administer, one at a time, a plan of up to 14 posts, or the same post across up to 10 channels and communities (cross_post, spaced 2 minutes apart), or cancel a waiting post. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Assistants can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; list_scheduled_channel_posts shows what is still waiting. To plan a week of posts: read the channel with get_channel (its latest posts show the tone), draft the posts and their times, show the user the whole plan, and after a yes call schedule with posts; at most 14 posts wait per channel. Text only (max 2000 characters). Channel ids end in @newsletter; community ids end in @g.us (a community means its announcement group).",
       "",
-      "Reading channels is list_channels and get_channel.",
+      "Reading channels is list_channels and get_channel; waiting posts and announcements are list_scheduled_channel_posts.",
       "",
       "Actions:",
-      "  list: { action: \"list\" }",
-      "  get: { action: \"get\", id: \"120363000000000001@newsletter\" }",
-      "  scheduled: { action: \"scheduled\", filter: \"pending\" | \"all\" | \"sent\" }",
       "  create: { action: \"create\", name: \"Store news\", description: \"Offers and opening hours\" }",
       "  update: { action: \"update\", id: \"120363000000000001@newsletter\", description: \"New hours: 9-18\" }",
       "  post: { action: \"post\", id: \"120363000000000001@newsletter\", text: \"We open at 10 today\" }",
@@ -729,7 +726,7 @@ export const TOOLS: ToolDefinition[] = [
       "  cancel: { action: \"cancel\", id: \"<scheduled post id>\" }",
     ].join("\n"),
     inputSchema: z.object({
-      action: z.enum(["list", "get", "scheduled", "create", "update", "post", "schedule", "cross_post", "cancel"]).describe("list, get, scheduled, create, update, post, schedule, cross_post or cancel"),
+      action: z.enum(["create", "update", "post", "schedule", "cross_post", "cancel"]).describe("create, update, post, schedule, cross_post or cancel"),
       id: z.string().optional().describe("Channel id (…@newsletter), or the scheduled post id (cancel)"),
       name: z.string().optional().describe("Channel name, 1-100 characters (create, update)"),
       description: z.string().optional().describe("Channel description, up to 2048 characters (create, update)"),
@@ -746,21 +743,17 @@ export const TOOLS: ToolDefinition[] = [
           text: z.string().optional().describe("This target's text"),
         }),
       ])).max(10).optional().describe("cross_post: up to 10 channel ids (…@newsletter) or community ids (…@g.us), or { id, text } for a per-target text"),
-      filter: z.enum(["pending", "all", "sent"]).optional().describe("scheduled: default \"pending\" (waiting, missed or failed)"),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
     name: "manage_communities",
     description: [
-      "Manage the user's WhatsApp Communities: list them, read one with its announcement group and linked groups, get a digest of recent activity per group (message counts and the latest texts, to summarise), create a community, add or remove groups, and post or schedule announcements (up to 14 in one call) to the announcement group of a community the user administers. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Assistants can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; check with action \"scheduled\". To summarise a community, call digest and write the summary from what it returns. Announcements count as group messages: a few a day at most. Text only (max 2000 characters). Community and group ids end in @g.us.",
+      "Change the user's WhatsApp Communities: create a community, add or remove groups, and post or schedule announcements (up to 14 in one call) to the announcement group of a community the user administers, or cancel a waiting announcement. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Assistants can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; list_scheduled_channel_posts shows what is still waiting. Announcements count as group messages: a few a day at most. Text only (max 2000 characters). Community and group ids end in @g.us.",
       "",
-      "Reading communities is list_communities and get_community.",
+      "Reading communities is list_communities and get_community; a summary of recent activity is get_community_digest; waiting announcements are list_scheduled_channel_posts.",
       "",
       "Actions:",
-      "  list: { action: \"list\" }",
-      "  get: { action: \"get\", id: \"120363000000000002@g.us\" }",
-      "  digest: { action: \"digest\", id: \"120363000000000002@g.us\", since: \"2026-11-08T00:00:00-03:00\" }",
       "  create: { action: \"create\", name: \"Neighbours\", description: \"Street news\", group_ids: [\"120363000000000003@g.us\"] }",
       "  add_groups: { action: \"add_groups\", id: \"120363000000000002@g.us\", group_ids: [\"120363000000000004@g.us\"] }",
       "  remove_groups: { action: \"remove_groups\", id: \"120363000000000002@g.us\", group_ids: [\"120363000000000004@g.us\"] }",
@@ -769,7 +762,7 @@ export const TOOLS: ToolDefinition[] = [
       "  cancel: { action: \"cancel\", id: \"<scheduled announcement id>\" }",
     ].join("\n"),
     inputSchema: z.object({
-      action: z.enum(["list", "get", "digest", "create", "add_groups", "remove_groups", "announce", "schedule_announcement", "cancel"]).describe("list, get, digest, create, add_groups, remove_groups, announce, schedule_announcement or cancel"),
+      action: z.enum(["create", "add_groups", "remove_groups", "announce", "schedule_announcement", "cancel"]).describe("create, add_groups, remove_groups, announce, schedule_announcement or cancel"),
       id: z.string().optional().describe("Community id (…@g.us), or the scheduled announcement id (cancel)"),
       name: z.string().optional().describe("Community name, 1-100 characters (create)"),
       description: z.string().optional().describe("Community description, up to 2048 characters (create)"),
@@ -780,7 +773,6 @@ export const TOOLS: ToolDefinition[] = [
         text: z.string().describe("The post (max 2000 characters)"),
         datetime: z.string().describe("ISO 8601 date-time in the future"),
       })).max(14).optional().describe("Up to 14 posts to schedule in one call, each { text, datetime } (instead of text + datetime)"),
-      since: z.string().optional().describe("digest: ISO 8601 start (default 24 hours ago, at most 7 days)"),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
@@ -808,6 +800,20 @@ export const TOOLS: ToolDefinition[] = [
     }),
   },
   {
+    name: "list_scheduled_channel_posts",
+    description: [
+      "List the channel posts and community announcements waiting to be posted from this computer (or all of them, or the ones already posted): id, channel or community, text, time and state. Changes nothing.",
+      "",
+      "Examples:",
+      "  Waiting to be posted: {}",
+      "  Everything: { filter: \"all\" }",
+    ].join("\n"),
+    inputSchema: z.object({
+      filter: z.enum(["pending", "all", "sent"]).optional().describe("Default: \"pending\" (waiting, missed or failed)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
     name: "list_communities",
     description: [
       "List the user's WhatsApp Communities: id, name, announcement group, number of groups, whether the user is an admin, and how many announcements are waiting. Changes nothing.",
@@ -827,6 +833,19 @@ export const TOOLS: ToolDefinition[] = [
     ].join("\n"),
     inputSchema: z.object({
       id: z.string().describe("Community id (…@g.us)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
+  {
+    name: "get_community_digest",
+    description: [
+      "Recent activity in one WhatsApp Community, per group: message counts and the latest texts WhatsApp has loaded on this computer, to write a summary from (no participant ids or numbers). Changes nothing.",
+      "",
+      "Example: { id: \"120363000000000002@g.us\", since: \"2026-11-08T00:00:00-03:00\" }",
+    ].join("\n"),
+    inputSchema: z.object({
+      id: z.string().describe("Community id (…@g.us)"),
+      since: z.string().optional().describe("ISO 8601 start (default 24 hours ago, at most 7 days)"),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
@@ -850,6 +869,8 @@ export const TOOL_ROUTES: Record<string, { method: string; action: string }> = {
   get_channel: { method: "manage_channels", action: "get" },
   list_communities: { method: "manage_communities", action: "list" },
   get_community: { method: "manage_communities", action: "get" },
+  list_scheduled_channel_posts: { method: "manage_channels", action: "scheduled" },
+  get_community_digest: { method: "manage_communities", action: "digest" },
 };
 
 /** The call the extension receives for a tool call: a routed read becomes its manage_* method and action. */
@@ -909,6 +930,8 @@ const TOOL_TITLES: Record<string, string> = {
   get_channel: "Get WhatsApp channel",
   list_communities: "List WhatsApp communities",
   get_community: "Get WhatsApp community",
+  list_scheduled_channel_posts: "List scheduled channel posts",
+  get_community_digest: "Get community digest",
 };
 
 // Safety annotations use OpenAI's review definitions:
@@ -965,6 +988,8 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_channel: { title: "Get WhatsApp channel", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   list_communities: { title: "List WhatsApp communities", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_community: { title: "Get WhatsApp community", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  list_scheduled_channel_posts: { title: "List scheduled channel posts", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  get_community_digest: { title: "Get community digest", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };
 
 // mcp.TOOLS — directories (Claude's Connectors Directory) read the listing name from annotations.title, so every tool

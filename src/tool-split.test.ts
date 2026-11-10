@@ -20,13 +20,6 @@ const READ_ACTIONS = new Set([
   "eval_results",
 ]);
 
-// whatsapp-channels-communities.HUB.2 — published verbatim from kaptionai kext/scripts/mcp-channels-communities-tools.json,
-// which still lets manage_channels / manage_communities read (list, get, scheduled, digest) and says "check with action".
-// They are listed only for accounts whose extension says features.channels_communities (owner-only flag), never to a
-// directory reviewer. Before they go wider the definitions must be split in kaptionai like every other manage_* tool;
-// this exemption covers exactly these two tools and nothing else.
-const PENDING_SPLIT = new Set(["manage_channels", "manage_communities"]);
-
 function actionsOf(name: string): string[] {
   const tool = getToolsForMCP().find((t) => t.name === name)!;
   const action = (tool.inputSchema.properties as Record<string, { enum?: string[] }>).action;
@@ -37,7 +30,7 @@ describe("read and write tools are separate (mcp.TOOLS.19)", () => {
   it("no write tool accepts a read action, and no read-only tool a write action", () => {
     for (const tool of getToolsForMCP()) {
       const actions = actionsOf(tool.name);
-      if (actions.length === 0 || PENDING_SPLIT.has(tool.name)) continue;
+      if (actions.length === 0) continue;
       if (tool.annotations?.readOnlyHint) {
         expect(actions.every((a) => READ_ACTIONS.has(a)), tool.name).toBe(true);
       } else {
@@ -82,10 +75,14 @@ describe("read and write tools are separate (mcp.TOOLS.19)", () => {
     expect(routeToolCall("list_reminders", { action: "delete" } as Record<string, unknown>).params.action).toBe("list");
   });
 
-  it("only the two pinned channel tools are exempt, and they stay gated", () => {
-    expect([...PENDING_SPLIT].every((name) => TOOLS.some((t) => t.name === name))).toBe(true);
+  it("routes the channel and community read tools to the manage_* read actions (whatsapp-channels-communities.MCP_ROUTES.4)", () => {
     expect(routeToolCall("list_channels", { action: "create" } as Record<string, unknown>)).toEqual({ method: "manage_channels", params: { action: "list" } });
     expect(routeToolCall("get_community", { id: "2@g.us" })).toEqual({ method: "manage_communities", params: { id: "2@g.us", action: "get" } });
+    expect(routeToolCall("list_scheduled_channel_posts", { filter: "all" })).toEqual({ method: "manage_channels", params: { filter: "all", action: "scheduled" } });
+    expect(routeToolCall("get_community_digest", { id: "2@g.us", since: "2026-11-08T00:00:00Z" })).toEqual({
+      method: "manage_communities",
+      params: { id: "2@g.us", since: "2026-11-08T00:00:00Z", action: "digest" },
+    });
   });
 
   it("passes every other tool through unchanged", () => {
@@ -96,7 +93,7 @@ describe("read and write tools are separate (mcp.TOOLS.19)", () => {
   });
 
   it("describes tools without telling the assistant what to call first", () => {
-    const text = JSON.stringify(getToolsForMCP().filter((t) => !PENDING_SPLIT.has(t.name)).map((t) => t.description));
+    const text = JSON.stringify(getToolsForMCP().map((t) => t.description));
     expect(text).not.toMatch(/\bFIRST\b|\bDo NOT\b|\bIMPORTANT\b|check with action/);
   });
 });
