@@ -72,16 +72,18 @@ describe("Tool registration", () => {
     "manage_communities",
     "list_channels",
     "get_channel",
+    "list_scheduled_channel_posts",
     "list_communities",
     "get_community",
+    "get_community_digest",
   ];
 
-  it("exports exactly 44 tools", () => {
-    expect(TOOLS).toHaveLength(44);
+  it("exports exactly 46 tools", () => {
+    expect(TOOLS).toHaveLength(46);
   });
 
   it("keeps local API credentials off the public cloud tool surface", () => {
-    expect(CLOUD_TOOLS).toHaveLength(43);
+    expect(CLOUD_TOOLS).toHaveLength(45);
     expect(CLOUD_TOOLS.map((tool) => tool.name)).not.toContain("get_api_info");
   });
 

@@ -47,8 +47,10 @@ export const MANAGE_TOOL_FEATURE: Readonly<Record<string, keyof ManageFeatures>>
   manage_communities: 'channels_communities',
   list_channels: 'channels_communities',
   get_channel: 'channels_communities',
+  list_scheduled_channel_posts: 'channels_communities',
   list_communities: 'channels_communities',
   get_community: 'channels_communities',
+  get_community_digest: 'channels_communities',
 });
 
 export const MANAGE_KAPTION_TOOLS: readonly string[] = Object.freeze(Object.keys(MANAGE_TOOL_FEATURE));

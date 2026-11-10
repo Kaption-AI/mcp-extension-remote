@@ -164,7 +164,7 @@ describe("scheduled-status.MCP the status tools on the relay", () => {
   });
 });
 
-const CHANNEL_TOOLS = ["manage_channels", "manage_communities", "list_channels", "get_channel", "list_communities", "get_community"];
+const CHANNEL_TOOLS = ["manage_channels", "manage_communities", "list_channels", "get_channel", "list_scheduled_channel_posts", "list_communities", "get_community", "get_community_digest"];
 
 // The relay's object schemas carry additionalProperties: false and the SDK adds $schema and lists a union as anyOf.
 function normalized(v: any): any {
@@ -231,10 +231,11 @@ describe("whatsapp-channels-communities.HUB the channels and communities tools o
     const room = fakeRoom({ channels_communities: true });
     const s = await session(room);
     const cross = { action: "cross_post", text: "Closed", targets: ["1@newsletter", { id: "2@g.us", text: "Closed Friday" }] };
-    const digest = { action: "digest", id: "2@g.us", since: "2026-11-08T00:00:00-03:00" };
+    const announce = { action: "announce", id: "2@g.us", text: "Meeting at 9" };
     for (const [name, args] of [
       ["list_channels", {}], ["get_channel", { id: "1@newsletter" }], ["list_communities", {}], ["get_community", { id: "2@g.us" }],
-      ["manage_channels", cross], ["manage_communities", digest],
+      ["manage_channels", cross], ["manage_communities", announce],
+      ["list_scheduled_channel_posts", { filter: "sent" }], ["get_community_digest", { id: "2@g.us", since: "2026-11-08T00:00:00-03:00" }],
     ] as Array<[string, Record<string, unknown>]>) {
       const res: any = await s.client.callTool({ name, arguments: args });
       expect(res.isError, name).toBeFalsy();
@@ -245,7 +246,9 @@ describe("whatsapp-channels-communities.HUB the channels and communities tools o
       { method: "manage_communities", params: { action: "list" } },
       { method: "manage_communities", params: { id: "2@g.us", action: "get" } },
       { method: "manage_channels", params: cross },
-      { method: "manage_communities", params: digest },
+      { method: "manage_communities", params: announce },
+      { method: "manage_channels", params: { filter: "sent", action: "scheduled" } },
+      { method: "manage_communities", params: { id: "2@g.us", since: "2026-11-08T00:00:00-03:00", action: "digest" } },
     ]);
   });
 
@@ -259,6 +262,10 @@ describe("whatsapp-channels-communities.HUB the channels and communities tools o
       ["manage_channels", { action: "cross_post", text: "x", targets: Array(11).fill("a@newsletter") }],
       ["manage_communities", { action: "add_groups", id: "c@g.us", group_ids: Array(21).fill("g@g.us") }],
       ["get_community", {}],
+      // mcp.TOOLS.19 — the manage tools take no read action any more.
+      ["manage_channels", { action: "scheduled" }],
+      ["manage_communities", { action: "digest", id: "c@g.us" }],
+      ["get_community_digest", {}],
     ] as Array<[string, Record<string, unknown>]>) {
       const res: any = await s.client.callTool({ name, arguments: args });
       expect(res.isError, name).toBe(true);

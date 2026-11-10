@@ -38,7 +38,7 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
   it("same annotations and _meta for the manage tools (mcp-manage-kaption.LIST.2, UI.1)", () => {
     for (const name of [
       "get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug", "get_business_agent", "manage_business_agent", "kaption_plans", "create_kaption_checkout_link", "manage_status", "list_status_posts",
-      "manage_channels", "manage_communities", "list_channels", "get_channel", "list_communities", "get_community",
+      "manage_channels", "manage_communities", "list_channels", "get_channel", "list_scheduled_channel_posts", "list_communities", "get_community", "get_community_digest",
     ]) {
       const cloud = CLOUD_TOOLS.find((t) => t.name === name)!;
       const local = LOCAL_TOOLS.find((t) => t.name === name)!;
@@ -115,6 +115,8 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       get_channel: { id: "1@newsletter" },
       list_communities: {},
       get_community: { id: "2@g.us" },
+      list_scheduled_channel_posts: { filter: "all" },
+      get_community_digest: { id: "2@g.us", since: "2026-11-08T00:00:00-03:00" },
     };
     // scheduled-status.MCP.9 — a status photo by upload ref (preferred) and the inline form, parsed the same.
     const statusSamples = [
@@ -166,6 +168,8 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       manage_communities: { action: "delete", id: "2@g.us" },
       get_channel: {},
       get_community: {},
+      list_scheduled_channel_posts: { filter: "later" },
+      get_community_digest: {},
     };
 
     // scheduled-status.MCP.9 — a GIF, a malformed ref, a ref with extra fields and a path are refused by both.
