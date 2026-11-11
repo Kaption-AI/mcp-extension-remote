@@ -27,6 +27,7 @@ import {
   syncGatedTools,
   visibleManageTools,
 } from "./manage-kaption";
+import { withLiveGuide } from "./live-guide";
 import {
   RepeatDetector,
   hourOf,
@@ -72,7 +73,8 @@ export class RelayMCP extends McpAgent<Env> {
       callHelp: async (args) => {
         const accountRef = this.getAccountRef();
         if (!accountRef) throw new Error(NO_ACCOUNT_TEXT);
-        return scrubInlineMedia(await this.relayToExtension(accountRef, "kaption_help", args));
+        // mcp-manage-kaption.HELP.5 — a guide read answers its live page (kaption://guide/{topic}).
+        return withLiveGuide(args, scrubInlineMedia(await this.relayToExtension(accountRef, "kaption_help", args)));
       },
     });
   }
@@ -212,6 +214,8 @@ export class RelayMCP extends McpAgent<Env> {
           if (tool.name !== "download_media") {
             result = scrubInlineMedia(result);
           }
+          // mcp-manage-kaption.HELP.5 — kaption_help "read" answers the guide's live page on kaptionai.com.
+          if (tool.name === "kaption_help") result = await withLiveGuide(cleanArgs, result);
 
           // mcp-usage-pricing.RELAY.1 — a usage warning from the extension becomes its own line after the result.
           const marked = takeUsageNotice(result);
