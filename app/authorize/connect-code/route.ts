@@ -24,6 +24,7 @@ import type { Env } from "@/src/types";
 import { errorBody, jsonError } from "@/app/i18n";
 import { withHeaders } from "@/src/problem";
 import { rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
+import { APPROVAL_REQUIRED_MESSAGE, refusesDirectSignIn } from "@/src/signed-request";
 
 const EXPIRED = "This code doesn't work any more. Get a new one in Kaption → AI assistants, then paste it here.";
 
@@ -74,6 +75,10 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (!oauthReq?.clientId) {
     return jsonError("Invalid or tampered OAuth state", { status: 400, code: "invalid_oauth_state", headers });
+  }
+  // mcp.ANY_CLIENT.3 — an app only the approval on the person's computer may connect (or one now refused).
+  if (await refusesDirectSignIn(env, oauthReq)) {
+    return jsonError(APPROVAL_REQUIRED_MESSAGE, { status: 403, code: "approval_required", headers });
   }
 
   const phone = await redeemConnectCode(connectDeps(env), input);

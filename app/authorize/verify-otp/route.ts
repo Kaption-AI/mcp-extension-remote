@@ -17,6 +17,7 @@ import {
 import type { Env } from "@/src/types";
 import { DEFAULT_CONNECTION_LIFETIME } from "@/src/connection-lifetime-options";
 import { jsonError } from "@/app/i18n";
+import { APPROVAL_REQUIRED_MESSAGE, refusesDirectSignIn } from "@/src/signed-request";
 
 export async function POST(request: Request): Promise<Response> {
   // [M7] Validate Content-Type
@@ -77,6 +78,10 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError("Invalid OAuth state: missing clientId",
       { status: 400, code: "invalid_oauth_state" },
     );
+  }
+  // mcp.ANY_CLIENT.3 — an app only the approval on the person's computer may connect (or one now refused).
+  if (await refusesDirectSignIn(env, oauthReq)) {
+    return jsonError(APPROVAL_REQUIRED_MESSAGE, { status: 403, code: "approval_required" });
   }
 
   try {
