@@ -33,6 +33,13 @@ export interface Env {
    * X-Kaption-Usage-* headers, a short line near the limit). Unset or "off": responses are byte-for-byte unchanged.
    */
   MCP_USAGE_IN_RESULTS?: string;
+  /**
+   * mcp-usage-ledger.SHADOW.1 (Kaption-AI monorepo) — phones whose ledger keeps its plan and judges its windows against
+   * it, without enforcing anything ("*" = everyone; unset, empty or "off" = nobody: nothing is fetched or stored).
+   */
+  LEDGER_SHADOW?: string;
+  /** mcp-usage-ledger.TOTALS.1 — global totals objects (default 16; "1" = the old single "global"). */
+  USAGE_TOTALS_SHARDS?: string;
   OAUTH_KV: KVNamespace;
   OAUTH_PROVIDER: OAuthHelpers;
   INTERNAL_API_BASE_URL: string;
