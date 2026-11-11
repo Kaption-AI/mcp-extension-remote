@@ -39,6 +39,7 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
     for (const name of [
       "get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug", "get_business_agent", "manage_business_agent", "kaption_plans", "create_kaption_checkout_link", "manage_status", "list_status_posts",
       "manage_channels", "manage_communities", "list_channels", "get_channel", "list_scheduled_channel_posts", "list_communities", "get_community", "get_community_digest",
+      "export_chat",
     ]) {
       const cloud = CLOUD_TOOLS.find((t) => t.name === name)!;
       const local = LOCAL_TOOLS.find((t) => t.name === name)!;
@@ -117,6 +118,8 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       get_community: { id: "2@g.us" },
       list_scheduled_channel_posts: { filter: "all" },
       get_community_digest: { id: "2@g.us", since: "2026-11-08T00:00:00-03:00" },
+      // chat-export.MCP.2
+      export_chat: { chat_id: "15555550101@c.us", format: "html", media: ["audio", "image"], last_n: 500, from: "2026-10-01T00:00:00Z" },
     };
     // scheduled-status.MCP.9 — a status photo by upload ref (preferred) and the inline form, parsed the same.
     const statusSamples = [
@@ -170,6 +173,7 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
       get_community: {},
       list_scheduled_channel_posts: { filter: "later" },
       get_community_digest: {},
+      export_chat: { chat_id: "1@c.us", format: "pdf" },
     };
 
     // scheduled-status.MCP.9 — a GIF, a malformed ref, a ref with extra fields and a path are refused by both.

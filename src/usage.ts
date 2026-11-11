@@ -131,6 +131,8 @@ const KIND_FIELDS: Record<string, { field: string; values: readonly string[] }> 
     field: "action",
     values: ["list", "get", "digest", "create", "add_groups", "remove_groups", "announce", "schedule_announcement", "cancel"],
   },
+  // chat-export.MCP.4 — the file format of an export_chat call (its 5-credit export class is the extension's).
+  export_chat: { field: "format", values: ["html", "csv"] },
 };
 
 export function usageKind(tool: string, args: unknown): string {

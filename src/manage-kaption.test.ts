@@ -34,6 +34,7 @@ import { MANAGE_KAPTION_TOOLS, readManageFeatures, visibleManageTools, type Mana
 import { PLANS_UI_HTML } from "./plans-ui";
 import { TOOLS, getToolsForMCP } from "./tools";
 import channelsCanonical from "./test-support/mcp-channels-communities-tools.json";
+import exportChatCanonical from "./test-support/mcp-export-chat-tools.json";
 import { FakeKV } from "./test-support/fake-kv";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -180,7 +181,7 @@ function normalized(v: any): any {
 
 describe("whatsapp-channels-communities.HUB the channels and communities tools on the relay", () => {
   it("HUB.2 are the pinned kaptionai definitions, verbatim", async () => {
-    expect(TOOLS.slice(-CHANNEL_TOOLS.length).map((t) => t.name)).toEqual(channelsCanonical.map((t: any) => t.name));
+    expect(TOOLS.map((t) => t.name).filter((n) => CHANNEL_TOOLS.includes(n))).toEqual(channelsCanonical.map((t: any) => t.name));
     const exported = getToolsForMCP();
     for (const want of channelsCanonical as any[]) {
       const got = exported.find((t) => t.name === want.name)!;
@@ -274,6 +275,48 @@ describe("whatsapp-channels-communities.HUB the channels and communities tools o
   });
 });
 
+describe("chat-export.MCP export_chat on the relay", () => {
+  it("chat-export.MCP.2, MCP.4 — is the pinned kaptionai definition, verbatim (read-only), last in TOOLS", async () => {
+    expect(TOOLS[TOOLS.length - 1].name).toBe("export_chat");
+    const want = (exportChatCanonical as any[])[0];
+    const got = getToolsForMCP().find((t) => t.name === "export_chat")!;
+    expect({ name: got.name, title: got.title, description: got.description, inputSchema: normalized(got.inputSchema), annotations: got.annotations }).toEqual(want);
+    expect(got.annotations?.readOnlyHint).toBe(true);
+    const listed = (await (await session(fakeRoom({ export_chat: true }))).client.listTools()).tools.find((t) => t.name === "export_chat")!;
+    expect(listed.description).toBe(want.description);
+    expect(listed.annotations).toEqual(want.annotations);
+    expect(normalized(listed.inputSchema)).toEqual(want.inputSchema);
+  });
+
+  it("chat-export.MCP.6 — only features.export_chat true shows it; an older extension (no key) never sees it", async () => {
+    expect([...visibleManageTools([{ export_chat: true }])]).toEqual(["export_chat"]);
+    expect(readManageFeatures({ export_chat: true, channels_communities: "yes" })).toEqual({ export_chat: true });
+    for (const features of [{}, { manage_kaption: true, channels_communities: true }, { export_chat: false }]) {
+      const names = (await (await session(fakeRoom(features))).client.listTools()).tools.map((t) => t.name);
+      expect(names).not.toContain("export_chat");
+    }
+  });
+
+  it("chat-export.MCP.6 — appears with list_changed, and is relayed as export_chat; hidden calls never reach the extension", async () => {
+    const room = fakeRoom({ manage_kaption: true });
+    const s = await session(room);
+    const hidden: any = await s.client.callTool({ name: "export_chat", arguments: { chat_id: "15555550101@c.us" } });
+    expect(hidden.isError).toBe(true);
+    expect(room.calls).toEqual([]);
+    room.features = { manage_kaption: true, export_chat: true };
+    await s.agent.refreshManageVisibility();
+    await flush();
+    expect(await s.manage()).toContain("export_chat");
+    expect(s.changed.tools).toBeGreaterThan(0);
+    const res: any = await s.client.callTool({ name: "export_chat", arguments: { chat_id: "15555550101@c.us", format: "csv" } });
+    expect(res.isError).toBeFalsy();
+    expect(room.calls).toEqual([{ method: "export_chat", params: { chat_id: "15555550101@c.us", format: "csv" } }]);
+    const bad: any = await s.client.callTool({ name: "export_chat", arguments: { chat_id: "1@c.us", format: "pdf" } });
+    expect(bad.isError).toBe(true);
+    expect(room.calls).toHaveLength(1);
+  });
+});
+
 describe("mcp-manage-kaption.LIST.2 an MCP session lists the manage tools from its extension's features", () => {
   it("hidden for an extension that said nothing, or when none is connected", async () => {
     expect(await (await session(fakeRoom({}))).manage()).toEqual([]);
@@ -288,7 +331,7 @@ describe("mcp-manage-kaption.LIST.2 an MCP session lists the manage tools from i
     expect(room.watchers).toEqual(["ab".repeat(32)]);
     expect(await s.manage()).toEqual(["get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug"]);
 
-    room.features = { manage_kaption: true, business_agent: true, plans: true, scheduled_status: true, channels_communities: true };
+    room.features = { manage_kaption: true, business_agent: true, plans: true, scheduled_status: true, channels_communities: true, export_chat: true };
     await s.agent.refreshManageVisibility();
     await flush();
     expect(await s.manage()).toEqual(MANAGE_KAPTION_TOOLS);

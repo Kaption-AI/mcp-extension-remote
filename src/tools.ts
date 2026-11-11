@@ -849,6 +849,28 @@ export const TOOLS: ToolDefinition[] = [
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
+  // chat-export.MCP.2, MCP.4, MCP.6 (kaptionai features/kext/chat-export.feature.yaml) — one chat as an Export chat file
+  // (html or csv) from the backup Kaption keeps on that computer, returned as base64_data like download_media. Listed only
+  // while a connected extension said features.export_chat (manage-kaption.ts). Verbatim from kaptionai
+  // kext/scripts/mcp-export-chat-tools.json (exportChat test); the same on the local hub and the cloud relay.
+  {
+    name: "export_chat",
+    description: [
+      "Export one WhatsApp chat as a file, from the backup Kaption keeps on this computer: its whole history in the same format as Kaption's Export chat (html, a self-contained page with transcripts and embedded media, or csv with one row per message). The file comes back as base64_data with filename, mimetype and size, plus missing: what is not in the file and why (files WhatsApp no longer has, files past the 16 MB answer, messages left out). Costs 5 credits. Changes nothing.",
+      "",
+      "Example: { chat_id: \"15555550101@c.us\", format: \"html\", media: [\"audio\", \"image\"], from: \"2026-10-01T00:00:00Z\" }",
+    ].join("\n"),
+    inputSchema: z.object({
+      chat_id: z.string().describe("Chat id (phone number, …@c.us or …@g.us)"),
+      format: z.enum(["html", "csv"]).optional().describe("html (default) or csv"),
+      include_transcripts: z.boolean().optional().describe("Voice-note transcripts in the file (default true)"),
+      media: z.array(z.enum(["audio", "image", "video", "document"])).optional().describe("Media kinds embedded in html (default audio, image, video; [] for text only)"),
+      last_n: z.number().optional().describe("Only the most recent N messages"),
+      from: z.string().optional().describe("ISO 8601 start (or relative, like 30d)"),
+      to: z.string().optional().describe("ISO 8601 end"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
+  },
 ];
 
 /**
@@ -932,6 +954,7 @@ const TOOL_TITLES: Record<string, string> = {
   get_community: "Get WhatsApp community",
   list_scheduled_channel_posts: "List scheduled channel posts",
   get_community_digest: "Get community digest",
+  export_chat: "Export chat",
 };
 
 // Safety annotations use OpenAI's review definitions:
@@ -990,6 +1013,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_community: { title: "Get WhatsApp community", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   list_scheduled_channel_posts: { title: "List scheduled channel posts", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   get_community_digest: { title: "Get community digest", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  export_chat: { title: "Export chat", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };
 
 // mcp.TOOLS — directories (Claude's Connectors Directory) read the listing name from annotations.title, so every tool

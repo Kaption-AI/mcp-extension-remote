@@ -1,0 +1,67 @@
+[
+  {
+    "name": "export_chat",
+    "title": "Export chat",
+    "description": "Export one WhatsApp chat as a file, from the backup Kaption keeps on this computer: its whole history in the same format as Kaption's Export chat (html, a self-contained page with transcripts and embedded media, or csv with one row per message). The file comes back as base64_data with filename, mimetype and size, plus missing: what is not in the file and why (files WhatsApp no longer has, files past the 16 MB answer, messages left out). Costs 5 credits. Changes nothing.\n\nExample: { chat_id: \"15555550101@c.us\", format: \"html\", media: [\"audio\", \"image\"], from: \"2026-10-01T00:00:00Z\" }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "chat_id": {
+          "type": "string",
+          "description": "Chat id (phone number, …@c.us or …@g.us)"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "html",
+            "csv"
+          ],
+          "description": "html (default) or csv"
+        },
+        "include_transcripts": {
+          "type": "boolean",
+          "description": "Voice-note transcripts in the file (default true)"
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "audio",
+              "image",
+              "video",
+              "document"
+            ]
+          },
+          "description": "Media kinds embedded in html (default audio, image, video; [] for text only)"
+        },
+        "last_n": {
+          "type": "number",
+          "description": "Only the most recent N messages"
+        },
+        "from": {
+          "type": "string",
+          "description": "ISO 8601 start (or relative, like 30d)"
+        },
+        "to": {
+          "type": "string",
+          "description": "ISO 8601 end"
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "required": [
+        "chat_id"
+      ]
+    },
+    "annotations": {
+      "title": "Export chat",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

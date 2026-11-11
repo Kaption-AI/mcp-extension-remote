@@ -13,7 +13,7 @@ import {
   type ToolDefinition,
 } from "./tools";
 import { NO_ACCOUNT_TEXT, toolErrorText } from "./tool-errors";
-import { scrubInlineMedia } from "./media-scrub";
+import { INLINE_FILE_TOOLS, scrubInlineMedia } from "./media-scrub";
 import { takeUsageNotice } from "./usage-notice";
 import type { Env } from "./types";
 import { manageFeaturesWithAlias, meteringPhoneWithAlias, relayWithAliasSettled } from "./phone-alias";
@@ -211,7 +211,8 @@ export class RelayMCP extends McpAgent<Env> {
           //   every other tool (mcp.TOOLS.7): scrub any base64/binary blob (e.g.
           //     thumbnail bodies leaked via conversations.lastMessage / search.text)
           //     so media never pollutes the model's context window.
-          if (tool.name !== "download_media") {
+          //   export_chat (chat-export.MCP.2): its file comes back as base64_data the same way.
+          if (!INLINE_FILE_TOOLS.has(tool.name)) {
             result = scrubInlineMedia(result);
           }
           // mcp-manage-kaption.HELP.5 — kaption_help "read" answers the guide's live page on kaptionai.com.

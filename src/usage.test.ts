@@ -122,6 +122,9 @@ describe("usage vocabulary (mcp-usage-accounting.RECORD)", () => {
     expect(usageKind("manage_channels", { action: "cross_post", text: "secret" })).toBe("cross_post");
     expect(usageKind("manage_communities", { action: "schedule_announcement", id: "1@g.us" })).toBe("schedule_announcement");
     expect(usageKind("manage_channels", { action: "1@newsletter" })).toBe("");
+    // chat-export.MCP.4 — export_chat keeps only its format, never the chat id.
+    expect(usageKind("export_chat", { chat_id: "15555550101@c.us", format: "csv" })).toBe("csv");
+    expect(usageKind("export_chat", { chat_id: "15555550101@c.us" })).toBe("");
   });
 
   it("buckets latency coarsely (RECORD.3)", () => {
