@@ -26,6 +26,21 @@ import {
 } from "./usage";
 import type { Env } from "./types";
 import { MeterStore, type Allowance, type HoldInput, type LeaseAnswer, type LeaseRequest, type Peek, type Reservation } from "./meter";
+import {
+  countWindow,
+  currentWindow,
+  fetchPlan,
+  planFresh,
+  shadowOf,
+  windowRange,
+  type LedgerPlan,
+  type PlanTier,
+  type ShadowWindow,
+  type WindowCount,
+  type WindowKind,
+  type WindowRange,
+  type WindowRow,
+} from "./ledger-windows";
 
 export const HOURLY_RETENTION_DAYS = 45;
 export const DAILY_RETENTION_DAYS = 400;
@@ -49,6 +64,12 @@ const LEDGER_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS conn (
      id TEXT PRIMARY KEY, path TEXT NOT NULL, app TEXT NOT NULL, first_at INTEGER NOT NULL, last_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS batch (id TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
+  // mcp-usage-ledger.PLAN.4 — the last plan answer rest-api gave this account (one row).
+  `CREATE TABLE IF NOT EXISTS plan_cache (
+     id INTEGER PRIMARY KEY CHECK (id = 1), fetched_at INTEGER NOT NULL, ttl_s INTEGER NOT NULL, tier TEXT NOT NULL,
+     period TEXT, lim INTEGER, pool_ref TEXT, pool_numbers INTEGER, enforced_by TEXT NOT NULL)`,
+  // mcp-usage-ledger.SHADOW.1, SHADOW.3 — when a window's count first passed the plan's limit (no call data).
+  `CREATE TABLE IF NOT EXISTS shadow_window (win TEXT PRIMARY KEY, lim INTEGER NOT NULL, crossed_at INTEGER NOT NULL)`,
 ];
 
 /** The ledger's storage logic, independent of the Durable Object runtime. */
@@ -143,8 +164,62 @@ export class LedgerStore {
       .toArray();
   }
 
-  /** mcp-usage-accounting.RETAIN.1-3 */
+  /** mcp-usage-ledger.MODEL.3-4 — a window's daily rows grouped by road, tool and outcome. */
+  windowRows(range: WindowRange): WindowRow[] {
+    return this.sql
+      .exec(
+        `SELECT path, tool, outcome, SUM(calls) AS calls FROM usage_day WHERE day >= ? AND day < ? GROUP BY path, tool, outcome`,
+        dayOf(range.from), dayOf(range.to),
+      )
+      .toArray()
+      .map((r) => ({ path: r.path as UsagePath, tool: String(r.tool), outcome: String(r.outcome), calls: Number(r.calls) }));
+  }
+
+  windowCount(range: WindowRange): WindowCount {
+    return countWindow(range, this.windowRows(range));
+  }
+
+  /** mcp-usage-ledger.PLAN.4 — the cached plan and when it was fetched, or null. */
+  plan(): { plan: LedgerPlan; fetchedAt: number } | null {
+    const r = this.sql.exec(`SELECT * FROM plan_cache WHERE id = 1`).toArray()[0];
+    if (!r) return null;
+    return {
+      fetchedAt: Number(r.fetched_at),
+      plan: {
+        tier: String(r.tier) as PlanTier,
+        period: r.period === "week" || r.period === "month" ? (r.period as WindowKind) : null,
+        limit: r.lim === null || r.lim === undefined ? null : Number(r.lim),
+        pool: r.pool_ref ? { ref: String(r.pool_ref), numbers: Number(r.pool_numbers ?? 1) } : null,
+        enforcedBy: (String(r.enforced_by) as LedgerPlan["enforcedBy"]) || "none",
+        ttlSeconds: Number(r.ttl_s),
+      },
+    };
+  }
+
+  setPlan(plan: LedgerPlan, now: number): void {
+    this.sql.exec(
+      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET fetched_at = excluded.fetched_at, ttl_s = excluded.ttl_s, tier = excluded.tier,
+         period = excluded.period, lim = excluded.lim, pool_ref = excluded.pool_ref, pool_numbers = excluded.pool_numbers,
+         enforced_by = excluded.enforced_by`,
+      now, plan.ttlSeconds, plan.tier, plan.period, plan.limit, plan.pool?.ref ?? null, plan.pool?.numbers ?? null, plan.enforcedBy,
+    );
+  }
+
+  /** mcp-usage-ledger.SHADOW.1 — the first time a window passed its limit is kept (later ones are ignored). */
+  markCrossed(kind: WindowKind, period: string, limit: number, at: number): void {
+    this.sql.exec(`INSERT OR IGNORE INTO shadow_window (win, lim, crossed_at) VALUES (?, ?, ?)`, `${kind}:${period}`, limit, at);
+  }
+
+  crossedAt(kind: WindowKind, period: string): number | null {
+    const r = this.sql.exec(`SELECT crossed_at FROM shadow_window WHERE win = ?`, `${kind}:${period}`).toArray()[0];
+    return r ? Number(r.crossed_at) : null;
+  }
+
+  /** mcp-usage-accounting.RETAIN.1-3, mcp-usage-ledger.RETAIN.2 */
   prune(now: number): void {
+    this.sql.exec(`DELETE FROM shadow_window WHERE crossed_at < ?`, now - DAILY_RETENTION_DAYS * DAY_MS);
     this.sql.exec(`DELETE FROM usage_hour WHERE hour < ?`, now - HOURLY_RETENTION_DAYS * DAY_MS);
     this.sql.exec(`DELETE FROM usage_day WHERE day < ?`, dayOf(now - DAILY_RETENTION_DAYS * DAY_MS));
     this.sql.exec(`DELETE FROM batch WHERE at < ?`, now - BATCH_RETENTION_DAYS * DAY_MS);
@@ -309,7 +384,7 @@ export class UsageLedger extends DurableObject<Env> {
     });
     const totals = this.env.USAGE_TOTALS;
     if (added.length && totals) {
-      this.state.waitUntil(totals.get(totals.idFromName("global")).add(added, accountTag.slice(0, 16)).catch(() => undefined));
+      this.state.waitUntil(totalsFor(this.env, accountTag).add(added, accountTag.slice(0, 16)).catch(() => undefined));
     }
     return answer;
   }
@@ -336,7 +411,7 @@ export class UsageLedger extends DurableObject<Env> {
     const totals = this.env.USAGE_TOTALS;
     if (cell && totals) {
       this.state.waitUntil(
-        totals.get(totals.idFromName("global")).add([cell], accountTag.slice(0, 16)).catch(() => undefined),
+        totalsFor(this.env, accountTag).add([cell], accountTag.slice(0, 16)).catch(() => undefined),
       );
     }
     return hold ? { charged: hold.charged } : null;
@@ -374,14 +449,60 @@ export class UsageLedger extends DurableObject<Env> {
     const totals = this.env.USAGE_TOTALS;
     if (totals) {
       this.state.waitUntil(
-        totals
-          .get(totals.idFromName("global"))
+        totalsFor(this.env, options.accountTag ?? "")
           .add(cells, (options.accountTag ?? "").slice(0, 16))
           .catch((error: unknown) => console.error("[usage] totals failed:", error instanceof Error ? error.message : error)),
       );
     }
     this.state.waitUntil(ensureDailyAlarm(this.state, now).catch(() => undefined));
     return { accepted, duplicate: false, ...(options.settle ? { settled } : {}) };
+  }
+
+  /**
+   * mcp-usage-ledger.MODEL.3, READ.3 — this account's week and month (the current ones unless named), the cached plan
+   * and when each window passed it (SHADOW.3). Read only.
+   */
+  async windows(opts: { week?: string; month?: string } = {}, now = Date.now()): Promise<LedgerWindows> {
+    const week = opts.week ? windowRange("week", opts.week) : currentWindow("week", now);
+    const month = opts.month ? windowRange("month", opts.month) : currentWindow("month", now);
+    const cached = this.store.plan();
+    return {
+      week: week ? this.store.windowCount(week) : null,
+      month: month ? this.store.windowCount(month) : null,
+      since: this.store.since(),
+      plan: cached ? { ...cached.plan, fetchedAt: cached.fetchedAt } : null,
+      crossed: {
+        week: week ? this.store.crossedAt("week", week.period) : null,
+        month: month ? this.store.crossedAt("month", month.period) : null,
+      },
+    };
+  }
+
+  /**
+   * mcp-usage-ledger.SHADOW.1-2, PLAN.4-5 — after a recorded call or batch (always from waitUntil, never before a call):
+   * refresh the plan when it is stale and keep when the plan's window first passed its limit. Never throws, never
+   * refuses anything.
+   */
+  async shadowAfter(phone: string, now = Date.now(), fetchImpl: typeof fetch = fetch): Promise<ShadowWindow | null> {
+    try {
+      let cached = this.store.plan();
+      if (!cached || !planFresh(cached.fetchedAt, cached.plan.ttlSeconds, now, cached.plan.period)) {
+        const fresh = await fetchPlan(this.env, phone, fetchImpl);
+        if (fresh) {
+          this.store.setPlan(fresh, now);
+          cached = { plan: fresh, fetchedAt: now };
+        }
+      }
+      const plan = cached?.plan;
+      if (!plan || plan.limit === null || !plan.period) return null;
+      const range = currentWindow(plan.period, now);
+      const counted = this.store.windowCount(range).counted;
+      if (counted > plan.limit) this.store.markCrossed(plan.period, range.period, plan.limit, now);
+      return shadowOf(plan.limit, counted, this.store.crossedAt(plan.period, range.period));
+    } catch (error) {
+      console.error("[ledger] shadow failed:", error instanceof Error ? error.message : error);
+      return null;
+    }
   }
 
   /** mcp-usage-accounting.REPORT.1 — the month's rows, the account's connections and the first counted day. */
@@ -431,6 +552,44 @@ export class UsageTotals extends DurableObject<Env> {
     this.store.prune(now);
     await this.state.storage.setAlarm(now + DAY_MS);
   }
+}
+
+export interface LedgerWindows {
+  week: WindowCount | null;
+  month: WindowCount | null;
+  since: string | null;
+  plan: (LedgerPlan & { fetchedAt: number }) | null;
+  crossed: { week: number | null; month: number | null };
+}
+
+/** mcp-usage-ledger.TOTALS.1 — how many global totals objects calls are spread over (1 = the old single "global"). */
+export const DEFAULT_TOTALS_SHARDS = 16;
+
+export function totalsShards(env: Pick<Env, "USAGE_TOTALS_SHARDS">): number {
+  const n = Number(env.USAGE_TOTALS_SHARDS ?? DEFAULT_TOTALS_SHARDS);
+  return Number.isInteger(n) && n >= 1 && n <= 64 ? n : DEFAULT_TOTALS_SHARDS;
+}
+
+/** mcp-usage-ledger.TOTALS.1, TOTALS.3 — an account always lands in the same shard (FNV-1a of its tag). */
+export function totalsShardName(accountTag: string, shards: number): string {
+  if (shards <= 1) return "global";
+  let h = 0x811c9dc5;
+  for (let i = 0; i < accountTag.length; i++) {
+    h ^= accountTag.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `global:${h % shards}`;
+}
+
+/** Every totals object /admin/usage reads: the old "global" (days before the split) and every shard (TOTALS.2). */
+export function totalsNames(env: Pick<Env, "USAGE_TOTALS_SHARDS">): string[] {
+  const shards = totalsShards(env);
+  return shards <= 1 ? ["global"] : ["global", ...Array.from({ length: shards }, (_, i) => `global:${i}`)];
+}
+
+function totalsFor(env: Env, accountTag: string) {
+  const ns = env.USAGE_TOTALS!;
+  return ns.get(ns.idFromName(totalsShardName(accountTag.slice(0, 16), totalsShards(env))));
 }
 
 /** The ledger of an account. */

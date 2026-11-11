@@ -37,6 +37,7 @@ import {
   type UsageCell,
 } from "./usage";
 import { ledgerFor } from "./usage-ledger";
+import { shadowPhone } from "./ledger-windows";
 import { DISABLED_CODE, DisabledGate } from "./disabled-gate";
 import { beginUse, refundUse, usageConfigured, usageLine, usageMeta, type UseAnswer } from "./weekly-usage";
 
@@ -405,9 +406,14 @@ export class RelayMCP extends McpAgent<Env> {
       // hold settled in the same transaction, a failed charged call credited back once).
       if (usage.gate?.metered && this.meter) {
         await this.meter.finish(usage.gate, cell, usage.accountRef);
-        return;
+      } else {
+        await ledgerFor(this.env, usage.accountRef).record([cell], { accountTag: usage.accountRef });
       }
-      await ledgerFor(this.env, usage.accountRef).record([cell], { accountTag: usage.accountRef });
+      // mcp-usage-ledger.SHADOW.1-2, HOT_PATH.6 — after the call was answered and recorded: judge the window, never enforce.
+      if (String(this.env.LEDGER_SHADOW ?? "").trim()) {
+        const phone = await meteringPhoneWithAlias(this.env, usage.accountRef).catch(() => null);
+        if (phone && shadowPhone(phone, this.env)) await ledgerFor(this.env, usage.accountRef).shadowAfter(phone);
+      }
     })().catch((error) => console.error("[usage] record failed:", error instanceof Error ? error.message : error));
     try {
       (this as any).ctx?.waitUntil?.(work);

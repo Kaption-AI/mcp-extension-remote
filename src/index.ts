@@ -29,7 +29,9 @@ import {
   handleTokenRequest,
   listConnections,
 } from "./connection-lifetime";
-import { UsageLedger, UsageTotals, ledgerFor } from "./usage-ledger";
+import { UsageLedger, UsageTotals, ledgerFor, totalsNames } from "./usage-ledger";
+import { READ_BATCH_MAX, internalCaller, last4, readPhone, usageForPhone, validWindows } from "./ledger-read";
+import { shadowPhone } from "./ledger-windows";
 import {
   LOCAL_MAX_BODY_BYTES,
   buildReport,
@@ -162,6 +164,8 @@ const OUTER_ROUTE_METHODS: { pattern: RegExp; allow: string }[] = [
   { pattern: /^\/ext\/usage$/, allow: "GET, OPTIONS" },
   { pattern: /^\/ext\/usage\/local$/, allow: "POST, OPTIONS" },
   { pattern: /^\/admin\/usage$/, allow: "GET" },
+  { pattern: /^\/internal\/ledger\/usage$/, allow: "GET" },
+  { pattern: /^\/internal\/ledger\/usage\/batch$/, allow: "POST" },
   { pattern: /^\/transparency(\/(latest|verify|gaps))?$/, allow: "GET, HEAD" },
   { pattern: /^\/transparency\/append$/, allow: "POST" },
 ];
@@ -552,10 +556,23 @@ outerApp.post("/ext/usage/local", async (c) => {
   }
   try {
     // The account's own form (the one its extension signs in with).
-    const result = await ledgerFor(c.env, userIds[0]).record(parsed.cells, {
+    const ledger = ledgerFor(c.env, userIds[0]);
+    const result = await ledger.record(parsed.cells, {
       batchId: `local:${parsed.batchId}`,
       accountTag: userIds[0],
     });
+    // mcp-usage-ledger.SHADOW.1-2, HOT_PATH.6 — the shadow judges the window after the batch is stored, in the background.
+    if (!result.duplicate && String(c.env.LEDGER_SHADOW ?? "").trim()) {
+      const phone = await validateJwt(c.env.JWT_SECRET, (c.req.header("Authorization") ?? "").slice(7)).catch(() => null);
+      if (phone && shadowPhone(phone, c.env)) {
+        const work = ledger.shadowAfter(phone).catch(() => undefined);
+        try {
+          c.executionCtx.waitUntil(work);
+        } catch {
+          // No execution context (tests): the promise still runs.
+        }
+      }
+    }
     return c.json({ ok: true, ...result }, 200, USAGE_CORS);
   } catch (e: any) {
     console.error("[usage] local batch failed:", e?.message || e);
@@ -776,8 +793,71 @@ outerApp.get("/admin/usage", async (c) => {
   const from = day.test(c.req.query("from") ?? "") ? c.req.query("from")! : dayOf(month.from);
   const to = day.test(c.req.query("to") ?? "") ? c.req.query("to")! : dayOf(month.to);
   if (!c.env.USAGE_TOTALS) return c.json({ from, to, rows: [], accounts: [] });
-  const totals = c.env.USAGE_TOTALS.get(c.env.USAGE_TOTALS.idFromName("global"));
-  return c.json({ from, to, ...(await totals.report(from, to)) }, 200, { "Cache-Control": "no-store" });
+  // mcp-usage-ledger.TOTALS.2 — every shard plus the old single object, merged into the same shape.
+  const ns = c.env.USAGE_TOTALS;
+  const reports = await Promise.all(totalsNames(c.env).map((name) => ns.get(ns.idFromName(name)).report(from, to)));
+  const rows = new Map<string, { day: string; path: string; app: string; tool: string; outcome: string; calls: number; repeats: number }>();
+  const accounts = new Map<string, { day: string; app: string; accounts: number }>();
+  for (const r of reports) {
+    for (const row of r.rows) {
+      const key = [row.day, row.path, row.app, row.tool, row.outcome].join("\u0000");
+      const entry = rows.get(key);
+      if (entry) {
+        entry.calls += row.calls;
+        entry.repeats += row.repeats;
+      } else rows.set(key, { ...row });
+    }
+    for (const a of r.accounts) {
+      const key = `${a.day}\u0000${a.app}`;
+      const entry = accounts.get(key);
+      if (entry) entry.accounts += a.accounts;
+      else accounts.set(key, { ...a });
+    }
+  }
+  const byDay = <T extends { day: string }>(list: T[]) => list.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+  return c.json({ from, to, rows: byDay([...rows.values()]), accounts: byDay([...accounts.values()]) }, 200, { "Cache-Control": "no-store" });
+});
+
+// mcp-usage-ledger.READ.2-4 — the ledger's internal read API, for rest-api only (Bearer INTERNAL_API_KEY). Counts only.
+outerApp.get("/internal/ledger/usage", async (c) => {
+  if (!internalCaller(c.req.header("Authorization"), c.env)) return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
+  const phone = readPhone(c.req.query("phone"));
+  const windows = validWindows(c.req.query("week"), c.req.query("month"));
+  if (!phone) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
+  if ("error" in windows) return problem({ status: 400, code: "invalid_window", detail: windows.error });
+  if (!c.env.USAGE_LEDGER) return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
+  try {
+    return c.json(await usageForPhone(c.env, phone, windows), 200, { "Cache-Control": "no-store" });
+  } catch (e: any) {
+    console.error(`[ledger] read failed for ${last4(phone)}:`, e?.message || e);
+    return problem({ status: 503, code: "unavailable", detail: "Could not read usage" });
+  }
+});
+
+outerApp.post("/internal/ledger/usage/batch", async (c) => {
+  if (!internalCaller(c.req.header("Authorization"), c.env)) return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
+  const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+  const raw = Array.isArray(body.phones) ? body.phones : null;
+  const phones = raw?.map(readPhone) ?? [];
+  if (!raw || raw.length === 0 || raw.length > READ_BATCH_MAX || phones.some((p) => !p)) {
+    return problem({ status: 400, code: "invalid_phones", detail: `phones must hold 1-${READ_BATCH_MAX} phones of 7-15 digits.` });
+  }
+  const windows = validWindows(body.week, body.month);
+  if ("error" in windows) return problem({ status: 400, code: "invalid_window", detail: windows.error });
+  if (!c.env.USAGE_LEDGER) return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
+  const now = Date.now();
+  const unique = [...new Set(phones as string[])];
+  const results = await Promise.all(
+    unique.map(async (phone) => {
+      try {
+        return { phone, ok: true as const, usage: await usageForPhone(c.env, phone, windows, now) };
+      } catch (e: any) {
+        console.error(`[ledger] batch read failed for ${last4(phone)}:`, e?.message || e);
+        return { phone, ok: false as const };
+      }
+    }),
+  );
+  return c.json({ accounts: results }, 200, { "Cache-Control": "no-store" });
 });
 
 // Transparency endpoints
@@ -1216,8 +1296,8 @@ function createRouter(nextHandler: WorkerHandler) {
       return outerApp.fetch(request, env, ctx);
     }
     // mcp-usage-accounting.REPORT.1, LOCAL.5, ADMIN.1
-    // business-plans.MCP_LEDGER.10-12 — the local bridge's meter.
-    if (url.pathname === "/ext/usage" || url.pathname === "/ext/usage/local" || url.pathname === "/admin/usage" || url.pathname.startsWith("/ext/usage/meter")) {
+    // business-plans.MCP_LEDGER.10-12 — the local bridge's meter. mcp-usage-ledger.READ.2 — the internal read API.
+    if (url.pathname === "/ext/usage" || url.pathname === "/ext/usage/local" || url.pathname === "/admin/usage" || url.pathname.startsWith("/ext/usage/meter") || url.pathname.startsWith("/internal/ledger/")) {
       return outerApp.fetch(request, env, ctx);
     }
     // Store phone hint by IP for pre-filling the authorize form.

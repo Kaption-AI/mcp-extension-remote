@@ -90,6 +90,13 @@
     // mcp-usage-pricing.USAGE.5-8 — "on"/"*" or a phone list: tool results say what is left. Empty/"off": unchanged.
     // Owner test 2026-11-08: 17373427172 only. Rollback: "" and merge.
     "MCP_USAGE_IN_RESULTS": "17373427172",
+    // mcp-usage-ledger.SHADOW.1 (monorepo features/mcp/mcp-usage-ledger.feature.yaml) — phase 1: phones whose ledger keeps
+    // its plan (from rest-api /__internal/mcp-ledger/plan, in the background) and notes when a window passes the limit.
+    // Never enforces anything. "" = nobody (default), "*" = everyone. Owner test first: "17373427172".
+    "LEDGER_SHADOW": "",
+    // mcp-usage-ledger.TOTALS.1 — the global totals are spread over this many objects (the old single "global" was a hot
+    // spot). Rollback: "1" and merge (the old object is still read for the days before the split).
+    "USAGE_TOTALS_SHARDS": "16",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },
