@@ -82,7 +82,24 @@ import {
   startLimit,
 } from "./connect-code";
 import { acceptsHtml, ensureProblemJson, problem } from "./problem";
-import { checkClientRegistration, isAllowedRedirectUri } from "./redirect-policy";
+import {
+  DEFAULT_REDIRECT_POLICY,
+  approvalAllowedForPhone,
+  approvalOfferedToBrowser,
+  approvalOnly,
+  checkClientRegistration,
+  classifyWithPolicy,
+  hasTesterCookie,
+  loadRedirectPolicy,
+} from "./redirect-policy";
+import {
+  approvalDetails,
+  denyApproval,
+  pollApprovalHandshake,
+  recordApprovalAudit,
+  readApproval,
+  startApprovalHandshake,
+} from "./approval";
 import { rateLimitHeaders, tooManyRequests } from "./rate-limit";
 import { withUsageHeaders } from "./weekly-usage";
 import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
@@ -159,6 +176,7 @@ const OUTER_ROUTE_METHODS: { pattern: RegExp; allow: string }[] = [
   { pattern: /^\/ws\/auth$/, allow: "POST, OPTIONS" },
   { pattern: /^\/ws\/ext$/, allow: "GET" },
   { pattern: /^\/ext\/connect-code\/(start|status)$/, allow: "POST, OPTIONS" },
+  { pattern: /^\/ext\/approval$/, allow: "POST, OPTIONS" },
   { pattern: /^\/ext\/connections$/, allow: "GET, OPTIONS" },
   { pattern: /^\/ext\/connections\/[^/]+$/, allow: "DELETE, OPTIONS" },
   { pattern: /^\/ext\/usage$/, allow: "GET, OPTIONS" },
@@ -418,6 +436,76 @@ outerApp.post("/ext/connect-code/status", async (c) => {
     return c.json(status, 200, CONNECT_CORS);
   } catch (e: any) {
     console.error("[connect-code] status failed:", e?.message || e);
+    return problem({ status: 500, code: "internal_error", detail: "Internal error", headers: CONNECT_CORS });
+  }
+});
+
+// mcp.ANY_CLIENT.8-10 — "Sign in with Kaption on this computer", the extension's side: the approval's details, Allow
+// (start the WhatsApp handshake for this request, then poll it) and Deny. The JWT names the phone; only the handshake
+// proves it (ACCEPT_ANY_TOKEN_BYPASS), so nothing here approves on the JWT alone.
+outerApp.options("/ext/approval", () => new Response(null, { status: 204, headers: CONNECT_CORS }));
+outerApp.post("/ext/approval", async (c) => {
+  const auth = c.req.header("Authorization");
+  const phone = auth?.startsWith("Bearer ") ? await validateJwt(c.env.JWT_SECRET, auth.slice(7)) : null;
+  if (!phone) return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or missing Kaption JWT", CONNECT_CORS);
+  const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
+  if (!accountRef) return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or missing Kaption JWT", CONNECT_CORS);
+  // mcp.ANY_CLIENT.16 — off, or not on this phone's allowlist: nothing to show, start or deny.
+  if (!approvalAllowedForPhone(await loadRedirectPolicy(c.env.OAUTH_KV), phone)) {
+    return c.json({ ok: false, error: "not_enabled" }, 403, CONNECT_CORS);
+  }
+  let body: { action?: unknown; requestId?: unknown } = {};
+  try { body = await c.req.json(); } catch { body = {}; }
+  const deps = connectDeps(c.env);
+  const id = body.requestId;
+  try {
+    switch (body.action) {
+      case "details": {
+        const details = await approvalDetails(deps, id, phone);
+        return c.json(details ? { ok: true, ...details } : { ok: false, error: "expired" }, 200, CONNECT_CORS);
+      }
+      case "start": {
+        // mcp.ANY_CLIENT.9 — the same 10 handshakes per phone an hour as connect codes.
+        const limit = await startLimit(c.env.OAUTH_KV, accountRef);
+        if (!limit.allowed) {
+          return tooManyRequests(limit.status, "Too many sign-ins for this phone. Try again later.", {
+            headers: CONNECT_CORS,
+            extra: { ok: false, error: "rate_limited" },
+          });
+        }
+        const started = await startApprovalHandshake(deps, id, phone);
+        return c.json(started, started.ok || started.error !== "handshake_unavailable" ? 200 : 502, {
+          ...CONNECT_CORS,
+          ...rateLimitHeaders(limit.status),
+        });
+      }
+      case "status": {
+        const before = await readApproval(deps, id);
+        const status = await pollApprovalHandshake(deps, id, phone);
+        if (status.status === "approved" && before?.status === "pending") {
+          await (recordApprovalAudit(c.env.OAUTH_KV, accountRef, {
+            at: Date.now(), outcome: "approved", appName: before.appName, clientId: before.clientId,
+            destination: before.destination, kind: before.kind,
+          }));
+        }
+        return c.json({ ok: true, ...status }, 200, CONNECT_CORS);
+      }
+      case "deny": {
+        const before = await readApproval(deps, id);
+        const denied = await denyApproval(deps, id, phone);
+        if (denied && before) {
+          await (recordApprovalAudit(c.env.OAUTH_KV, accountRef, {
+            at: Date.now(), outcome: "denied", appName: before.appName, clientId: before.clientId,
+            destination: before.destination, kind: before.kind,
+          }));
+        }
+        return c.json(denied ? { ok: true } : { ok: false, error: "expired" }, 200, CONNECT_CORS);
+      }
+      default:
+        return problem({ status: 400, code: "invalid_action", detail: "action is one of details, start, status, deny", headers: CONNECT_CORS });
+    }
+  } catch (e: any) {
+    console.error("[approval] ext request failed:", e?.message || e);
     return problem({ status: 500, code: "internal_error", detail: "Internal error", headers: CONNECT_CORS });
   }
 });
@@ -1071,7 +1159,7 @@ export function applySecurityHeaders(headers: Headers): void {
  * OAuthProvider options — shared by the Worker and by the helpers that list
  * and revoke connections, because getOAuthApi needs the very same options.
  */
-export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): OAuthProviderOptions<Env> {
+export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown, policyKv?: KVNamespace): OAuthProviderOptions<Env> {
   return {
     apiHandlers: {
       "/sse": sseHandler as any,
@@ -1084,7 +1172,9 @@ export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): O
     clientRegistrationEndpoint: "/register",
     // mcp.CLOUD_RELAY.16 — registration stays open to every MCP client, but only with redirect URIs of known AI apps,
     // loopback (CLI/desktop clients) or a known desktop app's scheme (security report #2198).
-    clientRegistrationCallback: checkClientRegistration,
+    // mcp.ANY_CLIENT.1-2 — and, under the owner's policy, an https app on any other host (approval only).
+    clientRegistrationCallback: async (options) =>
+      checkClientRegistration(options, policyKv ? await loadRedirectPolicy(policyKv) : DEFAULT_REDIRECT_POLICY),
     // Pin OAuth grants and access-token audiences to the trusted MCP hostname
     // the client selected. The provider also serves RFC 9728 metadata and
     // advertises it in 401 challenges for both the origin-level and
@@ -1295,6 +1385,10 @@ function createRouter(nextHandler: WorkerHandler) {
     if (url.pathname.startsWith("/ext/connect-code/")) {
       return outerApp.fetch(request, env, ctx);
     }
+    // mcp.ANY_CLIENT.8-10 — the extension's side of "Sign in with Kaption on this computer".
+    if (url.pathname === "/ext/approval") {
+      return outerApp.fetch(request, env, ctx);
+    }
     // mcp-usage-accounting.REPORT.1, LOCAL.5, ADMIN.1
     // business-plans.MCP_LEDGER.10-12 — the local bridge's meter. mcp-usage-ledger.READ.2 — the internal read API.
     if (url.pathname === "/ext/usage" || url.pathname === "/ext/usage/local" || url.pathname === "/admin/usage" || url.pathname.startsWith("/ext/usage/meter") || url.pathname.startsWith("/internal/ledger/")) {
@@ -1342,7 +1436,12 @@ function createRouter(nextHandler: WorkerHandler) {
             }
             // mcp.CLOUD_RELAY.16 — a client registered before the redirect rule, with an address that isn't a known
             // AI app's, can't start a sign-in either (the library already checked it is one the client registered).
-            if (!isAllowedRedirectUri(oauthReqInfo.redirectUri)) {
+            // mcp.ANY_CLIENT.1-3 — an https app on another host may start one too, completed only by the approval on
+            // the person's computer; the owner's deny list refuses even a known app.
+            // mcp.ANY_CLIENT.16 — until it is on for everyone, an unknown website starts one only in a tester's browser.
+            const policy = await loadRedirectPolicy(env.OAUTH_KV);
+            const kind = classifyWithPolicy(oauthReqInfo.redirectUri, policy);
+            if (kind === null || (approvalOnly(kind) && !approvalOfferedToBrowser(policy, hasTesterCookie(req.headers.get("cookie"))))) {
               console.warn("[authorize] sign-in refused: redirect not allowed for client", oauthReqInfo.clientId);
               return authorizeError(req, { key: "err.authorize_app_not_allowed", code: "unauthorized_client" });
             }
@@ -1387,7 +1486,7 @@ function createRouter(nextHandler: WorkerHandler) {
         if (pageLang.cookie) newResponse.headers.append("Set-Cookie", pageLang.cookie);
         return newResponse;
       },
-    });
+    }, env.OAUTH_KV);
     const oauthHandler = new OAuthProvider(oauthOptions);
 
     // The library caches its helpers on `env.OAUTH_PROVIDER` the first time a

@@ -15,7 +15,7 @@ import {
   rememberPhoneAlias,
   relayWithAlias,
 } from "./phone-alias";
-import { checkClientRegistration, classifyRedirectUri } from "./redirect-policy";
+import { REDIRECT_POLICY_KEY, checkClientRegistration, classifyRedirectUri, resetRedirectPolicyCache } from "./redirect-policy";
 import { connectorAddress } from "./connector-address";
 import { FakeKV } from "./test-support/fake-kv";
 import type { Env } from "./types";
@@ -38,8 +38,11 @@ const CODE_VERIFIER = "kaption-test-code-verifier-0123456789-abcdefghijklmnop";
 const BR_WITH_9 = "5551991234567";
 const BR_WITHOUT_9 = "555191234567";
 
-function createRelay() {
+function createRelay(policy?: Record<string, unknown>) {
   const kv = new FakeKV();
+  resetRedirectPolicyCache();
+  // mcp.ANY_CLIENT.2 — these CLOUD_RELAY.16 cases run with the owner's "known-only" switch, i.e. as before any-client.
+  if (policy) void kv.put(REDIRECT_POLICY_KEY, JSON.stringify(policy));
   const env = {
     OAUTH_KV: kv,
     JWT_SECRET,
@@ -107,7 +110,7 @@ const jwtFor = (phone: string) =>
 
 describe("mcp.CLOUD_RELAY.16 only known AI apps and this computer receive a sign-in", () => {
   it("refuses a registration with an attacker's redirect (security report #2198) and stores nothing", async () => {
-    const relay = createRelay();
+    const relay = createRelay({ mode: "known-only" });
     for (const uris of [
       ["https://attacker-alpha.example.com/cb"],
       [" https://attacker-alpha.example.com/cb"],
@@ -147,7 +150,7 @@ describe("mcp.CLOUD_RELAY.16 only known AI apps and this computer receive a sign
   });
 
   it("a client registered before the rule, with an attacker's redirect, can't start a sign-in: a page, nothing rendered", async () => {
-    const relay = createRelay();
+    const relay = createRelay({ mode: "known-only" });
     const clientId = await registeredClient(relay);
     // As registered before this change (the library never checked the host).
     const stored = relay.kv.json<Record<string, unknown>>(`client:${clientId}`)!;

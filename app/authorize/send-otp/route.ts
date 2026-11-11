@@ -21,6 +21,7 @@ import type { Env } from "@/src/types";
 import { errorBody, jsonError } from "@/app/i18n";
 import { withHeaders } from "@/src/problem";
 import { consumed, rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
+import { APPROVAL_REQUIRED_MESSAGE, readSignedRequest, refusesDirectSignIn } from "@/src/signed-request";
 
 export async function POST(request: Request): Promise<Response> {
   // [M7] Validate Content-Type
@@ -45,6 +46,13 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const { phone, oauthReqInfo } = parsed.data;
+  // mcp.ANY_CLIENT.3 — no WhatsApp code for an app only the approval on the person's computer may connect.
+  {
+    const signed = await readSignedRequest(oauthReqInfo, env);
+    if (signed && await refusesDirectSignIn(env, signed)) {
+      return jsonError(APPROVAL_REQUIRED_MESSAGE, { status: 403, code: "approval_required" });
+    }
+  }
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
     return jsonError("Invalid phone number format", { status: 400, code: "invalid_phone" });

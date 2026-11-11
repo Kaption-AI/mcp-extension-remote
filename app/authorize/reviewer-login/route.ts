@@ -21,6 +21,7 @@ import {
   tooManyRequests,
   writeSlidingCounter,
 } from "@/src/rate-limit";
+import { APPROVAL_REQUIRED_MESSAGE, refusesDirectSignIn } from "@/src/signed-request";
 
 // Every attempt counts; the window restarts with each one, and a success clears it.
 const REVIEWER_LOGIN_POLICY = { name: "reviewer-login-ip", limit: 10, windowSeconds: 15 * 60 };
@@ -108,6 +109,10 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (!oauthRequest.clientId) {
     return jsonError("Invalid OAuth state", { status: 400, code: "invalid_oauth_state", headers });
+  }
+  // mcp.ANY_CLIENT.3 — an app only the approval on the person's computer may connect (or one now refused).
+  if (await refusesDirectSignIn(env, oauthRequest)) {
+    return jsonError(APPROVAL_REQUIRED_MESSAGE, { status: 403, code: "approval_required", headers });
   }
 
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);

@@ -53,6 +53,8 @@ export interface Env {
   OPENAI_APPS_CHALLENGE_TOKEN?: string;
   OPENAI_REVIEW_PASSWORD_SHA256?: string;
   OPENAI_REVIEW_PHONE?: string;
+  /** mcp.ANY_CLIENT.4 — extra Kaption extension ids the sign-in page may ask (comma-separated; a preview's own build). */
+  KAPTION_EXTENSION_IDS?: string;
 }
 
 export interface OTPRecord {
