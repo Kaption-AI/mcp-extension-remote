@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { looksLikeBinary, scrubInlineMedia } from "./media-scrub";
+import { INLINE_FILE_TOOLS, looksLikeBinary, scrubInlineMedia } from "./media-scrub";
 
 // A realistic-ish base64 thumbnail body (long, no spaces).
 const FAKE_THUMB = "/9j/" + "ABCDabcd0123+/".repeat(200); // ~2.8KB, JPEG b64 prefix
@@ -79,9 +79,16 @@ describe("scrubInlineMedia", () => {
 });
 
 describe("relay inline-media policy (contract)", () => {
-  // Mirror relay-mcp.ts: download_media passes through; everything else is scrubbed.
+  // Mirror relay-mcp.ts: download_media and export_chat pass through; everything else is scrubbed.
   const applyPolicy = (toolName: string, result: unknown) =>
-    toolName !== "download_media" ? scrubInlineMedia(result) : result;
+    !INLINE_FILE_TOOLS.has(toolName) ? scrubInlineMedia(result) : result;
+
+  it("chat-export.MCP.2 — export_chat keeps its file's base64_data intact; only the two file tools are exempt", () => {
+    const file = Buffer.from("<!doctype html>" + "x".repeat(2000)).toString("base64");
+    const out = applyPolicy("export_chat", { filename: "Ana-chat-20261111.html", base64_data: file }) as any;
+    expect(out.base64_data).toBe(file);
+    expect([...INLINE_FILE_TOOLS].sort()).toEqual(["download_media", "export_chat"]);
+  });
 
   it("download_media keeps base64_data intact", () => {
     const result = { message_id: "m1", base64_data: FAKE_THUMB };

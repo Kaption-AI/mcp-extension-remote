@@ -8,6 +8,12 @@
  * (mcp.TOOLS.6 / mcp.CLOUD_RELAY.6).
  */
 
+/**
+ * mcp.TOOLS.6, chat-export.MCP.2 — the tools whose answer IS a file carried as base64_data: download_media (one media
+ * file) and export_chat (one chat exported as an html/csv file). Their answers pass through unscrubbed.
+ */
+export const INLINE_FILE_TOOLS: ReadonlySet<string> = new Set(["download_media", "export_chat"]);
+
 const MEDIA_PLACEHOLDER = "[media omitted — call download_media to retrieve the bytes]";
 
 /**

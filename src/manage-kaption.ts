@@ -28,6 +28,8 @@ export interface ManageFeatures {
   /** whatsapp-channels-communities.HUB.1 — MCP_CHANNELS_COMMUNITIES on for this account (manage_channels, manage_communities
    * and their read tools). */
   channels_communities?: boolean;
+  /** chat-export.MCP.6 — MCP_EXPORT_CHAT on for this account (export_chat). */
+  export_chat?: boolean;
 }
 
 /** mcp-manage-kaption.LIST.2 — which `features` key shows each tool. */
@@ -51,11 +53,12 @@ export const MANAGE_TOOL_FEATURE: Readonly<Record<string, keyof ManageFeatures>>
   list_communities: 'channels_communities',
   get_community: 'channels_communities',
   get_community_digest: 'channels_communities',
+  export_chat: 'export_chat',
 });
 
 export const MANAGE_KAPTION_TOOLS: readonly string[] = Object.freeze(Object.keys(MANAGE_TOOL_FEATURE));
 
-const FEATURE_KEYS: Array<keyof ManageFeatures> = ['manage_kaption', 'business_agent', 'plans', 'scheduled_status', 'channels_communities'];
+const FEATURE_KEYS: Array<keyof ManageFeatures> = ['manage_kaption', 'business_agent', 'plans', 'scheduled_status', 'channels_communities', 'export_chat'];
 
 /** Only booleans are kept; anything else (missing, "yes", 1) is unknown, which counts as no. */
 export function readManageFeatures(features: unknown): ManageFeatures {
