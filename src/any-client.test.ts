@@ -20,6 +20,8 @@ vi.mock("./relay-room", () => ({ RelayRoom: class RelayRoom {} }));
 vi.mock("./deployment-chain", () => ({ DeploymentChainDO: class DeploymentChainDO {} }));
 
 const state = vi.hoisted(() => ({ env: {} as any, jar: new Map<string, string>() }));
+/** mcp.ANY_CLIENT.16 — whether /authorize is opened in a tester's browser (the tester cookie). */
+const testerBrowser = { on: false };
 vi.mock("@opennextjs/cloudflare", () => ({ getCloudflareContext: () => ({ env: state.env }) }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({
@@ -42,10 +44,13 @@ import {
   classifyWithPolicy,
   parseRedirectPolicy,
   resetRedirectPolicyCache,
+  DEFAULT_ALLOW_PHONES,
   DEFAULT_REDIRECT_POLICY,
+  TESTER_COOKIE,
 } from "./redirect-policy";
 
 const ORIGIN = "https://mcp.kaptionai.com";
+const ON = parseRedirectPolicy({ mode: "on" });
 const API = "https://api.example.test";
 const N8N_REDIRECT = "https://n8n.example.org/rest/oauth2-credential/callback";
 const LOOPBACK_REDIRECT = "http://127.0.0.1:6274/oauth/callback";
@@ -59,6 +64,7 @@ const v3 = vi.hoisted(() => ({ status: { confirmed: false, reason: "pending" } a
 
 beforeEach(() => {
   state.jar.clear();
+  testerBrowser.on = false;
   v3.status = { confirmed: false, reason: "pending" };
   v3.sessions = 0;
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
@@ -73,7 +79,8 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function createRelay(policy?: Record<string, unknown>) {
+/** The flows below run with the switch "on" (for everyone); `null` stores no policy (the default, "allowlist"). */
+function createRelay(policy: Record<string, unknown> | null = { mode: "on" }) {
   resetRedirectPolicyCache();
   const kv = new FakeKV();
   if (policy) void kv.put(REDIRECT_POLICY_KEY, JSON.stringify(policy));
@@ -121,22 +128,23 @@ async function signInPage(relay: Relay, redirect = N8N_REDIRECT, name = "n8n", v
   return { clientId, ...(await authorize(relay, clientId, redirect, verifier)) };
 }
 
-async function authorize(relay: Relay, clientId: string, redirect: string, verifier: string | null = VERIFIER) {
-  const q = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: redirect, state: "st" });
+async function authorize(relay: Relay, clientId: string, redirect: string, verifier: string | null = VERIFIER, state = "st") {
+  const q = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: redirect, state });
   if (verifier) {
     q.set("code_challenge", await challenge(verifier));
     q.set("code_challenge_method", "S256");
   }
-  const response = await relay.call(`/authorize?${q}`, { headers: { accept: "text/html" } });
+  const cookie = testerBrowser.on ? `${TESTER_COOKIE}=1` : "";
+  const response = await relay.call(`/authorize?${q}`, { headers: { accept: "text/html", ...(cookie ? { cookie } : {}) } });
   expect(response.status).toBe(200);
   const page = relay.pages.at(-1)!;
   return { oauthReqInfo: new URL(page.url).searchParams.get("_oauthReqInfo")! };
 }
 
-const post = (path: string, body: unknown, ip = "192.0.2.10") =>
+const post = (path: string, body: unknown, ip = "192.0.2.10", headers: Record<string, string> = {}) =>
   new Request(`${ORIGIN}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": ip },
+    headers: { "content-type": "application/json", "cf-connecting-ip": ip, ...headers },
     body: JSON.stringify(body),
   });
 
@@ -195,11 +203,13 @@ describe("mcp.ANY_CLIENT.1-2 registration under the owner's policy", () => {
   });
 
   it("mcp.ANY_CLIENT.1 a look-alike of a known app is an unknown website, never a known one", () => {
-    expect(classifyWithPolicy("https://claude.ai.attacker.example/cb")).toBe("unknown_web");
-    expect(classifyWithPolicy("https://evilclaude.ai/cb")).toBe("unknown_web");
+    expect(classifyWithPolicy("https://claude.ai.attacker.example/cb", ON)).toBe("unknown_web");
+    expect(classifyWithPolicy("https://evilclaude.ai/cb", ON)).toBe("unknown_web");
     expect(classifyWithPolicy("https://claude.ai/api/mcp/auth_callback")).toBe("web");
     expect(classifyWithPolicy("http://localhost.attacker.example/cb")).toBeNull();
     expect(classifyWithPolicy(LOOPBACK_REDIRECT)).toBe("loopback");
+    // mcp.ANY_CLIENT.16 — by default (allowlist, no preview hosts) a look-alike is refused, as before any-client.
+    expect(classifyWithPolicy("https://claude.ai.attacker.example/cb")).toBeNull();
   });
 
   it("mcp.ANY_CLIENT.2 known-only refuses unknown websites; the deny list refuses even a known app; allowHosts makes one known", async () => {
@@ -207,7 +217,7 @@ describe("mcp.ANY_CLIENT.1-2 registration under the owner's policy", () => {
     expect((await register(relay, N8N_REDIRECT, "n8n")).status).toBe(400);
     expect((await register(relay, LOOPBACK_REDIRECT, "Inspector")).status).toBe(201);
 
-    relay = createRelay({ denyHosts: ["claude.ai", "bad.example.org"] });
+    relay = createRelay({ mode: "on", denyHosts: ["claude.ai", "bad.example.org"] });
     expect((await register(relay, "https://claude.ai/api/mcp/auth_callback", "Claude")).status).toBe(400);
     expect((await register(relay, "https://x.bad.example.org/cb", "X")).status).toBe(400);
     expect((await register(relay, N8N_REDIRECT, "n8n")).status).toBe(201);
@@ -219,14 +229,19 @@ describe("mcp.ANY_CLIENT.1-2 registration under the owner's policy", () => {
   it("mcp.ANY_CLIENT.2 an unreadable policy is the default", () => {
     expect(parseRedirectPolicy("{not json")).toEqual(DEFAULT_REDIRECT_POLICY);
     expect(parseRedirectPolicy(null)).toEqual(DEFAULT_REDIRECT_POLICY);
-    expect(parseRedirectPolicy({ mode: "everything", denyHosts: ["ok.example", 5, "nodot"] })).toEqual({ mode: "on", allowHosts: [], denyHosts: ["ok.example"] });
+    // mcp.ANY_CLIENT.16 — an unknown mode is the default, "allowlist" (never "on").
+    expect(parseRedirectPolicy({ mode: "everything", denyHosts: ["ok.example", 5, "nodot"] })).toEqual({
+      mode: "allowlist", allowHosts: [], denyHosts: ["ok.example"], allowPhones: DEFAULT_ALLOW_PHONES, previewHosts: [],
+    });
+    expect(parseRedirectPolicy({ mode: "known-only" }).mode).toBe("off");
+    expect(parseRedirectPolicy({ mode: "on", allowPhones: ["+1 (555) 555-0123", 15555550199, "x"] }).allowPhones).toEqual(["15555550123", "15555550199"]);
   });
 
   it("mcp.ANY_CLIENT.2 a host denied after registration can no longer start a sign-in", async () => {
     const relay = createRelay();
     const reg = await register(relay, N8N_REDIRECT, "n8n");
     const clientId = ((await reg.json()) as { client_id: string }).client_id;
-    await relay.kv.put(REDIRECT_POLICY_KEY, JSON.stringify({ denyHosts: ["example.org"] }));
+    await relay.kv.put(REDIRECT_POLICY_KEY, JSON.stringify({ mode: "on", denyHosts: ["example.org"] }));
     resetRedirectPolicyCache();
     const q = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: N8N_REDIRECT, state: "s", code_challenge: await challenge(VERIFIER), code_challenge_method: "S256" });
     const response = await relay.call(`/authorize?${q}`, { headers: { accept: "text/html" } });
@@ -420,5 +435,132 @@ describe("mcp.ANY_CLIENT.5-13 Sign in with Kaption on this computer", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("mcp.ANY_CLIENT.16 the owner's switch: off by default except the owner's test phones", () => {
+  const OWNER = "17373427172";
+  const OWNER_2 = "17374202658";
+  const CLAUDE = "https://claude.ai/api/mcp/auth_callback";
+
+  it("mcp.ANY_CLIENT.16 with no stored policy, registration and Claude's sign-in are as before any-client", async () => {
+    const relay = createRelay(null);
+    const refused = await register(relay, N8N_REDIRECT, "n8n");
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error_description: string }).error_description).toBe(
+      "This redirect URI is not accepted. Kaption connects to known AI apps (Claude, ChatGPT, Cursor, …) and to apps "
+      + "on your own computer (http://localhost or http://127.0.0.1 on any port). To connect another app, write to hello@kaptionai.com.",
+    );
+    const { oauthReqInfo } = await signInPage(relay, CLAUDE, "Claude");
+    expect(oauthReqInfo).toBeTruthy();
+    expect(DEFAULT_REDIRECT_POLICY).toMatchObject({ mode: "allowlist", allowPhones: [OWNER, OWNER_2], previewHosts: [] });
+  });
+
+  it("mcp.ANY_CLIENT.16 by default a browser that hasn't opted in can't start an approval, and a random phone gets nothing", async () => {
+    const relay = createRelay(null);
+    const { oauthReqInfo } = await signInPage(relay, LOOPBACK_REDIRECT, "MCP Inspector");
+    const started = await startApproval(oauthReqInfo);
+    expect(started.status).toBe(403);
+    expect(started.body).toMatchObject({ code: "approval_disabled" });
+    const random = await ext(relay, "details", "x".repeat(32), PHONE);
+    expect(random).toMatchObject({ status: 403, body: { ok: false, error: "not_enabled" } });
+    // The owner's phones reach the endpoint (this id simply doesn't exist).
+    expect(await ext(relay, "details", "x".repeat(32), OWNER)).toMatchObject({ status: 200, body: { ok: false, error: "expired" } });
+    expect((await ext(relay, "details", "x".repeat(32), OWNER_2)).status).toBe(200);
+  });
+
+  it("mcp.ANY_CLIENT.16 allowlist: a tester's browser on a preview host completes for the owner's phone only", async () => {
+    const relay = createRelay({ mode: "allowlist", previewHosts: ["example.org"] });
+    // Without the tester cookie, /authorize refuses the unknown website as before.
+    const reg = await register(relay, N8N_REDIRECT, "n8n");
+    expect(reg.status).toBe(201);
+    const clientId = ((await reg.json()) as { client_id: string }).client_id;
+    const q = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: N8N_REDIRECT, state: "s", code_challenge: await challenge(VERIFIER), code_challenge_method: "S256" });
+    expect((await relay.call(`/authorize?${q}`, { headers: { accept: "text/html" } })).status).toBe(400);
+    // Not a preview host: refused at registration.
+    expect((await register(relay, "https://agents.other.example/cb", "x")).status).toBe(400);
+
+    testerBrowser.on = true;
+    state.jar.set(TESTER_COOKIE, "1");
+    const { oauthReqInfo } = await authorize(relay, clientId, N8N_REDIRECT);
+    const { body } = await startApproval(oauthReqInfo);
+    expect(body.kind).toBe("unknown_web");
+    // A random phone can't see or start it.
+    expect((await ext(relay, "start", body.requestId, PHONE)).body).toMatchObject({ ok: false, error: "not_enabled" });
+    expect((await allow(relay, body.requestId, OWNER)).body.status).toBe("approved");
+    expect((await complete(body.requestId, oauthReqInfo)).status).toBe(200);
+  });
+
+  it("mcp.ANY_CLIENT.16 off (and the older known-only): nobody, the owner included, even in a tester's browser", async () => {
+    for (const mode of ["off", "known-only"]) {
+      const relay = createRelay({ mode });
+      state.jar.set(TESTER_COOKIE, "1");
+      testerBrowser.on = true;
+      expect((await register(relay, N8N_REDIRECT, "n8n")).status).toBe(400);
+      const { oauthReqInfo } = await signInPage(relay, LOOPBACK_REDIRECT, "MCP Inspector");
+      expect((await startApproval(oauthReqInfo)).body).toMatchObject({ code: "approval_disabled" });
+      expect((await ext(relay, "details", "x".repeat(32), OWNER)).body).toMatchObject({ error: "not_enabled" });
+    }
+  });
+
+  it("mcp.ANY_CLIENT.16 switching it off after Allow stops the completion", async () => {
+    const relay = createRelay({ mode: "on" });
+    const { oauthReqInfo } = await signInPage(relay, LOOPBACK_REDIRECT, "MCP Inspector");
+    const { body } = await startApproval(oauthReqInfo);
+    expect((await allow(relay, body.requestId)).body.status).toBe("approved");
+    await relay.kv.put(REDIRECT_POLICY_KEY, JSON.stringify({ mode: "allowlist" }));
+    resetRedirectPolicyCache();
+    expect((await complete(body.requestId, oauthReqInfo)).body).toMatchObject({ code: "approval_disabled" });
+  });
+
+  it("mcp.ANY_CLIENT.16 GET /authorize/approval/try sets the tester cookie; ?off=1 clears it", async () => {
+    const { GET } = await import("@/app/authorize/approval/try/route");
+    const on = await GET(new Request(`${ORIGIN}/authorize/approval/try`));
+    expect(on.headers.get("set-cookie")).toMatch(new RegExp(`^${TESTER_COOKIE}=1; Path=/authorize; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax$`));
+    const off = await GET(new Request(`${ORIGIN}/authorize/approval/try?off=1`));
+    expect(off.headers.get("set-cookie")).toMatch(/Max-Age=0/);
+  });
+});
+
+describe("mcp.ANY_CLIENT.18 the approval answers only its own sign-in page, for the very request", () => {
+  it("mcp.ANY_CLIENT.18 the same app, redirect and PKCE challenge with another state can't spend the approval", async () => {
+    const relay = createRelay();
+    const { clientId, oauthReqInfo } = await signInPage(relay, LOOPBACK_REDIRECT, "MCP Inspector");
+    const { body } = await startApproval(oauthReqInfo);
+    await allow(relay, body.requestId);
+    const other = await authorize(relay, clientId, LOOPBACK_REDIRECT, VERIFIER, "attacker-state");
+    expect((await complete(body.requestId, other.oauthReqInfo)).body).toMatchObject({ code: "approval_mismatch" });
+    expect((await complete(body.requestId, oauthReqInfo)).status).toBe(200);
+  });
+
+  it("mcp.ANY_CLIENT.18 a cross-site simple request or another origin is refused", async () => {
+    const relay = createRelay();
+    const { oauthReqInfo } = await signInPage(relay, LOOPBACK_REDIRECT, "MCP Inspector");
+    const sneaky = await approvalStart(post("/authorize/approval/start", { oauthReqInfo }, undefined, { "content-type": "text/plain; x=application/json" }));
+    expect(sneaky.status).toBe(400);
+    const foreign = await approvalStart(post("/authorize/approval/start", { oauthReqInfo }, undefined, { origin: "https://evil.example.org" }));
+    expect(foreign.status).toBe(403);
+    const own = await approvalStart(post("/authorize/approval/start", { oauthReqInfo }, undefined, { origin: ORIGIN }));
+    expect(own.status).toBe(200);
+    const statusForeign = await approvalStatus(post("/authorize/approval/status", { requestId: "x".repeat(32) }, undefined, { origin: "https://evil.example.org" }));
+    expect(statusForeign.status).toBe(403);
+  });
+});
+
+describe("mcp.ANY_CLIENT.19 an unknown website's connection ends after 90 days without use", () => {
+  async function grantLifetime(relay: Relay, redirect: string, name: string, chosen: string) {
+    const { oauthReqInfo } = await signInPage(relay, redirect, name);
+    const { body } = await startApproval(oauthReqInfo);
+    await allow(relay, body.requestId);
+    const response = await approvalComplete(post("/authorize/approval/complete", { requestId: body.requestId, oauthReqInfo, connectionLifetime: chosen }));
+    expect(response.status).toBe(200);
+    const accountRef = (await deriveAccountRef(PHONE, "phone-ref-secret"))!;
+    const grants = await relay.helpers.listUserGrants(accountRef);
+    return grants.items.map((g: any) => g.metadata?.lifetime);
+  }
+
+  it("mcp.ANY_CLIENT.19 'until I disconnect it' is not offered to an unknown website; a loopback app keeps its choice", async () => {
+    expect(await grantLifetime(createRelay(), N8N_REDIRECT, "n8n", "until-revoked")).toEqual(["inactive-90d"]);
+    expect(await grantLifetime(createRelay(), LOOPBACK_REDIRECT, "MCP Inspector", "until-revoked")).toEqual(["until-revoked"]);
   });
 });

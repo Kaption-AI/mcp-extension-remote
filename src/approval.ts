@@ -41,6 +41,8 @@ export interface ApprovalRecord {
   /** The name the app registered with: its own claim. */
   appName: string | null;
   browserHash: string;
+  /** mcp.ANY_CLIENT.18 — SHA-256 of the whole signed OAuth request (state, scope and resource included). */
+  requestHash: string;
   createdAt: number;
   expiresAt: number;
   status: ApprovalStatus;
@@ -64,6 +66,18 @@ export interface AuthRequestLike {
   redirectUri?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
+}
+
+/** mcp.ANY_CLIENT.18 — one fingerprint for the whole OAuth request, independent of key order. */
+export async function requestFingerprint(request: object): Promise<string> {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.keys(value as object).sort().map((k) => [k, canonical((value as Record<string, unknown>)[k])]));
+    }
+    return value;
+  };
+  return sha256Hex(JSON.stringify(canonical(request)));
 }
 
 const APPROVAL_ID = /^[A-Za-z0-9_-]{32}$/;
@@ -138,6 +152,7 @@ export async function createApproval(
     detail,
     appName: input.appName ? input.appName.slice(0, 60) : null,
     browserHash: await sha256Hex(browserSecret),
+    requestHash: await requestFingerprint(request),
     createdAt: now,
     expiresAt: now + APPROVAL_TTL_SECONDS * 1000,
     status: "pending",
@@ -248,6 +263,8 @@ export async function takeApproval(deps: ConnectDeps, id: unknown, browserSecret
     || record.redirectUri !== request.redirectUri
     || record.codeChallenge !== (request.codeChallenge ?? null)
     || record.codeChallengeMethod !== (request.codeChallengeMethod ?? null)
+    // mcp.ANY_CLIENT.18 — and the very request it was made for: not another state, scope or resource.
+    || record.requestHash !== (await requestFingerprint(request))
   ) {
     return { ok: false, error: "mismatch" };
   }

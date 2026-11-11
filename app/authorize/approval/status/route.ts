@@ -9,11 +9,11 @@ import { connectDeps } from "@/src/connect-code";
 import type { Env } from "@/src/types";
 import { jsonError } from "@/app/i18n";
 import { approvalCookieName } from "../cookie";
+import { refuseForeignRequest } from "../guard";
 
 export async function POST(request: Request): Promise<Response> {
-  if (!request.headers.get("content-type")?.includes("application/json")) {
-    return jsonError("Invalid content type", { status: 400, code: "invalid_content_type" });
-  }
+  const foreign = refuseForeignRequest(request);
+  if (foreign) return foreign;
   const { env } = getCloudflareContext() as unknown as { env: Env };
   let body: { requestId?: unknown } = {};
   try {

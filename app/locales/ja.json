@@ -171,5 +171,6 @@
   "err.pkce_required": "このアプリは PKCE (S256) を使っていないため、Kaption は承認できません。",
   "err.approval_expired": "このサインインのリクエストは期限切れです。アプリからやり直してください。",
   "err.approval_denied": "このサインインは Kaption で拒否されました。",
-  "err.approval_pending": "まず Kaption でサインインを承認してください。"
+  "err.approval_pending": "まず Kaption でサインインを承認してください。",
+  "err.approval_disabled": "このコンピューターで Kaption を使ってサインインする機能はまだ利用できません。"
 }

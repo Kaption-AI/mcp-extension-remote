@@ -111,18 +111,43 @@ export function isAllowedRedirectUri(redirectUri: unknown): boolean {
  */
 export type PolicyRedirectKind = RedirectKind | "unknown_web";
 
+/**
+ * mcp.ANY_CLIENT.2, .16 — the owner's switch for everything any-client adds:
+ * - "off": as before it (CLOUD_RELAY.16): unknown websites refused at register and /authorize, the sign-in page never
+ *   offers the approval, the approval endpoints answer 403 `approval_disabled`. "known-only" is read as "off".
+ * - "allowlist" (the default): only for testers. An approval completes only for a phone on `allowPhones` (proven by the
+ *   WhatsApp handshake); the sign-in page offers it only in a browser that opted in (the tester cookie); unknown
+ *   websites are accepted only on a `previewHosts` host. Everyone else sees the relay exactly as before.
+ * - "on": for everyone.
+ */
+export type AnyClientMode = "off" | "allowlist" | "on";
+
 /** mcp.ANY_CLIENT.2 — the owner's switch and lists, one KV value. */
 export interface RedirectPolicy {
-  /** "on": unknown websites through the approval; "known-only": refused, as before. */
-  mode: "on" | "known-only";
+  mode: AnyClientMode;
   /** Hosts treated as known AI apps (subdomains included). */
   allowHosts: string[];
   /** Hosts refused everywhere, known apps included (subdomains included). */
   denyHosts: string[];
+  /** mcp.ANY_CLIENT.16 — "allowlist": the only phones an approval completes for. */
+  allowPhones: string[];
+  /** mcp.ANY_CLIENT.16 — "allowlist": the only unknown websites accepted (subdomains included). */
+  previewHosts: string[];
 }
 
 export const REDIRECT_POLICY_KEY = "mcp-any-client:policy";
-export const DEFAULT_REDIRECT_POLICY: RedirectPolicy = { mode: "on", allowHosts: [], denyHosts: [] };
+/** mcp.ANY_CLIENT.16 — the owner's test numbers, the allowlist when the stored value names none. */
+export const DEFAULT_ALLOW_PHONES = ["17373427172", "17374202658"];
+export const DEFAULT_REDIRECT_POLICY: RedirectPolicy = {
+  mode: "allowlist",
+  allowHosts: [],
+  denyHosts: [],
+  allowPhones: DEFAULT_ALLOW_PHONES,
+  previewHosts: [],
+};
+
+/** mcp.ANY_CLIENT.16 — the cookie a tester's browser carries to see the new sign-in (not a credential). */
+export const TESTER_COOKIE = "kaption_any_client_tester";
 
 function hostList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -131,6 +156,21 @@ function hostList(value: unknown): string[] {
     .map((h) => h.trim().toLowerCase().replace(/^\*\./, "").replace(/\.$/, ""))
     .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h) && h.includes("."))
     .slice(0, 500);
+}
+
+function phoneList(value: unknown): string[] {
+  if (!Array.isArray(value)) return DEFAULT_ALLOW_PHONES;
+  return value
+    .filter((p): p is string | number => typeof p === "string" || typeof p === "number")
+    .map((p) => String(p).replace(/[\s\-+()]/g, ""))
+    .filter((p) => /^\d{8,15}$/.test(p))
+    .slice(0, 100);
+}
+
+function parseMode(value: unknown): AnyClientMode {
+  if (value === "on") return "on";
+  if (value === "off" || value === "known-only") return "off";
+  return "allowlist";
 }
 
 /** mcp.ANY_CLIENT.2 — a stored value as a policy; anything unreadable is the default. */
@@ -142,10 +182,31 @@ export function parseRedirectPolicy(raw: unknown): RedirectPolicy {
   if (!value || typeof value !== "object") return DEFAULT_REDIRECT_POLICY;
   const v = value as Record<string, unknown>;
   return {
-    mode: v.mode === "known-only" ? "known-only" : "on",
+    mode: parseMode(v.mode),
     allowHosts: hostList(v.allowHosts),
     denyHosts: hostList(v.denyHosts),
+    allowPhones: phoneList(v.allowPhones),
+    previewHosts: hostList(v.previewHosts),
   };
+}
+
+/** mcp.ANY_CLIENT.16 — whether this browser is shown the approval (the page, /authorize, approval/start). */
+export function approvalOfferedToBrowser(policy: RedirectPolicy, tester: boolean): boolean {
+  if (policy.mode === "on") return true;
+  return policy.mode === "allowlist" && tester;
+}
+
+/** mcp.ANY_CLIENT.16 — whether an approval may be shown to, started and completed for this phone. */
+export function approvalAllowedForPhone(policy: RedirectPolicy, phone: string | null | undefined): boolean {
+  if (!phone) return false;
+  if (policy.mode === "on") return true;
+  return policy.mode === "allowlist" && policy.allowPhones.includes(phone);
+}
+
+/** mcp.ANY_CLIENT.16 — the tester cookie in a Cookie header. */
+export function hasTesterCookie(cookieHeader: string | null | undefined): boolean {
+  if (!cookieHeader) return false;
+  return cookieHeader.split(";").some((part) => part.trim() === `${TESTER_COOKIE}=1`);
 }
 
 const POLICY_CACHE_MS = 60_000;
@@ -197,7 +258,10 @@ export function classifyWithPolicy(redirectUri: unknown, policy: RedirectPolicy 
   if (scheme !== "https") return null;
   if (isIpLiteral(host) || !host.includes(".") || host.endsWith(".")) return null;
   if (matchesHost(host, policy.allowHosts)) return "web";
-  return policy.mode === "on" ? "unknown_web" : null;
+  // mcp.ANY_CLIENT.16 — "off": refused as before; "allowlist": only the owner's preview hosts.
+  if (policy.mode === "on") return "unknown_web";
+  if (policy.mode === "allowlist" && matchesHost(host, policy.previewHosts)) return "unknown_web";
+  return null;
 }
 
 /** mcp.ANY_CLIENT.3, .5 — kinds a sign-in must be approved on the person's computer for (no phone, no code). */
@@ -223,11 +287,15 @@ export function checkClientRegistration(options: {
   const allowed = (uri: unknown) => (policy ? classifyWithPolicy(uri, policy) !== null : isAllowedRedirectUri(uri));
   const refused = uris.find((uri) => !allowed(uri));
   if (refused === undefined) return undefined;
+  // mcp.ANY_CLIENT.16 — until it is on for everyone, the refusal reads as it did before any-client.
   return {
     code: "invalid_redirect_uri",
-    description:
-      "This redirect URI is not accepted. Kaption connects to AI apps over https, and to apps on your own computer "
-      + "(http://localhost or http://127.0.0.1 on any port). To connect another app, write to hello@kaptionai.com.",
+    description: policy?.mode === "on"
+      ? "This redirect URI is not accepted. Kaption connects to AI apps over https, and to apps on your own computer "
+        + "(http://localhost or http://127.0.0.1 on any port). To connect another app, write to hello@kaptionai.com."
+      : "This redirect URI is not accepted. Kaption connects to known AI apps (Claude, ChatGPT, Cursor, …) and to apps "
+        + "on your own computer (http://localhost or http://127.0.0.1 on any port). To connect another app, write to "
+        + "hello@kaptionai.com.",
     status: 400,
   };
 }

@@ -171,5 +171,6 @@
   "err.pkce_required": "此应用未使用 PKCE (S256)，因此 Kaption 无法批准它。",
   "err.approval_expired": "此登录请求已过期。请从应用中重新开始。",
   "err.approval_denied": "此登录已在 Kaption 中被拒绝。",
-  "err.approval_pending": "请先在 Kaption 中批准登录。"
+  "err.approval_pending": "请先在 Kaption 中批准登录。",
+  "err.approval_disabled": "在此电脑上使用 Kaption 登录尚不可用。"
 }

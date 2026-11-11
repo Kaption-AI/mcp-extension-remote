@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import SignIn from "./SignIn";
 import { CONNECT_COOKIE, connectDeps, maskPhone, peekConnectCode, redirectDestination } from "@/src/connect-code";
 import { hmacVerify } from "@/src/otp";
-import { classifyWithPolicy, loadRedirectPolicy, type PolicyRedirectKind } from "@/src/redirect-policy";
+import { TESTER_COOKIE, approvalOfferedToBrowser, classifyWithPolicy, loadRedirectPolicy, type PolicyRedirectKind } from "@/src/redirect-policy";
 import { DEFAULT_EXTENSION_IDS } from "./extension-bridge";
 import type { Env } from "@/src/types";
 import { getServerT } from "../i18n-server";
@@ -55,7 +55,7 @@ export default async function AuthorizePage({
   let appName: string | null = null;
   let destination: string | null = null;
   let kind: PolicyRedirectKind | null = null;
-  let ids: string[] = DEFAULT_EXTENSION_IDS;
+  let ids: string[] = [];
   try {
     const { env } = getCloudflareContext() as unknown as { env: Env };
     const remembered = (await cookies()).get(CONNECT_COOKIE)?.value;
@@ -63,8 +63,12 @@ export default async function AuthorizePage({
       const phone = await peekConnectCode(connectDeps(env), remembered);
       rememberedFor = phone ? maskPhone(phone) : null;
     }
-    ids = extensionIds(env);
+    // mcp.ANY_CLIENT.16 — the new sign-in only where the owner's switch offers it (testers' browsers while "allowlist");
+    // elsewhere no extension is asked and the page is the one before any-client.
+    const offered = approvalOfferedToBrowser(await loadRedirectPolicy(env.OAUTH_KV), (await cookies()).get(TESTER_COOKIE)?.value === "1");
+    ids = offered ? extensionIds(env) : [];
     if (oauthReqInfo) ({ name: appName, destination, kind } = await clientInfo(env, oauthReqInfo));
+    if (!offered) kind = null;
   } catch {
     rememberedFor = null;
   }

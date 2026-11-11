@@ -82,7 +82,16 @@ import {
   startLimit,
 } from "./connect-code";
 import { acceptsHtml, ensureProblemJson, problem } from "./problem";
-import { DEFAULT_REDIRECT_POLICY, checkClientRegistration, classifyWithPolicy, loadRedirectPolicy } from "./redirect-policy";
+import {
+  DEFAULT_REDIRECT_POLICY,
+  approvalAllowedForPhone,
+  approvalOfferedToBrowser,
+  approvalOnly,
+  checkClientRegistration,
+  classifyWithPolicy,
+  hasTesterCookie,
+  loadRedirectPolicy,
+} from "./redirect-policy";
 import {
   approvalDetails,
   denyApproval,
@@ -441,6 +450,10 @@ outerApp.post("/ext/approval", async (c) => {
   if (!phone) return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or missing Kaption JWT", CONNECT_CORS);
   const accountRef = await deriveAccountRef(phone, c.env.PHONE_REF_SECRET);
   if (!accountRef) return legacyProblem(401, "invalid_token", "invalid_token", "Invalid or missing Kaption JWT", CONNECT_CORS);
+  // mcp.ANY_CLIENT.16 — off, or not on this phone's allowlist: nothing to show, start or deny.
+  if (!approvalAllowedForPhone(await loadRedirectPolicy(c.env.OAUTH_KV), phone)) {
+    return c.json({ ok: false, error: "not_enabled" }, 403, CONNECT_CORS);
+  }
   let body: { action?: unknown; requestId?: unknown } = {};
   try { body = await c.req.json(); } catch { body = {}; }
   const deps = connectDeps(c.env);
@@ -1425,7 +1438,10 @@ function createRouter(nextHandler: WorkerHandler) {
             // AI app's, can't start a sign-in either (the library already checked it is one the client registered).
             // mcp.ANY_CLIENT.1-3 — an https app on another host may start one too, completed only by the approval on
             // the person's computer; the owner's deny list refuses even a known app.
-            if (classifyWithPolicy(oauthReqInfo.redirectUri, await loadRedirectPolicy(env.OAUTH_KV)) === null) {
+            // mcp.ANY_CLIENT.16 — until it is on for everyone, an unknown website starts one only in a tester's browser.
+            const policy = await loadRedirectPolicy(env.OAUTH_KV);
+            const kind = classifyWithPolicy(oauthReqInfo.redirectUri, policy);
+            if (kind === null || (approvalOnly(kind) && !approvalOfferedToBrowser(policy, hasTesterCookie(req.headers.get("cookie"))))) {
               console.warn("[authorize] sign-in refused: redirect not allowed for client", oauthReqInfo.clientId);
               return authorizeError(req, { key: "err.authorize_app_not_allowed", code: "unauthorized_client" });
             }

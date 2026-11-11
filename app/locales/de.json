@@ -171,5 +171,6 @@
   "err.pkce_required": "Diese App hat kein PKCE (S256) verwendet, daher kann Kaption sie nicht erlauben.",
   "err.approval_expired": "Diese Anmeldeanfrage ist abgelaufen. Starte erneut in der App.",
   "err.approval_denied": "Diese Anmeldung wurde in Kaption abgelehnt.",
-  "err.approval_pending": "Erlaube die Anmeldung zuerst in Kaption."
+  "err.approval_pending": "Erlaube die Anmeldung zuerst in Kaption.",
+  "err.approval_disabled": "Mit Kaption auf diesem Computer anmelden ist noch nicht verfügbar."
 }

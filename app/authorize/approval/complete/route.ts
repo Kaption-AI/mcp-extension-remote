@@ -10,18 +10,19 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { isApprovalId, recordApprovalAudit, takeApproval } from "@/src/approval";
 import { connectDeps } from "@/src/connect-code";
 import { deriveAccountRef, sanitizeAccountRefForLog } from "@/src/otp";
-import { parseConnectionLifetime } from "@/src/connection-lifetime-options";
+import { DEFAULT_CONNECTION_LIFETIME, parseConnectionLifetime } from "@/src/connection-lifetime-options";
+import { approvalAllowedForPhone, loadRedirectPolicy } from "@/src/redirect-policy";
 import { readSignedRequest, requestKind } from "@/src/signed-request";
 import type { Env } from "@/src/types";
 import { jsonError } from "@/app/i18n";
 import { approvalCookieName } from "../cookie";
+import { refuseForeignRequest } from "../guard";
 
 const EXPIRED = "This sign-in request expired. Start again from the app.";
 
 export async function POST(request: Request): Promise<Response> {
-  if (!request.headers.get("content-type")?.includes("application/json")) {
-    return jsonError("Invalid content type", { status: 400, code: "invalid_content_type" });
-  }
+  const foreign = refuseForeignRequest(request);
+  if (foreign) return foreign;
   const { env } = getCloudflareContext() as unknown as { env: Env };
   let body: { requestId?: unknown; oauthReqInfo?: unknown; connectionLifetime?: unknown } = {};
   try {
@@ -51,10 +52,17 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError(EXPIRED, { status: 400, code: taken.error === "mismatch" ? "approval_mismatch" : "approval_expired" });
   }
   jar.delete(cookieName);
+  // mcp.ANY_CLIENT.16 — the proven phone must still be allowed (the owner may have switched it off meanwhile).
+  if (!approvalAllowedForPhone(await loadRedirectPolicy(env.OAUTH_KV), taken.phone)) {
+    return jsonError("Sign in with Kaption on this computer isn't available yet.", { status: 403, code: "approval_disabled" });
+  }
 
   const accountRef = await deriveAccountRef(taken.phone, env.PHONE_REF_SECRET);
   if (!accountRef) return jsonError(EXPIRED, { status: 400, code: "approval_expired" });
-  const connectionLifetime = parseConnectionLifetime(body.connectionLifetime);
+  // mcp.ANY_CLIENT.19 — an unknown website's connection always ends after 90 days without use.
+  const connectionLifetime = taken.record.kind === "unknown_web"
+    ? DEFAULT_CONNECTION_LIFETIME
+    : parseConnectionLifetime(body.connectionLifetime);
   try {
     const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
       // mcp.ANY_CLIENT.11 — where it returns to and how it was approved, readable without decrypting the grant.

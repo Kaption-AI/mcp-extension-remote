@@ -171,5 +171,6 @@
   "err.pkce_required": "Cette application n'a pas utilisé PKCE (S256), Kaption ne peut donc pas l'approuver.",
   "err.approval_expired": "Cette demande de connexion a expiré. Recommencez depuis l'application.",
   "err.approval_denied": "Cette connexion a été refusée dans Kaption.",
-  "err.approval_pending": "Approuvez d'abord la connexion dans Kaption."
+  "err.approval_pending": "Approuvez d'abord la connexion dans Kaption.",
+  "err.approval_disabled": "La connexion avec Kaption sur cet ordinateur n'est pas encore disponible."
 }

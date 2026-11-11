@@ -10,18 +10,18 @@ import { cookies } from "next/headers";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { APPROVAL_START_IP_POLICY, APPROVAL_TTL_SECONDS, createApproval } from "@/src/approval";
 import { connectDeps } from "@/src/connect-code";
-import { approvalNeedsPkce } from "@/src/redirect-policy";
+import { TESTER_COOKIE, approvalNeedsPkce, approvalOfferedToBrowser, loadRedirectPolicy } from "@/src/redirect-policy";
 import { readSignedRequest, requestKind } from "@/src/signed-request";
 import { readSlidingCounter, rateLimitHeaders, slidingStatus, tooManyRequests, writeSlidingCounter } from "@/src/rate-limit";
 import { withHeaders } from "@/src/problem";
 import type { Env } from "@/src/types";
 import { errorBody, jsonError } from "@/app/i18n";
 import { approvalCookieName } from "../cookie";
+import { refuseForeignRequest } from "../guard";
 
 export async function POST(request: Request): Promise<Response> {
-  if (!request.headers.get("content-type")?.includes("application/json")) {
-    return jsonError("Invalid content type", { status: 400, code: "invalid_content_type" });
-  }
+  const foreign = refuseForeignRequest(request);
+  if (foreign) return foreign;
   const { env } = getCloudflareContext() as unknown as { env: Env };
   let body: { oauthReqInfo?: unknown } = {};
   try {
@@ -39,6 +39,12 @@ export async function POST(request: Request): Promise<Response> {
   if (limit.remaining <= 0) {
     const message = "Too many requests. Try again later.";
     return tooManyRequests(limit, message, { extra: errorBody(message) });
+  }
+
+  // mcp.ANY_CLIENT.16 — off, or this browser hasn't opted in while it is for testers only.
+  const jar = await cookies();
+  if (!approvalOfferedToBrowser(await loadRedirectPolicy(env.OAUTH_KV), jar.get(TESTER_COOKIE)?.value === "1")) {
+    return jsonError("Sign in with Kaption on this computer isn't available yet.", { status: 403, code: "approval_disabled" });
   }
 
   const oauthReq = await readSignedRequest(body.oauthReqInfo, env);
@@ -62,7 +68,7 @@ export async function POST(request: Request): Promise<Response> {
     appName = null;
   }
   const created = await createApproval(connectDeps(env), { request: oauthReq, kind, appName });
-  (await cookies()).set(approvalCookieName(created.id), created.browserSecret, {
+  jar.set(approvalCookieName(created.id), created.browserSecret, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",

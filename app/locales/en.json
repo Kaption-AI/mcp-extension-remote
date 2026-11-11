@@ -171,5 +171,6 @@
   "err.pkce_required": "This app didn't use PKCE (S256), so Kaption can't approve it.",
   "err.approval_expired": "This sign-in request expired. Start again from the app.",
   "err.approval_denied": "This sign-in was declined in Kaption.",
-  "err.approval_pending": "Approve the sign-in in Kaption first."
+  "err.approval_pending": "Approve the sign-in in Kaption first.",
+  "err.approval_disabled": "Sign in with Kaption on this computer isn't available yet."
 }

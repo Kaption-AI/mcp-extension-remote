@@ -171,5 +171,6 @@
   "err.pkce_required": "Bu uygulama PKCE (S256) kullanmadı, bu yüzden Kaption onu onaylayamaz.",
   "err.approval_expired": "Bu giriş isteğinin süresi doldu. Uygulamadan yeniden başla.",
   "err.approval_denied": "Bu giriş Kaption'da reddedildi.",
-  "err.approval_pending": "Önce girişi Kaption'da onayla."
+  "err.approval_pending": "Önce girişi Kaption'da onayla.",
+  "err.approval_disabled": "Bu bilgisayarda Kaption ile oturum açma henüz kullanılamıyor."
 }
