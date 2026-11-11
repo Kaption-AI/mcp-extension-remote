@@ -316,12 +316,6 @@ export interface ConnectionView {
   lifetime: ConnectionLifetime;
   /** Epoch ms when it disconnects on its own; null means only when disconnected. */
   endsAt: number | null;
-  /**
-   * mcp.ANY_CLIENT.13 — where signing in sent the person back: a host, or "local" (an app on this computer), with the
-   * port or app scheme in destinationDetail. Only on connections approved on the person's computer.
-   */
-  destination?: string;
-  destinationDetail?: string;
 }
 
 /** mcp.CLOUD_RELAY.12 — the account's connections, newest first. */
@@ -357,8 +351,6 @@ export async function listConnections(
         lastUsedAt: lastUsed ? lastUsed * 1000 : null,
         lifetime,
         endsAt: Number.isFinite(endsAt) ? endsAt * 1000 : null,
-        ...(typeof grant.metadata?.destination === "string" ? { destination: String(grant.metadata.destination).slice(0, 255) } : {}),
-        ...(typeof grant.metadata?.destinationDetail === "string" ? { destinationDetail: String(grant.metadata.destinationDetail).slice(0, 32) } : {}),
       });
     }
     cursor = page.cursor;

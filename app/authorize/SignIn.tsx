@@ -5,12 +5,9 @@
  * browser came from Kaption's Add to Claude (the /connect page remembered it; only the masked phone shows), otherwise
  * pasted from Kaption. "Use my phone number instead" is today's phone + WhatsApp code form, unchanged.
  */
-import { useEffect, useState } from "react";
-import ApproveOnComputer from "./ApproveOnComputer";
+import { useState } from "react";
 import Destination from "./Destination";
 import PhoneForm from "./PhoneForm";
-import { findExtension } from "./extension-bridge";
-import type { PolicyRedirectKind } from "@/src/redirect-policy";
 import {
   DEFAULT_CONNECTION_LIFETIME,
   LIFETIME_CHOICES,
@@ -26,18 +23,12 @@ export default function SignIn({
   rememberedFor,
   appName,
   destination,
-  kind = null,
-  extensionIds = [],
 }: {
   oauthReqInfo: string;
   loginHint?: string;
   rememberedFor: string | null;
   appName: string | null;
   destination: string | null;
-  /** mcp.ANY_CLIENT.3 — the redirect's kind under the owner's policy ("unknown_web": approval only). */
-  kind?: PolicyRedirectKind | null;
-  /** mcp.ANY_CLIENT.4 — the Kaption extension ids this page may ask. */
-  extensionIds?: string[];
 }) {
   const { t } = useI18n();
   const [mode, setMode] = useState<"code" | "phone">(loginHint ? "phone" : "code");
@@ -47,69 +38,6 @@ export default function SignIn({
   const [error, setError] = useState<{ error?: string; errorKey?: string; errorParams?: Record<string, string> } | null>(null);
   const [loading, setLoading] = useState(false);
   const app = appName || t("signin.this_app");
-  // mcp.ANY_CLIENT.4 — is Kaption in this browser? (undefined while asking)
-  const [extensionId, setExtensionId] = useState<string | null | undefined>(undefined);
-  const approvalOnly = kind === "unknown_web";
-  useEffect(() => {
-    let alive = true;
-    if (!oauthReqInfo || !extensionIds.length) {
-      setExtensionId(null);
-      return undefined;
-    }
-    void findExtension(extensionIds).then((id) => { if (alive) setExtensionId(id); });
-    return () => { alive = false; };
-  }, [oauthReqInfo, extensionIds.join(",")]);
-
-  const lifetimeSelect = (() => {
-    const choice = LIFETIME_CHOICES.find((c) => c.id === lifetime) ?? LIFETIME_CHOICES[0];
-    return (
-      <>
-        <label htmlFor="connectionLifetime" className="block text-[13px] text-neutral-400 mt-5 mb-1.5">
-          {t("lifetime.label")}
-        </label>
-        <select
-          id="connectionLifetime"
-          value={lifetime}
-          onChange={(e) => setLifetime(parseConnectionLifetime(e.target.value))}
-          aria-describedby="connectionLifetimeDetail"
-          style={{ colorScheme: "dark" }}
-          className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-sm outline-none cursor-pointer focus:border-green-500"
-        >
-          {LIFETIME_CHOICES.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.id === DEFAULT_CONNECTION_LIFETIME
-                ? t("lifetime.recommended", { title: t(`lifetime.${c.id}.title`) })
-                : t(`lifetime.${c.id}.title`)}
-            </option>
-          ))}
-        </select>
-        <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2 mb-5">{t(`lifetime.${choice.id}.detail`)}</p>
-      </>
-    );
-  })();
-
-  // mcp.ANY_CLIENT.3-4 — an app Kaption doesn't know: only the approval on this computer, with a warning.
-  if (approvalOnly && oauthReqInfo) {
-    return (
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full" data-testid="signin-approval-only">
-        <h1 className="text-xl mb-2 text-neutral-50">{t("signin.title", { app })}</h1>
-        <Destination destination={destination} />
-        <p className="text-sm text-amber-400 mb-4 leading-relaxed" data-testid="signin-unknown-warning">
-          {rich(t("approve.unknown_warning"), { host: <span className="font-medium">{destination ?? ""}</span> })}
-        </p>
-        {extensionId === undefined && <p className="text-sm text-neutral-400">{t("approve.looking")}</p>}
-        {extensionId === null && (
-          <p className="text-sm text-neutral-300 leading-relaxed" data-testid="signin-need-extension">{t("approve.need_extension")}</p>
-        )}
-        {extensionId && (
-          <>
-            {lifetimeSelect}
-            <ApproveOnComputer oauthReqInfo={oauthReqInfo} extensionId={extensionId} lifetime={lifetime} />
-          </>
-        )}
-      </div>
-    );
-  }
 
   if (mode === "phone" || !oauthReqInfo) {
     return (
@@ -123,6 +51,8 @@ export default function SignIn({
       </div>
     );
   }
+
+  const selectedChoice = LIFETIME_CHOICES.find((choice) => choice.id === lifetime) ?? LIFETIME_CHOICES[0];
 
   async function connect(e: React.FormEvent) {
     e.preventDefault();
@@ -161,14 +91,6 @@ export default function SignIn({
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
       <h1 className="text-xl mb-2 text-neutral-50">{t("signin.title", { app })}</h1>
       <Destination destination={destination} />
-      {/* mcp.ANY_CLIENT.4 — with Kaption in this browser, its one-click approval comes first. */}
-      {extensionId && !(useRemembered && rememberedFor) && (
-        <div className="mb-6" data-testid="signin-approve-first">
-          {lifetimeSelect}
-          <ApproveOnComputer oauthReqInfo={oauthReqInfo} extensionId={extensionId} lifetime={lifetime} />
-          <p className="text-xs text-neutral-500 mt-6 mb-1 uppercase tracking-wide">{t("approve.or_code")}</p>
-        </div>
-      )}
       {useRemembered && rememberedFor ? (
         <p className="text-sm text-neutral-400 mb-6 leading-relaxed" data-testid="connect-remembered">
           {rich(t("signin.remembered", { app }), {
@@ -205,7 +127,26 @@ export default function SignIn({
           </>
         )}
 
-        {!(extensionId && !(useRemembered && rememberedFor)) && lifetimeSelect}
+        <label htmlFor="connectionLifetime" className="block text-[13px] text-neutral-400 mt-5 mb-1.5">
+          {t("lifetime.label")}
+        </label>
+        <select
+          id="connectionLifetime"
+          value={lifetime}
+          onChange={(e) => setLifetime(parseConnectionLifetime(e.target.value))}
+          aria-describedby="connectionLifetimeDetail"
+          style={{ colorScheme: "dark" }}
+          className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-sm outline-none cursor-pointer focus:border-green-500"
+        >
+          {LIFETIME_CHOICES.map((choice) => (
+            <option key={choice.id} value={choice.id}>
+              {choice.id === DEFAULT_CONNECTION_LIFETIME
+                ? t("lifetime.recommended", { title: t(`lifetime.${choice.id}.title`) })
+                : t(`lifetime.${choice.id}.title`)}
+            </option>
+          ))}
+        </select>
+        <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2">{t(`lifetime.${selectedChoice.id}.detail`)}</p>
 
         {error && (
           <p className="text-red-500 text-[13px] mt-3" role="alert">
@@ -216,9 +157,7 @@ export default function SignIn({
         <button
           type="submit"
           disabled={loading}
-          className={extensionId
-            ? "w-full py-3 rounded-lg border border-neutral-700 bg-transparent text-neutral-100 font-semibold text-sm cursor-pointer mt-5 hover:border-green-500 disabled:opacity-50 disabled:cursor-wait"
-            : "w-full py-3 rounded-lg border-none bg-green-500 text-neutral-950 font-semibold text-sm cursor-pointer mt-5 hover:bg-green-600 disabled:opacity-50 disabled:cursor-wait"}
+          className="w-full py-3 rounded-lg border-none bg-green-500 text-neutral-950 font-semibold text-sm cursor-pointer mt-5 hover:bg-green-600 disabled:opacity-50 disabled:cursor-wait"
         >
           {loading ? t("signin.connecting") : t("signin.connect")}
         </button>

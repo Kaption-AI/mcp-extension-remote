@@ -134,12 +134,20 @@ export async function pollConnectPairing(deps: ConnectDeps, pairId: string, phon
   if (pair.code && pair.codeExpiresAt && pair.codeExpiresAt > now) {
     return { status: "ready", code: formatConnectCode(pair.code), expiresAt: pair.codeExpiresAt, masked: maskPhone(pair.phone) };
   }
-  const proof = await v3Proof(deps, pair.sessionToken);
-  if (proof === "error") return { status: "error" };
-  if (proof === "pending") return { status: "pending" };
-  if (proof !== "proven") {
-    if (proof !== "needs_code") await deps.kv.delete(pairKey(pairId));
-    return { status: proof };
+  const res = await deps.api("/api/v5/auth/v3/status", { sessionToken: pair.sessionToken });
+  if (!res.ok) return { status: "error" };
+  const body = (res.json ?? {}) as { confirmed?: boolean; proven?: boolean; reason?: string };
+  if (!body.confirmed) {
+    if (body.reason === "needs_code" || body.reason === "rejected" || body.reason === "expired") {
+      if (body.reason !== "needs_code") await deps.kv.delete(pairKey(pairId));
+      return { status: body.reason };
+    }
+    return { status: "pending" };
+  }
+  // mcp.CONNECT_CODE.2 — accepted is not proven: a link taken on trust never becomes a code.
+  if (body.proven !== true) {
+    await deps.kv.delete(pairKey(pairId));
+    return { status: "unproven" };
   }
   const code = generateConnectCode();
   const expiresAt = now + CONNECT_CODE_TTL_SECONDS * 1000;
@@ -148,23 +156,6 @@ export async function pollConnectPairing(deps: ConnectDeps, pairId: string, phon
   const updated: PairRecord = { ...pair, code, codeExpiresAt: expiresAt };
   await deps.kv.put(pairKey(pairId), await sealState(updated, PAIR_TTL_SECONDS, deps.secret), { expirationTtl: PAIR_TTL_SECONDS });
   return { status: "ready", code: formatConnectCode(code), expiresAt, masked: maskPhone(pair.phone) };
-}
-
-export type V3Proof = "proven" | "pending" | "needs_code" | "rejected" | "expired" | "unproven" | "error";
-
-/**
- * mcp.CONNECT_CODE.2, mcp.ANY_CLIENT.9 — where an auth v3 handshake stands. "proven" only when the API says so
- * (auth-v3-server.PROVEN): accepted is not proven, and a link taken on trust never counts.
- */
-export async function v3Proof(deps: Pick<ConnectDeps, "api">, sessionToken: string): Promise<V3Proof> {
-  const res = await deps.api("/api/v5/auth/v3/status", { sessionToken });
-  if (!res.ok) return "error";
-  const body = (res.json ?? {}) as { confirmed?: boolean; proven?: boolean; reason?: string };
-  if (!body.confirmed) {
-    if (body.reason === "needs_code" || body.reason === "rejected" || body.reason === "expired") return body.reason;
-    return "pending";
-  }
-  return body.proven === true ? "proven" : "unproven";
 }
 
 /** mcp.CONNECT_CODE.4 — the phone behind a code, without spending it (the sign-in page's masked prefill). */
