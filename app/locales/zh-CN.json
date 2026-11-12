@@ -152,5 +152,18 @@
   "err.too_many_attempts": "尝试次数过多。请稍后再试。",
   "err.reviewer_invalid": "审核员凭据无效",
   "err.authorize_start": "Kaption 无法开始登录此应用。请从该应用的连接器中移除 Kaption，重新添加后再试一次。",
-  "err.authorize_app_not_allowed": "Kaption 不会连接到此应用：登录后它会把你带到一个 Kaption 无法识别的地址。Kaption 适用于 Claude、ChatGPT 等已知的 AI 应用，以及你自己电脑上的应用。如果你没有预料到这个页面，请关闭它。"
+  "err.authorize_app_not_allowed": "Kaption 不会连接到此应用：登录后它会把你带到一个 Kaption 无法识别的地址。Kaption 适用于 Claude、ChatGPT 等已知的 AI 应用，以及你自己电脑上的应用。如果你没有预料到这个页面，请关闭它。",
+  "another.warning": "{{host}} 想要使用 Kaption。Kaption 不认识这个应用。",
+  "another.warning_detail": "它将能读取和发送你的 WhatsApp 消息。只有在你亲自把 Kaption 添加到这个应用时才继续。",
+  "another.trust": "我了解并信任这个网站",
+  "signin.paste_hint_other": "粘贴 Kaption 在 WhatsApp 中显示的代码，位置：Kaption → AI 助手 (MCP) → 连接其他应用。",
+  "connect.other_title": "将其他应用连接到你的 WhatsApp",
+  "connect.other_paste": "在你的应用中将此粘贴为 MCP 服务器：",
+  "connect.other_step1": "在你的应用中添加 MCP 服务器（或连接器）并粘贴地址",
+  "connect.other_step2": "在 Kaption 的登录页面勾选“我了解并信任这个网站”，然后点击连接",
+  "connect.other_no_code": "此链接没有代码。在 WhatsApp 中打开 Kaption，再次点击“连接其他应用”。",
+  "connect.other_footnote": "代码只能使用一次，有效期 10 分钟。在其他浏览器或电脑上登录？请在登录页面粘贴 Kaption 显示的代码。",
+  "err.trust_required": "请先勾选“我了解并信任这个网站”。",
+  "err.another_app_unavailable": "此应用暂时无法连接到 Kaption。",
+  "err.another_app_rate_limited": "今天连接的新应用太多。请明天再试。"
 }

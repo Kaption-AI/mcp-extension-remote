@@ -5,7 +5,7 @@
  */
 import { getOAuthApi } from "@cloudflare/workers-oauth-provider";
 import { SignJWT } from "jose";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildOAuthOptions, canonicalResource, createFetchHandler } from "./index";
 import { deriveAccountRef } from "./otp";
 import {
@@ -18,6 +18,16 @@ import {
 import { checkClientRegistration, classifyRedirectUri } from "./redirect-policy";
 import { connectorAddress } from "./connector-address";
 import { FakeKV } from "./test-support/fake-kv";
+import { ANOTHER_APP_POLICY_KEY, resetAnotherAppPolicyCache } from "./another-app";
+
+// mcp.ANOTHER_APP.1 — the owner's switch is cached per isolate; every test starts from what its KV says.
+beforeEach(() => resetAnotherAppPolicyCache());
+
+/** mcp.ANOTHER_APP.9 — the kill switch: unknown websites are refused exactly as CLOUD_RELAY.16 refused them. */
+async function switchOff(relay: { kv: FakeKV }) {
+  await relay.kv.put(ANOTHER_APP_POLICY_KEY, JSON.stringify({ mode: "off" }));
+  resetAnotherAppPolicyCache();
+}
 import type { Env } from "./types";
 
 vi.mock("./relay-mcp", () => ({
@@ -106,8 +116,9 @@ const jwtFor = (phone: string) =>
     .sign(new TextEncoder().encode(JWT_SECRET));
 
 describe("mcp.CLOUD_RELAY.16 only known AI apps and this computer receive a sign-in", () => {
-  it("refuses a registration with an attacker's redirect (security report #2198) and stores nothing", async () => {
+  it("with the another-app switch off (mcp.ANOTHER_APP.9), refuses a registration with an attacker's redirect (security report #2198) and stores nothing", async () => {
     const relay = createRelay();
+    await switchOff(relay);
     for (const uris of [
       ["https://attacker-alpha.example.com/cb"],
       [" https://attacker-alpha.example.com/cb"],
@@ -146,8 +157,9 @@ describe("mcp.CLOUD_RELAY.16 only known AI apps and this computer receive a sign
     }
   });
 
-  it("a client registered before the rule, with an attacker's redirect, can't start a sign-in: a page, nothing rendered", async () => {
+  it("with the another-app switch off (mcp.ANOTHER_APP.9), a client registered before the rule, with an attacker's redirect, can't start a sign-in: a page, nothing rendered", async () => {
     const relay = createRelay();
+    await switchOff(relay);
     const clientId = await registeredClient(relay);
     // As registered before this change (the library never checked the host).
     const stored = relay.kv.json<Record<string, unknown>>(`client:${clientId}`)!;

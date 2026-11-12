@@ -152,5 +152,18 @@
   "err.too_many_attempts": "Zu viele Versuche. Versuchen Sie es später erneut.",
   "err.reviewer_invalid": "Ungültige Prüfer-Zugangsdaten",
   "err.authorize_start": "Kaption konnte die Anmeldung bei dieser App nicht starten. Entfernen Sie Kaption aus den Connectors der App, fügen Sie es erneut hinzu und versuchen Sie es noch einmal.",
-  "err.authorize_app_not_allowed": "Kaption verbindet sich nicht mit dieser App: Nach der Anmeldung würden Sie an eine Adresse weitergeleitet, die Kaption nicht kennt. Kaption funktioniert mit Claude, ChatGPT und anderen bekannten KI-Apps sowie mit Apps auf Ihrem eigenen Computer. Wenn Sie diese Seite nicht erwartet haben, schließen Sie sie."
+  "err.authorize_app_not_allowed": "Kaption verbindet sich nicht mit dieser App: Nach der Anmeldung würden Sie an eine Adresse weitergeleitet, die Kaption nicht kennt. Kaption funktioniert mit Claude, ChatGPT und anderen bekannten KI-Apps sowie mit Apps auf Ihrem eigenen Computer. Wenn Sie diese Seite nicht erwartet haben, schließen Sie sie.",
+  "another.warning": "{{host}} möchte Kaption verwenden. Kaption kennt diese App nicht.",
+  "another.warning_detail": "Sie kann deine WhatsApp-Nachrichten lesen und senden. Fahre nur fort, wenn du Kaption selbst zu dieser App hinzugefügt hast.",
+  "another.trust": "Ich kenne diese Website und vertraue ihr",
+  "signin.paste_hint_other": "Füge den Code ein, den Kaption in WhatsApp anzeigt, unter Kaption → KI-Assistenten (MCP) → Andere App verbinden.",
+  "connect.other_title": "Verbinde eine andere App mit deinem WhatsApp",
+  "connect.other_paste": "Füge dies in deiner App als MCP-Server ein:",
+  "connect.other_step1": "Füge in deiner App einen MCP-Server (oder Connector) hinzu und füge die Adresse ein",
+  "connect.other_step2": "Setze auf der Anmeldeseite von Kaption das Häkchen bei „Ich kenne diese Website und vertraue ihr“ und klicke dann auf Verbinden",
+  "connect.other_no_code": "Dieser Link hat keinen Code. Öffne Kaption in WhatsApp und klicke erneut auf Andere App verbinden.",
+  "connect.other_footnote": "Der Code funktioniert einmal, 10 Minuten lang. Du meldest dich in einem anderen Browser oder auf einem anderen Computer an? Füge dort den Code ein, den Kaption dir gezeigt hat.",
+  "err.trust_required": "Setze zuerst das Häkchen bei „Ich kenne diese Website und vertraue ihr“.",
+  "err.another_app_unavailable": "Diese App kann sich noch nicht mit Kaption verbinden.",
+  "err.another_app_rate_limited": "Heute wurden zu viele neue Apps verbunden. Versuche es morgen erneut."
 }

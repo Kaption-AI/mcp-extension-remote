@@ -152,5 +152,18 @@
   "err.too_many_attempts": "Çok fazla deneme. Daha sonra tekrar dene.",
   "err.reviewer_invalid": "Geçersiz inceleyici kimlik bilgileri",
   "err.authorize_start": "Kaption bu uygulamada giriş işlemini başlatamadı. Kaption'ı uygulamanın bağlayıcılarından kaldır, yeniden ekle ve bir kez daha dene.",
-  "err.authorize_app_not_allowed": "Kaption bu uygulamaya bağlanmaz: giriş yaptıktan sonra seni Kaption'ın tanımadığı bir adrese gönderecekti. Kaption; Claude, ChatGPT ve bilinen diğer yapay zekâ uygulamalarıyla ve kendi bilgisayarındaki uygulamalarla çalışır. Bu sayfayı beklemiyorsan kapat."
+  "err.authorize_app_not_allowed": "Kaption bu uygulamaya bağlanmaz: giriş yaptıktan sonra seni Kaption'ın tanımadığı bir adrese gönderecekti. Kaption; Claude, ChatGPT ve bilinen diğer yapay zekâ uygulamalarıyla ve kendi bilgisayarındaki uygulamalarla çalışır. Bu sayfayı beklemiyorsan kapat.",
+  "another.warning": "{{host}} Kaption'ı kullanmak istiyor. Kaption bu uygulamayı tanımıyor.",
+  "another.warning_detail": "WhatsApp mesajlarınızı okuyabilecek ve gönderebilecek. Yalnızca Kaption'ı bu uygulamaya kendiniz eklediyseniz devam edin.",
+  "another.trust": "Bu siteyi tanıyorum ve güveniyorum",
+  "signin.paste_hint_other": "Kaption'ın WhatsApp'ta gösterdiği kodu yapıştırın: Kaption → Yapay zekâ asistanları (MCP) → Başka bir uygulama bağla.",
+  "connect.other_title": "WhatsApp'ınıza başka bir uygulama bağlayın",
+  "connect.other_paste": "Bunu uygulamanıza MCP sunucusu olarak yapıştırın:",
+  "connect.other_step1": "Uygulamanızda bir MCP sunucusu (veya bağlayıcı) ekleyin ve adresi yapıştırın",
+  "connect.other_step2": "Kaption'ın giriş sayfasında \"Bu siteyi tanıyorum ve güveniyorum\" kutusunu işaretleyin, ardından Bağlan",
+  "connect.other_no_code": "Bu bağlantıda kod yok. WhatsApp'ta Kaption'ı açın ve yeniden Başka bir uygulama bağla'ya tıklayın.",
+  "connect.other_footnote": "Kod bir kez ve 10 dakika boyunca çalışır. Başka bir tarayıcıdan veya bilgisayardan mı giriş yapıyorsunuz? Kaption'ın gösterdiği kodu giriş sayfasına yapıştırın.",
+  "err.trust_required": "Önce \"Bu siteyi tanıyorum ve güveniyorum\" kutusunu işaretleyin.",
+  "err.another_app_unavailable": "Bu uygulama henüz Kaption'a bağlanamıyor.",
+  "err.another_app_rate_limited": "Bugün çok fazla yeni uygulama bağlandı. Yarın tekrar deneyin."
 }

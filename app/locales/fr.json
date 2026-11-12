@@ -152,5 +152,18 @@
   "err.too_many_attempts": "Trop de tentatives. Réessayez plus tard.",
   "err.reviewer_invalid": "Identifiants d'évaluateur invalides",
   "err.authorize_start": "Kaption n'a pas pu lancer la connexion à cette app. Retirez Kaption des connecteurs de l'app, ajoutez-le à nouveau, puis réessayez.",
-  "err.authorize_app_not_allowed": "Kaption ne se connecte pas à cette app : après la connexion, vous seriez envoyé vers une adresse que Kaption ne reconnaît pas. Kaption fonctionne avec Claude, ChatGPT et d'autres apps d'IA connues, ainsi qu'avec les apps de votre propre ordinateur. Si vous ne vous attendiez pas à cette page, fermez-la."
+  "err.authorize_app_not_allowed": "Kaption ne se connecte pas à cette app : après la connexion, vous seriez envoyé vers une adresse que Kaption ne reconnaît pas. Kaption fonctionne avec Claude, ChatGPT et d'autres apps d'IA connues, ainsi qu'avec les apps de votre propre ordinateur. Si vous ne vous attendiez pas à cette page, fermez-la.",
+  "another.warning": "{{host}} veut utiliser Kaption. Kaption ne connaît pas cette app.",
+  "another.warning_detail": "Elle pourra lire et envoyer vos messages WhatsApp. Ne continuez que si vous avez ajouté Kaption à cette app vous-même.",
+  "another.trust": "Je connais ce site et je lui fais confiance",
+  "signin.paste_hint_other": "Collez le code que Kaption affiche dans WhatsApp, sous Kaption → Assistants IA (MCP) → Connecter une autre app.",
+  "connect.other_title": "Connectez une autre app à votre WhatsApp",
+  "connect.other_paste": "Collez ceci dans votre app comme serveur MCP :",
+  "connect.other_step1": "Dans votre app, ajoutez un serveur MCP (ou connecteur) et collez l'adresse",
+  "connect.other_step2": "Sur la page de connexion de Kaption, cochez « Je connais ce site et je lui fais confiance », puis Connecter",
+  "connect.other_no_code": "Ce lien n'a pas de code. Ouvrez Kaption dans WhatsApp et cliquez à nouveau sur Connecter une autre app.",
+  "connect.other_footnote": "Le code fonctionne une fois, pendant 10 minutes. Vous vous connectez depuis un autre navigateur ou ordinateur ? Collez le code que Kaption vous a montré sur la page de connexion.",
+  "err.trust_required": "Cochez d'abord « Je connais ce site et je lui fais confiance ».",
+  "err.another_app_unavailable": "Cette app ne peut pas encore se connecter à Kaption.",
+  "err.another_app_rate_limited": "Trop de nouvelles apps connectées aujourd'hui. Réessayez demain."
 }

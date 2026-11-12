@@ -28,6 +28,7 @@ import {
   type ConnectionLifetime,
 } from "./connection-lifetime-options";
 import { KNOWN_CLIENT_HOSTS } from "./redirect-policy";
+import { audit, refreshBlocked } from "./another-app";
 
 const DAY_SECONDS = 24 * 3600;
 
@@ -146,7 +147,10 @@ export async function adoptDefaultLifetime(
   await dropClientExpiry(kv, grant.clientId);
 }
 
-export type RefreshVerdict = "allow" | "idle-expired";
+export type RefreshVerdict = "allow" | "idle-expired" | "another-app-off";
+
+export const ANOTHER_APP_OFF_DESCRIPTION =
+  "Kaption has turned off connections from this app for now. Try again later.";
 
 /**
  * Decides a refresh before the library runs it. Only a caller holding the
@@ -162,11 +166,15 @@ export async function checkRefresh(
   if (!ref) return "allow";
   const grant = await kv.get<StoredGrant>(grantKey(ref), "json");
   if (!grant || !(await isGrantRefreshToken(grant, refreshToken))) return "allow";
-  if (!grant.metadata?.lifetime) {
+  // mcp.ANOTHER_APP.9 — the owner's kill switch (or the deny list) holds an unknown website's connection, unrevoked.
+  if (await refreshBlocked(kv, grant.metadata)) return "another-app-off";
+  // mcp.ANOTHER_APP.8 — an unknown website's connection always ends after 90 days without use, whatever it says.
+  const anotherApp = grant.metadata?.anotherApp === true;
+  if (!grant.metadata?.lifetime && !anotherApp) {
     await adoptDefaultLifetime(kv, ref, grant, at);
     return "allow";
   }
-  if (parseConnectionLifetime(grant.metadata.lifetime) !== "inactive-90d") return "allow";
+  if (!anotherApp && parseConnectionLifetime(grant.metadata?.lifetime) !== "inactive-90d") return "allow";
   const since = idleSince(grant, Number(await kv.get(activityKey(ref))) || 0);
   return since > 0 && at - since > IDLE_LIMIT_SECONDS ? "idle-expired" : "allow";
 }
@@ -278,6 +286,10 @@ export async function handleTokenRequest(
         console.error("[lifetime] revoking an idle connection failed:", error instanceof Error ? error.message : error);
       }
       return invalidGrant(IDLE_EXPIRED_DESCRIPTION);
+    }
+    if (verdict === "another-app-off") {
+      ctx.waitUntil(audit(env.OAUTH_KV, { event: "refresh_refused", accountRef: ref?.userId, reason: "switch_off" }));
+      return invalidGrant(ANOTHER_APP_OFF_DESCRIPTION);
     }
     let response = await forward(request);
     if (response.ok && ref) {

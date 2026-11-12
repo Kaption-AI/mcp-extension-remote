@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useI18n } from "../LanguageProvider";
 import { translateError } from "../i18n";
+import AnotherAppWarning from "./AnotherAppWarning";
 import Destination from "./Destination";
 
 type ErrorState = { error?: string; errorKey?: string; errorParams?: Record<string, string> } | null;
@@ -13,11 +14,18 @@ export default function PhoneForm({
   loginHint = "",
   appName = null,
   destination = null,
+  unknownHost = null,
+  trusted = false,
+  onTrustedChange,
 }: {
   oauthReqInfo: string;
   loginHint?: string;
   appName?: string | null;
   destination?: string | null;
+  /** mcp.ANOTHER_APP.5 — the redirect's host when Kaption doesn't know the app; null for known apps (unchanged). */
+  unknownHost?: string | null;
+  trusted?: boolean;
+  onTrustedChange?: (trusted: boolean) => void;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -54,6 +62,7 @@ export default function PhoneForm({
         body: JSON.stringify({
           phone: normalized,
           oauthReqInfo,
+          ...(unknownHost ? { trustedSite: trusted } : {}),
           ...(reviewMode ? { password: reviewPassword } : {}),
         }),
       });
@@ -74,7 +83,8 @@ export default function PhoneForm({
         setLoading(false);
       } else if (data.ok && data.verifyTicket) {
         router.push(
-          `/authorize/verify?ticket=${encodeURIComponent(data.verifyTicket)}`,
+          // mcp.ANOTHER_APP.8 — the verify page then shows the fixed 90-day rule instead of the choice.
+          `/authorize/verify?ticket=${encodeURIComponent(data.verifyTicket)}${unknownHost ? "&another=1" : ""}`,
         );
       } else {
         setError((data.error || data.errorKey) ? data : { errorKey: "common.send_failed" });
@@ -90,6 +100,7 @@ export default function PhoneForm({
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
       <h1 className="text-xl mb-2 text-neutral-50">{t("signin.title", { app: appName || t("signin.this_app") })}</h1>
       <Destination destination={destination} />
+      {unknownHost && onTrustedChange && <AnotherAppWarning host={unknownHost} trusted={trusted} onTrustedChange={onTrustedChange} />}
       <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
         {t("phone.intro")}
       </p>
@@ -141,7 +152,7 @@ export default function PhoneForm({
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || (!!unknownHost && !trusted)}
           className="w-full py-3 rounded-lg border-none bg-green-500 text-neutral-950 font-semibold text-sm cursor-pointer mt-4 hover:bg-green-600 disabled:opacity-50 disabled:cursor-wait"
         >
           {loading

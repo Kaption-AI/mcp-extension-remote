@@ -83,6 +83,15 @@ import {
 } from "./connect-code";
 import { acceptsHtml, ensureProblemJson, problem } from "./problem";
 import { checkClientRegistration, isAllowedRedirectUri } from "./redirect-policy";
+import {
+  audit,
+  hasS256Pkce,
+  loadAnotherAppPolicy,
+  registrationVerdict,
+  takeRegistration,
+  unknownSiteAllowed,
+  unknownSiteHost,
+} from "./another-app";
 import { rateLimitHeaders, tooManyRequests } from "./rate-limit";
 import { withUsageHeaders } from "./weekly-usage";
 import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
@@ -1071,7 +1080,34 @@ export function applySecurityHeaders(headers: Headers): void {
  * OAuthProvider options — shared by the Worker and by the helpers that list
  * and revoke connections, because getOAuthApi needs the very same options.
  */
-export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): OAuthProviderOptions<Env> {
+/**
+ * mcp.CLOUD_RELAY.16, mcp.ANOTHER_APP.2-3, .10 — registration. Every redirect a known app's: exactly as before. Otherwise,
+ * with the owner's switch on, an unknown website it allows (at most REGISTER_POLICY per address); else the same refusal.
+ */
+export function anotherAppRegistration(env: Pick<Env, "OAUTH_KV">) {
+  return async (options: { clientMetadata: Record<string, unknown>; request?: Request }) => {
+    const refusal = checkClientRegistration(options);
+    if (!refusal) return undefined;
+    const policy = await loadAnotherAppPolicy(env.OAUTH_KV);
+    const verdict = registrationVerdict(options.clientMetadata.redirect_uris, policy);
+    // Refused registrations go to the logs only (KV writes would let anyone fill the audit log).
+    if (!verdict.ok) {
+      console.warn("[another-app] registration refused");
+      return refusal;
+    }
+    const ip = options.request?.headers.get("cf-connecting-ip") || "unknown";
+    const limit = await takeRegistration(env.OAUTH_KV as KVNamespace, ip);
+    if (!limit.allowed) {
+      console.warn("[another-app] registration refused: rate limited");
+      return { code: "rate_limited", description: "Too many registrations. Try again later.", status: 429 };
+    }
+    const name = typeof options.clientMetadata.client_name === "string" ? options.clientMetadata.client_name : "";
+    await audit(env.OAUTH_KV, { event: "registered", host: verdict.unknownHosts.join(" "), reason: name.slice(0, 60) || undefined });
+    return undefined;
+  };
+}
+
+export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown, env?: Pick<Env, "OAUTH_KV">): OAuthProviderOptions<Env> {
   return {
     apiHandlers: {
       "/sse": sseHandler as any,
@@ -1084,7 +1120,7 @@ export function buildOAuthOptions(mcpOrigin: string, defaultHandler: unknown): O
     clientRegistrationEndpoint: "/register",
     // mcp.CLOUD_RELAY.16 — registration stays open to every MCP client, but only with redirect URIs of known AI apps,
     // loopback (CLI/desktop clients) or a known desktop app's scheme (security report #2198).
-    clientRegistrationCallback: checkClientRegistration,
+    clientRegistrationCallback: env ? anotherAppRegistration(env) : checkClientRegistration,
     // Pin OAuth grants and access-token audiences to the trusted MCP hostname
     // the client selected. The provider also serves RFC 9728 metadata and
     // advertises it in 401 challenges for both the origin-level and
@@ -1343,8 +1379,18 @@ function createRouter(nextHandler: WorkerHandler) {
             // mcp.CLOUD_RELAY.16 — a client registered before the redirect rule, with an address that isn't a known
             // AI app's, can't start a sign-in either (the library already checked it is one the client registered).
             if (!isAllowedRedirectUri(oauthReqInfo.redirectUri)) {
-              console.warn("[authorize] sign-in refused: redirect not allowed for client", oauthReqInfo.clientId);
-              return authorizeError(req, { key: "err.authorize_app_not_allowed", code: "unauthorized_client" });
+              // mcp.ANOTHER_APP.4 — an unknown website starts a sign-in only with the owner's switch on for it and
+              // PKCE with S256; the library already checked the redirect is one the client registered, byte for byte.
+              const host = unknownSiteHost(oauthReqInfo.redirectUri);
+              const allowed = host !== null
+                && unknownSiteAllowed(host, await loadAnotherAppPolicy(env.OAUTH_KV))
+                && hasS256Pkce(oauthReqInfo);
+              if (!allowed) {
+                console.warn("[authorize] sign-in refused: redirect not allowed for client", oauthReqInfo.clientId);
+                if (host) c.waitUntil(audit(env.OAUTH_KV, { event: "signin_refused", host, clientId: oauthReqInfo.clientId }));
+                return authorizeError(req, { key: "err.authorize_app_not_allowed", code: "unauthorized_client" });
+              }
+              c.waitUntil(audit(env.OAUTH_KV, { event: "signin_started", host, clientId: oauthReqInfo.clientId }));
             }
             const encoded = btoa(JSON.stringify(oauthReqInfo));
             const signed = await hmacSign(encoded, env.INTERNAL_API_KEY);
@@ -1387,7 +1433,7 @@ function createRouter(nextHandler: WorkerHandler) {
         if (pageLang.cookie) newResponse.headers.append("Set-Cookie", pageLang.cookie);
         return newResponse;
       },
-    });
+    }, env);
     const oauthHandler = new OAuthProvider(oauthOptions);
 
     // The library caches its helpers on `env.OAUTH_PROVIDER` the first time a

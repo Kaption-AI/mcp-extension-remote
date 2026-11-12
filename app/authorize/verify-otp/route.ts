@@ -17,6 +17,7 @@ import {
 import type { Env } from "@/src/types";
 import { DEFAULT_CONNECTION_LIFETIME } from "@/src/connection-lifetime-options";
 import { jsonError } from "@/app/i18n";
+import { anotherAppMetadata, audit, gateSignIn, RATE_LIMITED_MESSAGE, takeConnection } from "@/src/another-app";
 
 export async function POST(request: Request): Promise<Response> {
   // [M7] Validate Content-Type
@@ -54,6 +55,15 @@ export async function POST(request: Request): Promise<Response> {
     return jsonError("Invalid phone number format", { status: 400, code: "invalid_phone" });
   }
 
+  // mcp.ANOTHER_APP.6-7 — the ticket exists only because send-otp saw the tick; the switch and the phone are checked
+  // again here (the owner may have turned it off in between). A known app's request passes straight through.
+  const gate = await gateSignIn(env, oauthReqInfo, { trusted: true, phone });
+  if (gate?.kind === "refused") {
+    await audit(env.OAUTH_KV, { event: "refused", accountRef, reason: gate.code });
+    return jsonError(gate.message, { status: gate.status, code: gate.code });
+  }
+  const anotherAppHost = gate?.kind === "unknown" ? gate.host : null;
+
   const result = await verifyOTP(env.OAUTH_KV, accountRef, code);
 
   if (!result.valid) {
@@ -79,6 +89,14 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  // mcp.ANOTHER_APP.11 — at most a few new unknown websites per account a day.
+  if (anotherAppHost && !(await takeConnection(env.OAUTH_KV, accountRef)).allowed) {
+    await audit(env.OAUTH_KV, { event: "refused", host: anotherAppHost, clientId: oauthReq.clientId, accountRef, reason: "rate_limited" });
+    return jsonError(RATE_LIMITED_MESSAGE, { status: 429, code: "another_app_rate_limited" });
+  }
+  // mcp.ANOTHER_APP.8 — an unknown website's connection always ends after 90 days without use.
+  const lifetime = anotherAppHost ? "inactive-90d" : connectionLifetime;
+
   try {
     const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
       // `metadata.lifetime` is readable without decrypting the grant (the
@@ -86,17 +104,19 @@ export async function POST(request: Request): Promise<Response> {
       // it into the token-exchange callback that sets the library lifetime.
       metadata: {
         label: `WhatsApp ${accountRef.slice(0, 13)}`,
-        lifetime: connectionLifetime,
+        lifetime,
+        ...(anotherAppHost ? anotherAppMetadata(anotherAppHost) : {}),
       },
       props: {
         accountRef,
-        connectionLifetime,
+        connectionLifetime: lifetime,
       },
       request: oauthReq,
       scope: oauthReq.scope,
       userId: accountRef,
     });
 
+    if (anotherAppHost) await audit(env.OAUTH_KV, { event: "approved", host: anotherAppHost, clientId: oauthReq.clientId, accountRef });
     return Response.json({ redirectTo });
   } catch (err) {
     // [H1] Never leak internal error details

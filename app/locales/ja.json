@@ -152,5 +152,18 @@
   "err.too_many_attempts": "試行回数が多すぎます。しばらくしてからもう一度お試しください。",
   "err.reviewer_invalid": "審査担当者の認証情報が正しくありません",
   "err.authorize_start": "Kaption はこのアプリへのサインインを開始できませんでした。アプリのコネクタから Kaption を削除し、もう一度追加してからお試しください。",
-  "err.authorize_app_not_allowed": "Kaption はこのアプリに接続しません。サインイン後、Kaption が認識できないアドレスに移動することになるためです。Kaption は Claude、ChatGPT などの既知の AI アプリと、お使いのコンピュータ上のアプリで動作します。このページに心当たりがない場合は閉じてください。"
+  "err.authorize_app_not_allowed": "Kaption はこのアプリに接続しません。サインイン後、Kaption が認識できないアドレスに移動することになるためです。Kaption は Claude、ChatGPT などの既知の AI アプリと、お使いのコンピュータ上のアプリで動作します。このページに心当たりがない場合は閉じてください。",
+  "another.warning": "{{host}} が Kaption を使おうとしています。Kaption はこのアプリを知りません。",
+  "another.warning_detail": "このアプリは WhatsApp のメッセージを読んだり送ったりできるようになります。ご自身でこのアプリに Kaption を追加した場合のみ続けてください。",
+  "another.trust": "このサイトを知っていて信頼しています",
+  "signin.paste_hint_other": "Kaption が WhatsApp に表示するコードを貼り付けてください（Kaption → AI アシスタント (MCP) → 別のアプリを接続）。",
+  "connect.other_title": "別のアプリを WhatsApp に接続",
+  "connect.other_paste": "これをアプリの MCP サーバーとして貼り付けてください：",
+  "connect.other_step1": "アプリで MCP サーバー（またはコネクタ）を追加し、アドレスを貼り付けます",
+  "connect.other_step2": "Kaption のサインインページで「このサイトを知っていて信頼しています」にチェックを入れ、接続をクリックします",
+  "connect.other_no_code": "このリンクにはコードがありません。WhatsApp で Kaption を開き、もう一度「別のアプリを接続」をクリックしてください。",
+  "connect.other_footnote": "コードは 1 回だけ、10 分間有効です。別のブラウザやパソコンでサインインしますか？サインインページで Kaption が表示したコードを貼り付けてください。",
+  "err.trust_required": "まず「このサイトを知っていて信頼しています」にチェックを入れてください。",
+  "err.another_app_unavailable": "このアプリはまだ Kaption に接続できません。",
+  "err.another_app_rate_limited": "今日は新しいアプリの接続が多すぎます。明日もう一度お試しください。"
 }

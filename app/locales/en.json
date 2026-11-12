@@ -152,5 +152,18 @@
   "err.too_many_attempts": "Too many attempts. Try again later.",
   "err.reviewer_invalid": "Invalid reviewer credentials",
   "err.authorize_start": "Kaption couldn't start signing in to this app. Remove Kaption from the app's connectors, add it again, and try once more.",
-  "err.authorize_app_not_allowed": "Kaption doesn't connect to this app: after signing in it would send you to an address Kaption doesn't recognize. Kaption works with Claude, ChatGPT and other known AI apps, and with apps on your own computer. If you didn't expect this page, close it."
+  "err.authorize_app_not_allowed": "Kaption doesn't connect to this app: after signing in it would send you to an address Kaption doesn't recognize. Kaption works with Claude, ChatGPT and other known AI apps, and with apps on your own computer. If you didn't expect this page, close it.",
+  "another.warning": "{{host}} wants to use Kaption. Kaption doesn't know this app.",
+  "another.warning_detail": "It will be able to read and send your WhatsApp messages. Continue only if you added Kaption to this app yourself.",
+  "another.trust": "I know and trust this site",
+  "signin.paste_hint_other": "Paste the code Kaption shows in WhatsApp, under Kaption → AI assistants (MCP) → Connect another app.",
+  "connect.other_title": "Connect another app to your WhatsApp",
+  "connect.other_paste": "Paste this in your app as the MCP server:",
+  "connect.other_step1": "In your app, add an MCP server (or connector) and paste the address",
+  "connect.other_step2": "On Kaption's sign-in page, tick \"I know and trust this site\", then Connect",
+  "connect.other_no_code": "This link has no code. Open Kaption in WhatsApp and click Connect another app again.",
+  "connect.other_footnote": "The code works once, for 10 minutes. Signing in from another browser or computer? Paste the code Kaption showed you on the sign-in page instead.",
+  "err.trust_required": "Tick \"I know and trust this site\" first.",
+  "err.another_app_unavailable": "This app can't connect to Kaption yet.",
+  "err.another_app_rate_limited": "Too many new apps connected today. Try again tomorrow."
 }

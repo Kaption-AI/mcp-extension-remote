@@ -5,24 +5,31 @@ import SignIn from "./SignIn";
 import { CONNECT_COOKIE, connectDeps, maskPhone, peekConnectCode, redirectDestination } from "@/src/connect-code";
 import { hmacVerify } from "@/src/otp";
 import type { Env } from "@/src/types";
+import { unknownSiteHost } from "@/src/another-app";
 import { getServerT } from "../i18n-server";
 
 /**
  * mcp.CONNECT_CODE.5 — the app asking to connect, by the name it registered with (Claude, ChatGPT…), and where signing
  * in sends the person back. Anyone can register an app under any name, so the destination is what tells them apart.
  */
-async function clientInfo(env: Env, oauthReqInfo: string): Promise<{ name: string | null; destination: string | null }> {
+async function clientInfo(
+  env: Env,
+  oauthReqInfo: string,
+): Promise<{ name: string | null; destination: string | null; unknownHost: string | null }> {
   try {
     const payload = await hmacVerify(oauthReqInfo, env.INTERNAL_API_KEY);
-    if (!payload) return { name: null, destination: null };
+    if (!payload) return { name: null, destination: null, unknownHost: null };
     const request = JSON.parse(atob(payload)) as { clientId?: string; redirectUri?: string };
     const destination = redirectDestination(request.redirectUri);
-    if (!request.clientId) return { name: null, destination };
+    // mcp.ANOTHER_APP.5 — an app Kaption doesn't know goes by its real host, never by the name it chose.
+    const unknownHost = unknownSiteHost(request.redirectUri);
+    if (unknownHost) return { name: unknownHost, destination, unknownHost };
+    if (!request.clientId) return { name: null, destination, unknownHost: null };
     const client = await env.OAUTH_PROVIDER.lookupClient(request.clientId);
     const name = client?.clientName?.trim();
-    return { name: name ? name.slice(0, 60) : null, destination };
+    return { name: name ? name.slice(0, 60) : null, destination, unknownHost: null };
   } catch {
-    return { name: null, destination: null };
+    return { name: null, destination: null, unknownHost: null };
   }
 }
 
@@ -44,6 +51,7 @@ export default async function AuthorizePage({
   let rememberedFor: string | null = null;
   let appName: string | null = null;
   let destination: string | null = null;
+  let unknownHost: string | null = null;
   try {
     const { env } = getCloudflareContext() as unknown as { env: Env };
     const remembered = (await cookies()).get(CONNECT_COOKIE)?.value;
@@ -51,7 +59,7 @@ export default async function AuthorizePage({
       const phone = await peekConnectCode(connectDeps(env), remembered);
       rememberedFor = phone ? maskPhone(phone) : null;
     }
-    if (oauthReqInfo) ({ name: appName, destination } = await clientInfo(env, oauthReqInfo));
+    if (oauthReqInfo) ({ name: appName, destination, unknownHost } = await clientInfo(env, oauthReqInfo));
   } catch {
     rememberedFor = null;
   }
@@ -65,7 +73,7 @@ export default async function AuthorizePage({
           </div>
         }
       >
-        <SignIn oauthReqInfo={oauthReqInfo} loginHint={loginHint} rememberedFor={rememberedFor} appName={appName} destination={destination} />
+        <SignIn oauthReqInfo={oauthReqInfo} loginHint={loginHint} rememberedFor={rememberedFor} appName={appName} destination={destination} unknownHost={unknownHost} />
       </Suspense>
     </div>
   );

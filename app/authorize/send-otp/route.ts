@@ -21,6 +21,7 @@ import type { Env } from "@/src/types";
 import { errorBody, jsonError } from "@/app/i18n";
 import { withHeaders } from "@/src/problem";
 import { consumed, rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
+import { audit, gateSignIn } from "@/src/another-app";
 
 export async function POST(request: Request): Promise<Response> {
   // [M7] Validate Content-Type
@@ -48,6 +49,19 @@ export async function POST(request: Request): Promise<Response> {
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);
   if (!accountRef) {
     return jsonError("Invalid phone number format", { status: 400, code: "invalid_phone" });
+  }
+
+  // mcp.ANOTHER_APP.6-7 — an unknown website: the tick, the switch and the phone before any code is sent. A known
+  // app's request passes straight through.
+  const gate = await gateSignIn(env, oauthReqInfo, {
+    trusted: (raw as { trustedSite?: unknown } | null)?.trustedSite,
+    phone,
+  });
+  if (gate?.kind === "refused") {
+    if (gate.code !== "trust_required") {
+      await audit(env.OAUTH_KV, { event: "refused", accountRef, reason: gate.code });
+    }
+    return jsonError(gate.message, { status: gate.status, code: gate.code });
   }
 
   // The dedicated synthetic review account uses a static password because
