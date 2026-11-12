@@ -152,5 +152,18 @@
   "err.too_many_attempts": "Demasiados intentos. Inténtalo más tarde.",
   "err.reviewer_invalid": "Credenciales de revisión no válidas",
   "err.authorize_start": "Kaption no pudo iniciar sesión en esta app. Quita Kaption de los conectores de la app, agrégalo de nuevo y vuelve a intentarlo.",
-  "err.authorize_app_not_allowed": "Kaption no se conecta a esta app: después de iniciar sesión te enviaría a una dirección que Kaption no reconoce. Kaption funciona con Claude, ChatGPT y otras apps de IA conocidas, y con apps de tu propia computadora. Si no esperabas esta página, ciérrala."
+  "err.authorize_app_not_allowed": "Kaption no se conecta a esta app: después de iniciar sesión te enviaría a una dirección que Kaption no reconoce. Kaption funciona con Claude, ChatGPT y otras apps de IA conocidas, y con apps de tu propia computadora. Si no esperabas esta página, ciérrala.",
+  "another.warning": "{{host}} quiere usar Kaption. Kaption no conoce esta app.",
+  "another.warning_detail": "Podrá leer y enviar tus mensajes de WhatsApp. Continúa solo si tú agregaste Kaption a esta app.",
+  "another.trust": "Conozco este sitio y confío en él",
+  "signin.paste_hint_other": "Pega el código que Kaption muestra en WhatsApp, en Kaption → Asistentes de IA (MCP) → Conectar otra app.",
+  "connect.other_title": "Conecta otra app a tu WhatsApp",
+  "connect.other_paste": "Pega esto en tu app como servidor MCP:",
+  "connect.other_step1": "En tu app, agrega un servidor MCP (o conector) y pega la dirección",
+  "connect.other_step2": "En la página de inicio de sesión de Kaption, marca \"Conozco este sitio y confío en él\" y luego Conectar",
+  "connect.other_no_code": "Este enlace no tiene código. Abre Kaption en WhatsApp y haz clic en Conectar otra app de nuevo.",
+  "connect.other_footnote": "El código funciona una vez, durante 10 minutos. ¿Inicias sesión desde otro navegador u otra computadora? Pega en la página de inicio de sesión el código que te mostró Kaption.",
+  "err.trust_required": "Primero marca \"Conozco este sitio y confío en él\".",
+  "err.another_app_unavailable": "Esta app todavía no puede conectarse a Kaption.",
+  "err.another_app_rate_limited": "Demasiadas apps nuevas conectadas hoy. Inténtalo mañana."
 }

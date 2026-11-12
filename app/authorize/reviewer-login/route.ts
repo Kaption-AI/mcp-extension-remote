@@ -10,6 +10,7 @@ import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { ReviewerLoginSchema } from "@/src/schemas";
 import { deriveAccountRef, hmacVerify } from "@/src/otp";
+import { UNAVAILABLE_MESSAGE, unknownSiteHost } from "@/src/another-app";
 import type { Env } from "@/src/types";
 import { DEFAULT_CONNECTION_LIFETIME } from "@/src/connection-lifetime-options";
 import { errorBody, jsonError } from "@/app/i18n";
@@ -108,6 +109,11 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (!oauthRequest.clientId) {
     return jsonError("Invalid OAuth state", { status: 400, code: "invalid_oauth_state", headers });
+  }
+
+  // mcp.ANOTHER_APP.13 — the reviewer sign-in is for OpenAI's review of the ChatGPT app, never for unknown websites.
+  if (unknownSiteHost(oauthRequest.redirectUri)) {
+    return jsonError(UNAVAILABLE_MESSAGE, { status: 403, code: "another_app_unavailable", headers });
   }
 
   const accountRef = await deriveAccountRef(phone, env.PHONE_REF_SECRET);

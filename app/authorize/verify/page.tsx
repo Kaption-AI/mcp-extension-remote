@@ -20,6 +20,8 @@ function OTPForm() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const initialTicket = searchParams.get("ticket") || "";
+  // mcp.ANOTHER_APP.8 — an unknown website: the server applies the 90-day rule, so there is nothing to choose.
+  const anotherApp = searchParams.get("another") === "1";
   const [ticket, setTicket] = useState(initialTicket);
   const [code, setCode] = useState("");
   const [error, setError] = useState<ErrorState>(null);
@@ -141,45 +143,51 @@ function OTPForm() {
           className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-2xl tracking-[8px] text-center outline-none focus:border-green-500"
         />
 
-        <label
-          htmlFor="connectionLifetime"
-          className="block text-[13px] text-neutral-400 mt-5 mb-1.5"
-        >
-          {t("lifetime.label")}
-        </label>
-        <div className="relative">
-          <select
-            id="connectionLifetime"
-            value={lifetime}
-            onChange={(e) => setLifetime(parseConnectionLifetime(e.target.value))}
-            aria-describedby="connectionLifetimeDetail"
-            style={{ colorScheme: "dark" }}
-            className="w-full appearance-none px-3.5 py-2.5 pr-10 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-sm outline-none cursor-pointer focus:border-green-500"
-          >
-            {LIFETIME_CHOICES.map((choice) => (
-              <option key={choice.id} value={choice.id}>
-                {choice.id === DEFAULT_CONNECTION_LIFETIME
-                  ? t("lifetime.recommended", { title: t(`lifetime.${choice.id}.title`) })
-                  : t(`lifetime.${choice.id}.title`)}
-              </option>
-            ))}
-          </select>
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
-          >
-            <path
-              fillRule="evenodd"
-              d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-        <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2">
-          {t(`lifetime.${selectedChoice.id}.detail`)}
-        </p>
+        {anotherApp ? (
+          <p className="text-xs text-neutral-400 mt-5" data-testid="another-app-lifetime">{t("lifetime.inactive-90d.detail")}</p>
+        ) : (
+          <>
+            <label
+              htmlFor="connectionLifetime"
+              className="block text-[13px] text-neutral-400 mt-5 mb-1.5"
+            >
+              {t("lifetime.label")}
+            </label>
+            <div className="relative">
+              <select
+                id="connectionLifetime"
+                value={lifetime}
+                onChange={(e) => setLifetime(parseConnectionLifetime(e.target.value))}
+                aria-describedby="connectionLifetimeDetail"
+                style={{ colorScheme: "dark" }}
+                className="w-full appearance-none px-3.5 py-2.5 pr-10 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-sm outline-none cursor-pointer focus:border-green-500"
+              >
+                {LIFETIME_CHOICES.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.id === DEFAULT_CONNECTION_LIFETIME
+                      ? t("lifetime.recommended", { title: t(`lifetime.${choice.id}.title`) })
+                      : t(`lifetime.${choice.id}.title`)}
+                  </option>
+                ))}
+              </select>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2">
+              {t(`lifetime.${selectedChoice.id}.detail`)}
+            </p>
+          </>
+        )}
         <p className="text-xs text-neutral-500 mt-1">
           {t("verify.disconnect_note")}
         </p>

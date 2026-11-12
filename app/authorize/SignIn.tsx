@@ -6,6 +6,7 @@
  * pasted from Kaption. "Use my phone number instead" is today's phone + WhatsApp code form, unchanged.
  */
 import { useState } from "react";
+import AnotherAppWarning from "./AnotherAppWarning";
 import Destination from "./Destination";
 import PhoneForm from "./PhoneForm";
 import {
@@ -23,12 +24,15 @@ export default function SignIn({
   rememberedFor,
   appName,
   destination,
+  unknownHost = null,
 }: {
   oauthReqInfo: string;
   loginHint?: string;
   rememberedFor: string | null;
   appName: string | null;
   destination: string | null;
+  /** mcp.ANOTHER_APP.5 — the redirect's host when Kaption doesn't know the app; null for known apps (unchanged). */
+  unknownHost?: string | null;
 }) {
   const { t } = useI18n();
   const [mode, setMode] = useState<"code" | "phone">(loginHint ? "phone" : "code");
@@ -37,12 +41,23 @@ export default function SignIn({
   const [lifetime, setLifetime] = useState<ConnectionLifetime>(DEFAULT_CONNECTION_LIFETIME);
   const [error, setError] = useState<{ error?: string; errorKey?: string; errorParams?: Record<string, string> } | null>(null);
   const [loading, setLoading] = useState(false);
+  // mcp.ANOTHER_APP.5 — "I know and trust this site", shared by the code and the phone forms.
+  const [trusted, setTrusted] = useState(false);
   const app = appName || t("signin.this_app");
+  const blocked = !!unknownHost && !trusted;
 
   if (mode === "phone" || !oauthReqInfo) {
     return (
       <div className="flex flex-col items-center gap-3 w-full max-w-[400px]">
-        <PhoneForm oauthReqInfo={oauthReqInfo} loginHint={loginHint} appName={appName} destination={destination} />
+        <PhoneForm
+          oauthReqInfo={oauthReqInfo}
+          loginHint={loginHint}
+          appName={appName}
+          destination={destination}
+          unknownHost={unknownHost}
+          trusted={trusted}
+          onTrustedChange={setTrusted}
+        />
         {oauthReqInfo && (
           <button type="button" onClick={() => setMode("code")} className="text-sm text-green-400 hover:underline">
             {t("signin.use_code")}
@@ -65,6 +80,7 @@ export default function SignIn({
         body: JSON.stringify({
           oauthReqInfo,
           connectionLifetime: lifetime,
+          ...(unknownHost ? { trustedSite: trusted } : {}),
           ...(useRemembered ? { remembered: true } : { code }),
         }),
       });
@@ -91,6 +107,7 @@ export default function SignIn({
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 max-w-[400px] w-full">
       <h1 className="text-xl mb-2 text-neutral-50">{t("signin.title", { app })}</h1>
       <Destination destination={destination} />
+      {unknownHost && <AnotherAppWarning host={unknownHost} trusted={trusted} onTrustedChange={setTrusted} />}
       {useRemembered && rememberedFor ? (
         <p className="text-sm text-neutral-400 mb-6 leading-relaxed" data-testid="connect-remembered">
           {rich(t("signin.remembered", { app }), {
@@ -102,7 +119,7 @@ export default function SignIn({
         </p>
       ) : (
         <p className="text-sm text-neutral-400 mb-6 leading-relaxed">
-          {t("signin.paste_hint")}
+          {t(unknownHost ? "signin.paste_hint_other" : "signin.paste_hint")}
         </p>
       )}
 
@@ -127,26 +144,33 @@ export default function SignIn({
           </>
         )}
 
-        <label htmlFor="connectionLifetime" className="block text-[13px] text-neutral-400 mt-5 mb-1.5">
-          {t("lifetime.label")}
-        </label>
-        <select
-          id="connectionLifetime"
-          value={lifetime}
-          onChange={(e) => setLifetime(parseConnectionLifetime(e.target.value))}
-          aria-describedby="connectionLifetimeDetail"
-          style={{ colorScheme: "dark" }}
-          className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-sm outline-none cursor-pointer focus:border-green-500"
-        >
-          {LIFETIME_CHOICES.map((choice) => (
-            <option key={choice.id} value={choice.id}>
-              {choice.id === DEFAULT_CONNECTION_LIFETIME
-                ? t("lifetime.recommended", { title: t(`lifetime.${choice.id}.title`) })
-                : t(`lifetime.${choice.id}.title`)}
-            </option>
-          ))}
-        </select>
-        <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2">{t(`lifetime.${selectedChoice.id}.detail`)}</p>
+        {unknownHost ? (
+          // mcp.ANOTHER_APP.8 — an unknown website always disconnects after 90 days without use: no choice to make.
+          <p className="text-xs text-neutral-400 mt-5" data-testid="another-app-lifetime">{t("lifetime.inactive-90d.detail")}</p>
+        ) : (
+          <>
+            <label htmlFor="connectionLifetime" className="block text-[13px] text-neutral-400 mt-5 mb-1.5">
+              {t("lifetime.label")}
+            </label>
+            <select
+              id="connectionLifetime"
+              value={lifetime}
+              onChange={(e) => setLifetime(parseConnectionLifetime(e.target.value))}
+              aria-describedby="connectionLifetimeDetail"
+              style={{ colorScheme: "dark" }}
+              className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-50 text-sm outline-none cursor-pointer focus:border-green-500"
+            >
+              {LIFETIME_CHOICES.map((choice) => (
+                <option key={choice.id} value={choice.id}>
+                  {choice.id === DEFAULT_CONNECTION_LIFETIME
+                    ? t("lifetime.recommended", { title: t(`lifetime.${choice.id}.title`) })
+                    : t(`lifetime.${choice.id}.title`)}
+                </option>
+              ))}
+            </select>
+            <p id="connectionLifetimeDetail" className="text-xs text-neutral-400 mt-2">{t(`lifetime.${selectedChoice.id}.detail`)}</p>
+          </>
+        )}
 
         {error && (
           <p className="text-red-500 text-[13px] mt-3" role="alert">
@@ -156,8 +180,9 @@ export default function SignIn({
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full py-3 rounded-lg border-none bg-green-500 text-neutral-950 font-semibold text-sm cursor-pointer mt-5 hover:bg-green-600 disabled:opacity-50 disabled:cursor-wait"
+          disabled={loading || blocked}
+          data-testid="signin-connect"
+          className={`w-full py-3 rounded-lg border-none bg-green-500 text-neutral-950 font-semibold text-sm cursor-pointer mt-5 hover:bg-green-600 disabled:opacity-50 ${blocked ? "disabled:cursor-not-allowed" : "disabled:cursor-wait"}`}
         >
           {loading ? t("signin.connecting") : t("signin.connect")}
         </button>
