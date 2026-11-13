@@ -93,7 +93,7 @@ import {
   unknownSiteHost,
 } from "./another-app";
 import { rateLimitHeaders, tooManyRequests } from "./rate-limit";
-import { withUsageHeaders } from "./weekly-usage";
+import { UNCOUNTED_TOOLS, withUsageHeaders } from "./weekly-usage";
 import { LANG_COOKIE, LANG_HEADER, getT, languageCookie, normalizeLanguage, readCookie, resolveLanguage } from "../app/i18n";
 
 // Re-export Durable Objects so the wrapper can re-export them for wrangler
@@ -839,6 +839,35 @@ outerApp.get("/internal/ledger/usage", async (c) => {
     return c.json(await usageForPhone(c.env, phone, windows), 200, { "Cache-Control": "no-store" });
   } catch (e: any) {
     console.error(`[ledger] read failed for ${last4(phone)}:`, e?.message || e);
+    return problem({ status: 503, code: "unavailable", detail: "Could not read usage" });
+  }
+});
+
+// mcp-usage-ledger.READ.8 — one phone's month breakdown (the shape of /ext/usage) for rest-api's
+// GET /api/v5/mcp-usage/ledger?detail=1, so every app reads its Usage tab through rest-api (READ.1, READ.9). The
+// uncounted tools (MODEL.2) are left out, so `counted` equals the month window's counted. Counts only (READ.4).
+outerApp.get("/internal/ledger/report", async (c) => {
+  if (!internalCaller(c.req.header("Authorization"), c.env)) return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
+  const phone = readPhone(c.req.query("phone"));
+  if (!phone) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
+  const now = Date.now();
+  const month = c.req.query("month") || monthOf(now);
+  if (!monthRange(month)) return problem({ status: 400, code: "invalid_month", detail: "month must be YYYY-MM." });
+  if (!c.env.USAGE_LEDGER) return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
+  try {
+    const userIds = await accountRefsForPhone(phone, c.env.PHONE_REF_SECRET);
+    const [{ rows, connections, since }, grants] = await Promise.all([
+      mergedLedgers(c.env, userIds, month),
+      // Which connections are still connected is decoration: a grants failure never fails the read.
+      activeGrantIds(c.env, userIds).catch(() => new Set<string>()),
+    ]);
+    const counted = rows.filter((row) => !UNCOUNTED_TOOLS.has(row.tool));
+    const report = buildReport(month, counted, connections, since, grants, now);
+    // READ.4 — never a connection id: each connection becomes an opaque position in this answer.
+    const anonymous = report.connections.map((conn, i) => ({ ...conn, id: `conn-${i + 1}` }));
+    return c.json({ ...report, connections: anonymous }, 200, { "Cache-Control": "no-store" });
+  } catch (e: any) {
+    console.error(`[ledger] report failed for ${last4(phone)}:`, e?.message || e);
     return problem({ status: 503, code: "unavailable", detail: "Could not read usage" });
   }
 });
