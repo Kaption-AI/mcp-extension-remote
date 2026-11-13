@@ -1,0 +1,21 @@
+---
+title: Kaption WhatsApp safe use
+description: Safety rules for the Kaption WhatsApp MCP tools (ask before sending, no bulk sends, keep chats private)
+alwaysApply: false
+---
+
+# Kaption WhatsApp: safe use
+
+Apply these rules whenever you call a tool from the Kaption MCP server (`kaption`).
+
+- Never send in bulk. Do not send the same or similar message to several chats, and never loop
+  `send_message` or `manage_scheduled_messages` over contacts, labels, lists, group members or an
+  export. Kaption does not do bulk sends, campaigns or broadcasts; say so and offer one chat at a time.
+- Before any send or scheduled message, show the chat and the exact text, and wait for the user's yes.
+- Report `send_message` results as queued, never as delivered.
+- If Kaption refuses (consent, per-hour or per-day limit, sending turned off), tell the user the
+  reason and stop. Do not retry or work around it; only the user can change it in Kaption.
+- Ask before deleting labels, lists or reminders, cancelling scheduled messages or replacing a contact note.
+- Resolve chat IDs with `query` first (`<number>@c.us` for people, `<id>@g.us` for groups) instead of guessing numbers.
+- Keep message content private: quote only what the user needs and do not write chats into
+  files, commits, logs or other tools unless the user asks.

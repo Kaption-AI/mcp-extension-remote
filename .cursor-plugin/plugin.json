@@ -1,0 +1,33 @@
+{
+  "name": "kaption-whatsapp",
+  "displayName": "Kaption WhatsApp",
+  "version": "1.0.0",
+  "description": "Read, search, summarize and organize your own WhatsApp from Cursor or Claude Code through the Kaption extension or desktop app. OAuth sign-in; the relay cannot read your messages.",
+  "author": {
+    "name": "Kaption AI",
+    "email": "hello@kaptionai.com"
+  },
+  "homepage": "https://kaptionai.com/mcp/",
+  "repository": "https://github.com/Kaption-AI/mcp-extension-remote",
+  "license": "BUSL-1.1",
+  "logo": "app/icon.png",
+  "keywords": [
+    "whatsapp",
+    "mcp",
+    "kaption",
+    "messaging",
+    "transcription",
+    "contacts",
+    "reminders",
+    "scheduled-messages"
+  ],
+  "category": "integrations",
+  "tags": [
+    "whatsapp",
+    "messaging",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "rules": "./rules/",
+  "mcpServers": "./mcp.json"
+}
