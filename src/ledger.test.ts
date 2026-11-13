@@ -276,6 +276,30 @@ describe("internal read API (mcp-usage-ledger.READ.2-4)", () => {
     expect(unknown).toMatchObject({ week: { counted: 0 }, month: { counted: 0 }, since: null });
   });
 
+  it("mcp-usage-ledger.READ.8 — the month breakdown for rest-api: internal key only, uncounted tools out, counted = the window's", async () => {
+    const r = relayEnv();
+    expect((await r.call(`/internal/ledger/report?phone=${PHONE}`)).status).toBe(401);
+    expect((await r.call(`/internal/ledger/report?phone=12`, { headers: auth })).status).toBe(400);
+    expect((await r.call(`/internal/ledger/report?phone=${PHONE}&month=2026-13`, { headers: auth })).status).toBe(400);
+    await (await ledgerOf(r)).record([
+      cell({ calls: 4 }),
+      cell({ calls: 2, tool: "kaption_help" }),
+      cell({ calls: 3, path: "local", connection: "local-x" }),
+      cell({ calls: 1, outcome: "error" }),
+    ]);
+    const res = await r.call(`/internal/ledger/report?phone=${PHONE}&month=2026-11`, { headers: auth });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain(PHONE);
+    expect(text).not.toContain("kaption_help");
+    expect(text).not.toContain("grant-a");
+    const report = JSON.parse(text) as { month: string; counted: number; tools: { tool: string }[] };
+    expect(report.month).toBe("2026-11");
+    const window = (await (await r.call(`/internal/ledger/usage?phone=${PHONE}&month=2026-11`, { headers: auth })).json()) as { month: { counted: number } };
+    expect(report.counted).toBe(7);
+    expect(report.counted).toBe(window.month.counted);
+  });
+
   it("mcp-usage-ledger.READ.3 — a Brazilian line's two written forms are one answer", async () => {
     const r = relayEnv();
     await (await ledgerOf(r, BR_PHONE)).record([cell({ calls: 2 })]);
