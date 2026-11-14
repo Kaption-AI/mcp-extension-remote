@@ -18,9 +18,19 @@ export type UsagePath = "cloud" | "local" | "webmcp";
 export const WEBMCP_APP = "WebMCP (browser)";
 export const WEBMCP_CONNECTION = "webmcp-browser";
 
+/**
+ * in-app-kally.LIMITS.5, mcp-usage-accounting.LOCAL.12 (kaptionai) — a WhatsApp-data call made by Kally, Kaption's
+ * in-app assistant, on the user's computer. The extension and the desktop app report it in the local batch with
+ * `source: "kally"`; it is a device call on the local path (same allowance, same count) under its own app and
+ * connection, so the Usage tab names it.
+ */
+export const KALLY_APP = "Kally (in-app)";
+export const KALLY_CONNECTION = "kally-in-app";
+
 /** mcp.WEBMCP.8 — the path, app and connection of a device-reported call: WebMCP when `source` says so, else local. */
 export function devicePath(source: unknown, client: string | null | undefined): { path: UsagePath; app: string; connection: string } {
   if (source === "webmcp") return { path: "webmcp", app: WEBMCP_APP, connection: WEBMCP_CONNECTION };
+  if (source === "kally") return { path: "local", app: KALLY_APP, connection: KALLY_CONNECTION };
   const app = normalizeLocalApp(client);
   return { path: "local", app, connection: localConnectionId(app) };
 }
@@ -235,7 +245,7 @@ export function parseLocalBatch(body: unknown, now: number): LocalBatch | { erro
     if (typeof repeats !== "number" || !Number.isInteger(repeats) || repeats < 0 || repeats > calls) {
       return { error: `rows[${i}].repeats must be 0–calls.` };
     }
-    if (row.source !== undefined && row.source !== "local" && row.source !== "webmcp") return { error: `rows[${i}].source is invalid.` };
+    if (row.source !== undefined && row.source !== "local" && row.source !== "webmcp" && row.source !== "kally") return { error: `rows[${i}].source is invalid.` };
     // mcp.WEBMCP.8 — a WebMCP row is its own path.
     const { path, app, connection } = devicePath(row.source, client);
     cells.push({
