@@ -1,19 +1,19 @@
 /**
- * Kaption-AI monorepo specs: features/pricing/weekly-plan-limits.feature.yaml (SERVER.9, SERVER.13, COUNT.10) and
+ * Kaption-AI monorepo specs: features/mcp/mcp-usage-ledger.feature.yaml (SINGLE.1-15) and
  * features/mcp/mcp-usage-pricing.feature.yaml (USAGE.1-8).
  *
- * Two switches, both off by default (unset = nobody, every call and every response exactly as before):
- *   - WEEKLY_PLAN_LIMITS_PHONES ("*" = everyone, else a comma list of phones): each cloud tool call of a listed phone is
- *     counted on rest-api's weekly ledger before it runs (POST /__internal/mcp-ledger/use {phone, change, actionId}),
- *     refused at the limit (402 weekly-limit-reached, the plans link in the text) and given back when it fails.
- *     rest-api's own switch (its WEEKLY_PLAN_LIMITS_PHONES + the WEEKLY_PLAN_LIMITS flag) still decides; when rest-api
- *     cannot answer, the call runs (disabled-gating.MCP.5).
- *   - MCP_USAGE_IN_RESULTS ("on" or "*" = everyone, else a comma list): the relay asks for `usage` (body usage: true) and
- *     puts it in the tool result's _meta.kaption.usage, in the X-Kaption-Usage-* headers (JSON responses) and, when
- *     little is left or overage is active, in one short localized line. rest-api answers usage only with the
- *     MCP_USAGE_IN_RESULTS flag on for the phone.
+ * Claude/ChatGPT usage is counted and enforced in one place, the account's UsageLedger (usage-ledger.ts): every cloud
+ * call is recorded there, and an account rest-api holds to a weekly number (its /__internal/mcp-ledger/plan answer says
+ * enforce) has each cloud call reserved there before it runs and refused past the number (SINGLE.4). rest-api's
+ * weekly ledger (mcp_usage_week) is no longer asked or written, and WEEKLY_PLAN_LIMITS_PHONES is no longer read
+ * (SINGLE.15).
+ *
+ * MCP_USAGE_IN_RESULTS ("on" or "*" = everyone, else a comma list): the tool result says what is left, from the
+ * ledger's own week or month - in _meta.kaption.usage, the X-Kaption-Usage-* headers and, when little is left, one short
+ * localized line.
  */
 import type { Env } from "./types";
+import type { LedgerPlan, WindowCount } from "./ledger-windows";
 
 /** mcp-usage-pricing.PRICE.1 — tools that are never counted (settings, help, plans, Business Agent). */
 export const UNCOUNTED_TOOLS: ReadonlySet<string> = new Set([
@@ -21,8 +21,6 @@ export const UNCOUNTED_TOOLS: ReadonlySet<string> = new Set([
   "report_bug", "kaption_plans", "create_kaption_checkout_link", "get_business_agent", "manage_business_agent",
   "kaption_settings", "business_agent",
 ]);
-
-type UsageEnv = Pick<Env, "INTERNAL_API_BASE_URL" | "INTERNAL_API_KEY" | "WEEKLY_PLAN_LIMITS_PHONES" | "MCP_USAGE_IN_RESULTS">;
 
 const digitsOf = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
@@ -33,13 +31,11 @@ function listed(phone: unknown, raw: string | undefined, allWords: string[] = ["
   return list.some((e) => allWords.includes(e)) || list.some((entry) => digitsOf(entry) === digits);
 }
 
-/** weekly-plan-limits.SERVER.13 — the relay counts this phone's calls on the weekly ledger. */
-export const weeklyPhone = (phone: unknown, env: Pick<Env, "WEEKLY_PLAN_LIMITS_PHONES">) => listed(phone, env.WEEKLY_PLAN_LIMITS_PHONES);
 /** mcp-usage-pricing.USAGE.8 — the relay shows what is left for this phone. */
 export const usagePhone = (phone: unknown, env: Pick<Env, "MCP_USAGE_IN_RESULTS">) => listed(phone, env.MCP_USAGE_IN_RESULTS, ["*", "on"]);
-/** Either switch set at all (a session with both unset never looks its phone up). */
-export const usageConfigured = (env: Pick<Env, "WEEKLY_PLAN_LIMITS_PHONES" | "MCP_USAGE_IN_RESULTS">) =>
-  [env.WEEKLY_PLAN_LIMITS_PHONES, env.MCP_USAGE_IN_RESULTS].some((v) => String(v ?? "").split(",").some((s) => s.trim() && s.trim() !== "off"));
+/** The usage switch set at all (a session with it unset never looks its phone up for usage). */
+export const usageConfigured = (env: Pick<Env, "MCP_USAGE_IN_RESULTS">) =>
+  String(env.MCP_USAGE_IN_RESULTS ?? "").split(",").some((s) => s.trim() && s.trim() !== "off");
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Copied verbatim from the monorepo's shared rules (kext/src/core/pricing/weeklyPlanLimits.ts at 44a6ef1a1); the fixture's
@@ -158,56 +154,29 @@ export function usageHeaders(usage: Usage): Record<string, string> {
   return out;
 }
 
-export type UseAnswer =
-  /** Let the call run; `counted` when it took a slot on the weekly ledger (give it back if the call fails). */
-  | { state: "run"; counted: boolean; actionId: string; usage: Usage | null; lang: UsageLang }
-  /** weekly-plan-limits.SERVER.13 — refused at the weekly limit. */
-  | { state: "refused"; message: string; usage: Usage | null; lang: UsageLang };
-
-const REFUSAL_FALLBACK = "This Kaption account has used this week's Claude and ChatGPT actions. Tell the user they come back on Monday, or to choose a plan at https://kaptionai.com/pricing for more.";
-
-async function postLedger(env: UsageEnv, path: string, body: unknown, fetchImpl: typeof fetch): Promise<{ status: number; data: any } | null> {
-  if (!env.INTERNAL_API_BASE_URL || !env.INTERNAL_API_KEY) return null;
-  try {
-    const res = await fetchImpl(`${env.INTERNAL_API_BASE_URL.replace(/\/$/, "")}/__internal/mcp-ledger/${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": env.INTERNAL_API_KEY },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5_000),
-    });
-    return { status: res.status, data: await res.json().catch(() => null) };
-  } catch {
-    return null;
-  }
+/** mcp-usage-ledger.SINGLE.4 — the refusal words when rest-api's plan answer carried none. */
+export function refusalFallback(limit: number): string {
+  return `This Kaption account has used this week's ${limit} Claude and ChatGPT actions. Tell the user they come back on Monday, or to choose a plan at https://kaptionai.com/pricing for more.`;
 }
 
 /**
- * weekly-plan-limits.SERVER.13, COUNT.10; mcp-usage-pricing.USAGE.5 — before one cloud call: count it (listed phones, or
- * opts.weekly: rest-api's /access said the account is counted by the week — lifetime-local.HOLDER.7)
- * and/or fetch what is left (usage phones). Null = nothing to do (both switches off for this phone, an uncounted tool,
- * or rest-api could not answer: the call runs as before).
+ * mcp-usage-pricing.USAGE.1-3, mcp-usage-ledger.SINGLE.2 — what is left, from the ledger: the plan's window (week for
+ * free and lifetime, month for Pro and Business) and its counted actions; null without a plan. Overage stays null (the
+ * overage switches are off, mcp-usage-ledger.OVERAGE.7).
  */
-export async function beginUse(env: UsageEnv, phone: string | null, tool: string, actionId: string, fetchImpl: typeof fetch = fetch,
-  opts: { weekly?: boolean } = {}): Promise<UseAnswer | null> {
-  if (!phone || UNCOUNTED_TOOLS.has(tool)) return null;
-  // lifetime-local.HOLDER.7 — also counted when rest-api's /access said the account is weekly (every Lifetime account,
-  // whatever WEEKLY_PLAN_LIMITS_PHONES says here); rest-api still decides at /use.
-  const count = weeklyPhone(phone, env) || opts.weekly === true;
-  const show = usagePhone(phone, env);
-  if (!count && !show) return null;
-  // Usage only: /access answers it without counting anything.
-  const r = await postLedger(env, count ? "use" : "access", { phone, ...(count ? { change: "reserve", actionId } : {}), ...(show ? { usage: true } : {}) }, fetchImpl);
-  if (!r || !r.data) return null;
-  const usage = show ? normalizeUsage(r.data.usage) : null;
-  const lang = usageLang(r.data.lang);
-  if (count && r.status === 402) return { state: "refused", message: typeof r.data.message === "string" && r.data.message ? r.data.message : REFUSAL_FALLBACK, usage, lang };
-  if (r.status !== 200) return null;
-  return { state: "run", counted: count && r.data.counted === true, actionId, usage, lang };
-}
-
-/** weekly-plan-limits.LIMITS.14 — a failed call gives its slot (or its charge) back. Never throws. */
-export async function refundUse(env: UsageEnv, phone: string, actionId: string, fetchImpl: typeof fetch = fetch): Promise<void> {
-  await postLedger(env, "use", { phone, change: "refund", actionId }, fetchImpl);
+export function ledgerUsage(plan: LedgerPlan | null, window: Pick<WindowCount, "counted" | "to"> | null): Usage | null {
+  if (!plan || !window) return null;
+  const used = Math.max(0, window.counted);
+  const limit = plan.limit;
+  return {
+    period: plan.period === "month" ? "month" : "week",
+    used,
+    limit,
+    left: limit === null ? null : Math.max(0, limit - used),
+    resetsAt: window.to,
+    source: "ledger",
+    overage: null,
+  };
 }
 
 /** mcp-usage-pricing.USAGE.6 — the usage a JSON-RPC tool result carries in _meta.kaption.usage, or null. */

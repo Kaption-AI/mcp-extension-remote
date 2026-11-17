@@ -327,13 +327,13 @@ describe("internal read API (mcp-usage-ledger.READ.2-4)", () => {
 
   it("mcp-usage-ledger.READ.3 — merging keeps the earliest crossing and the first form's plan", () => {
     const base = (counted: number, crossed: number | null, plan: LedgerWindows["plan"]): LedgerWindows => ({
-      week: { period: "2026-11-09", from: "", to: "", counted, by_source: { cloud: counted, local: 0, webmcp: 0 }, refused: 0, total: counted },
+      week: { period: "2026-11-09", from: "", to: "", counted, by_source: { cloud: counted, local: 0, webmcp: 0 }, kally: 0, pending: 0, refused: 0, total: counted },
       month: null,
       since: "2026-11-09",
       plan,
       crossed: { week: crossed, month: null },
     });
-    const plan = { tier: "free" as const, period: "week" as const, limit: 20, pool: null, enforcedBy: "week_ledger" as const, ttlSeconds: 600, fetchedAt: 1 };
+    const plan = { tier: "free" as const, period: "week" as const, limit: 20, pool: null, enforcedBy: "week_ledger" as const, ttlSeconds: 600, enforce: true, message: null, lang: null, fetchedAt: 1 };
     const merged = mergeLedgerWindows([base(15, null, plan), base(10, 50, null)]);
     expect(merged.week!.counted).toBe(25);
     expect(merged.shadow.week).toEqual({ limit: 20, over: 5, crossed_at: 50 });

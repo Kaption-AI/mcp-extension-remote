@@ -30,8 +30,8 @@ import {
   listConnections,
 } from "./connection-lifetime";
 import { UsageLedger, UsageTotals, ledgerFor, totalsNames } from "./usage-ledger";
-import { READ_BATCH_MAX, internalCaller, last4, readPhone, usageForPhone, validWindows } from "./ledger-read";
-import { shadowPhone } from "./ledger-windows";
+import { READ_BATCH_MAX, internalCaller, last4, parseUseRequest, readPhone, usageForPhone, validWindows } from "./ledger-read";
+import { shadowPhone, weekOf } from "./ledger-windows";
 import {
   LOCAL_MAX_BODY_BYTES,
   buildReport,
@@ -569,6 +569,8 @@ outerApp.post("/ext/usage/local", async (c) => {
     const result = await ledger.record(parsed.cells, {
       batchId: `local:${parsed.batchId}`,
       accountTag: userIds[0],
+      // mcp-usage-ledger.SINGLE.2 — the batch records the device's reserved calls finished before it was sent.
+      deviceBatch: true,
     });
     // mcp-usage-ledger.SHADOW.1-2, HOT_PATH.6 — the shadow judges the window after the batch is stored, in the background.
     if (!result.duplicate && String(c.env.LEDGER_SHADOW ?? "").trim()) {
@@ -724,7 +726,7 @@ outerApp.post("/ext/usage/meter/lease", async (c) => {
         hour: hourOf(now), path: "local" as const, connection: localConnectionId(i.app), app: i.app, tool: i.tool, kind: i.kind,
         outcome: i.outcome, latency: i.latency, calls: 1, repeats: 0,
       }));
-      await ledgerFor(c.env, caller.accountRef).record(cells, { accountTag: caller.accountRef, batchId: `lease:${leaseId}:${items[0].actionId}` }).catch(() => undefined);
+      await ledgerFor(c.env, caller.accountRef).record(cells, { accountTag: caller.accountRef, batchId: `lease:${leaseId}:${items[0].actionId}`, deviceBatch: true }).catch(() => undefined);
     }
     return c.json({ metered: false, ttl_seconds: DEFAULT_ALLOWANCE_TTL_S }, 200, USAGE_CORS);
   }
@@ -869,6 +871,35 @@ outerApp.get("/internal/ledger/report", async (c) => {
   } catch (e: any) {
     console.error(`[ledger] report failed for ${last4(phone)}:`, e?.message || e);
     return problem({ status: 503, code: "unavailable", detail: "Could not read usage" });
+  }
+});
+
+// mcp-usage-ledger.SINGLE.6-7 — rest-api reserves (or gives back) a device's local-bridge and WebMCP calls here, with the
+// limit it decided from the database (weekly-plan-limits.TIER.7). Bearer INTERNAL_API_KEY, as the read API.
+outerApp.post("/internal/ledger/use", async (c) => {
+  if (!internalCaller(c.req.header("Authorization"), c.env)) return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
+  const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+  const req = parseUseRequest(body);
+  if ("error" in req) return problem({ status: 400, code: "invalid_use", detail: req.error });
+  if (!c.env.USAGE_LEDGER || c.env.USAGE_LEDGER_ENABLED === "off") return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
+  try {
+    const refs = await accountRefsForPhone(req.phone, c.env.PHONE_REF_SECRET);
+    if (!refs.length) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
+    const now = Date.now();
+    // SINGLE.14 — the other written form's week counts toward the same number.
+    let offset = 0;
+    if (req.change === "reserve" && refs.length > 1) {
+      const week = weekOf(now);
+      const parts = await Promise.all(refs.slice(1).map((ref) => ledgerFor(c.env, ref).windows({ week }, now)));
+      offset = parts.reduce((n, p) => n + (p.week?.counted ?? 0), 0);
+    }
+    const answer = await ledgerFor(c.env, refs[0]).use({ ...req.use, offset }, now);
+    const out = { ok: answer.ok, counted: answer.counted, duplicates: answer.duplicates, refunded: answer.refunded, used: answer.used,
+      limit: answer.limit, left: answer.left, resets_at: answer.resetsAt };
+    return c.json(out, answer.ok ? 200 : 402, { "Cache-Control": "no-store" });
+  } catch (e: any) {
+    console.error(`[ledger] use failed for ${last4(req.phone)}:`, e?.message || e);
+    return problem({ status: 503, code: "unavailable", detail: "Could not reserve usage" });
   }
 });
 

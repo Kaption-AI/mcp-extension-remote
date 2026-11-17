@@ -46,9 +46,17 @@ export interface WindowCount {
   period: string;
   from: string;
   to: string;
-  /** mcp-usage-ledger.MODEL.2 — answered ok, uncounted tools left out, every road. */
+  /**
+   * mcp-usage-ledger.MODEL.2, SINGLE.2 — the window's counted actions: the answered calls recorded (uncounted tools left
+   * out) plus the reservations still waiting for their record.
+   */
   counted: number;
+  /** The same per road (Kally's calls are in local). */
   by_source: Record<UsagePath, number>;
+  /** mcp-usage-ledger.SINGLE.11 — Kally's counted calls (already inside by_source.local and counted). */
+  kally: number;
+  /** mcp-usage-ledger.SINGLE.2 — reservations not yet recorded (already inside counted). */
+  pending: number;
   refused: number;
   /** Every recorded call of the window, any outcome, uncounted tools included. */
   total: number;
@@ -60,16 +68,23 @@ export interface WindowRow {
   tool: string;
   outcome: string;
   calls: number;
+  /** A Kally (in-app) row (SINGLE.11). */
+  kally?: boolean;
 }
 
-/** mcp-usage-ledger.MODEL.2-4 — the window's numbers from its daily rows. */
-export function countWindow(range: WindowRange, rows: WindowRow[]): WindowCount {
+/** mcp-usage-ledger.SINGLE.2 — reservations of the window still waiting for their record, per road. */
+export type PendingCounts = Partial<Record<UsagePath, number>>;
+
+/** mcp-usage-ledger.MODEL.2-4, SINGLE.2 — the window's numbers from its daily rows and its pending reservations. */
+export function countWindow(range: WindowRange, rows: WindowRow[], pending: PendingCounts = {}): WindowCount {
   const out: WindowCount = {
     period: range.period,
     from: new Date(range.from).toISOString(),
     to: new Date(range.to).toISOString(),
     counted: 0,
     by_source: { cloud: 0, local: 0, webmcp: 0 },
+    kally: 0,
+    pending: 0,
     refused: 0,
     total: 0,
   };
@@ -77,9 +92,15 @@ export function countWindow(range: WindowRange, rows: WindowRow[]): WindowCount 
     out.total += r.calls;
     if (r.outcome === "refused") out.refused += r.calls;
     if (r.outcome !== "ok" || UNCOUNTED_TOOLS.has(r.tool)) continue;
-    out.counted += r.calls;
+    if (r.kally) out.kally += r.calls;
     if (r.path in out.by_source) out.by_source[r.path] += r.calls;
   }
+  for (const path of Object.keys(out.by_source) as UsagePath[]) {
+    const n = Math.max(0, Math.floor(pending[path] ?? 0));
+    out.by_source[path] += n;
+    out.pending += n;
+  }
+  out.counted = out.by_source.cloud + out.by_source.local + out.by_source.webmcp;
   return out;
 }
 
@@ -89,6 +110,8 @@ export function mergeWindows(a: WindowCount, b: WindowCount): WindowCount {
     ...a,
     counted: a.counted + b.counted,
     by_source: { cloud: a.by_source.cloud + b.by_source.cloud, local: a.by_source.local + b.by_source.local, webmcp: a.by_source.webmcp + b.by_source.webmcp },
+    kally: (a.kally ?? 0) + (b.kally ?? 0),
+    pending: (a.pending ?? 0) + (b.pending ?? 0),
     refused: a.refused + b.refused,
     total: a.total + b.total,
   };
@@ -104,8 +127,17 @@ export interface LedgerPlan {
   /** null = unlimited. */
   limit: number | null;
   pool: { ref: string; numbers: number } | null;
-  enforcedBy: "week_ledger" | "device" | "none";
+  enforcedBy: "week_ledger" | "ledger" | "device" | "none";
   ttlSeconds: number;
+  /**
+   * mcp-usage-ledger.SINGLE.3 — rest-api holds this account to its weekly number today: the ledger refuses past it.
+   * An older rest-api says so with enforced_by "week_ledger" (it then also refused at /access).
+   */
+  enforce: boolean;
+  /** mcp-usage-ledger.SINGLE.3 — the refusal words rest-api wrote (the plans link inside), or null. */
+  message: string | null;
+  /** en | es | pt for the usage line (mcp-usage-pricing.USAGE.4), or null. */
+  lang: string | null;
 }
 
 export const DEFAULT_PLAN_TTL_S = 600;
@@ -123,10 +155,14 @@ export function parsePlan(d: unknown): LedgerPlan | null {
     p && typeof p.ref === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(p.ref) && typeof p.numbers === "number" && p.numbers >= 1
       ? { ref: p.ref, numbers: Math.floor(p.numbers) }
       : null;
-  const enforcedBy = v.enforced_by === "week_ledger" || v.enforced_by === "device" ? v.enforced_by : "none";
+  const enforcedBy = v.enforced_by === "week_ledger" || v.enforced_by === "ledger" || v.enforced_by === "device" ? v.enforced_by : "none";
   const ttl = typeof v.ttl_seconds === "number" && v.ttl_seconds > 0 && v.ttl_seconds <= 86_400 ? Math.floor(v.ttl_seconds) : DEFAULT_PLAN_TTL_S;
   if (limit !== null && !period) return null;
-  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl };
+  // mcp-usage-ledger.SINGLE.3 — only a weekly number is enforced here (Pro and Business stay counted, SINGLE.10).
+  const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && period === "week" && limit !== null;
+  const message = typeof v.message === "string" && v.message.trim() ? v.message.slice(0, 2000) : null;
+  const lang = v.lang === "en" || v.lang === "es" || v.lang === "pt" ? v.lang : null;
+  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang };
 }
 
 /** mcp-usage-ledger.PLAN.1, PLAN.5 — the plan from rest-api, or null when it cannot answer (the caller fails open). */

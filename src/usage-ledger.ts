@@ -16,6 +16,7 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   DAY_MS,
+  KALLY_CONNECTION,
   dayOf,
   hourOf,
   monthRange,
@@ -25,6 +26,7 @@ import {
   type UsagePath,
 } from "./usage";
 import type { Env } from "./types";
+import { UNCOUNTED_TOOLS } from "./weekly-usage";
 import { MeterStore, type Allowance, type HoldInput, type LeaseAnswer, type LeaseRequest, type Peek, type Reservation } from "./meter";
 import {
   countWindow,
@@ -35,6 +37,7 @@ import {
   windowRange,
   type LedgerPlan,
   type PlanTier,
+  type PendingCounts,
   type ShadowWindow,
   type WindowCount,
   type WindowKind,
@@ -70,12 +73,61 @@ const LEDGER_SCHEMA = [
      period TEXT, lim INTEGER, pool_ref TEXT, pool_numbers INTEGER, enforced_by TEXT NOT NULL)`,
   // mcp-usage-ledger.SHADOW.1, SHADOW.3 — when a window's count first passed the plan's limit (no call data).
   `CREATE TABLE IF NOT EXISTS shadow_window (win TEXT PRIMARY KEY, lim INTEGER NOT NULL, crossed_at INTEGER NOT NULL)`,
+  // mcp-usage-ledger.SINGLE.2, SINGLE.4, SINGLE.6, IDEMPOTENCY.1-4 — one row per reserved action id: state 1 = pending
+  // (counted, its record not here yet), 2 = recorded (its call is in the cells), 0 = given back. Only the opaque id, its
+  // road and when: nothing about the call (PRIVACY).
+  `CREATE TABLE IF NOT EXISTS use_reserve (id TEXT PRIMARY KEY, path TEXT NOT NULL, at INTEGER NOT NULL, live INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS use_reserve_at ON use_reserve (at)`,
 ];
+
+/** mcp-usage-ledger.SINGLE.3 — columns added to plan_cache after it shipped (ALTER is a no-op error when present). */
+const PLAN_COLUMNS = [
+  `ALTER TABLE plan_cache ADD COLUMN enforce INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE plan_cache ADD COLUMN message TEXT`,
+  `ALTER TABLE plan_cache ADD COLUMN lang TEXT`,
+];
+
+/** mcp-usage-ledger.IDEMPOTENCY.4 — reservations are kept 40 days. */
+export const RESERVE_RETENTION_DAYS = 40;
+
+/** mcp-usage-ledger.SINGLE.6 — what one reservation asks. */
+export interface UseRequest {
+  change: "reserve" | "refund";
+  path: UsagePath;
+  /** Opaque action ids (already prefixed by road, e.g. local:<id>); a repeated id is counted once. */
+  actionIds?: string[];
+  /** Without ids: this many anonymous uses. */
+  count?: number;
+  /** null: no limit (counted, never refused). */
+  limit: number | null;
+  enforce: boolean;
+  /** mcp-usage-ledger.SINGLE.14 — counted actions of the account's other written form this week. */
+  offset?: number;
+}
+
+export interface UseAnswer {
+  ok: boolean;
+  counted: number;
+  duplicates: number;
+  refunded: number;
+  /** This week's counted actions after the change (the other form's included). */
+  used: number;
+  limit: number | null;
+  left: number | null;
+  resetsAt: string;
+}
 
 /** The ledger's storage logic, independent of the Durable Object runtime. */
 export class LedgerStore {
   constructor(private sql: SqlLike) {
     for (const statement of LEDGER_SCHEMA) sql.exec(statement);
+    for (const statement of PLAN_COLUMNS) {
+      try {
+        sql.exec(statement);
+      } catch {
+        // already there
+      }
+    }
   }
 
   /** mcp-usage-accounting.STORE.2 — adds the cells; the caller runs it inside one transaction. */
@@ -168,15 +220,100 @@ export class LedgerStore {
   windowRows(range: WindowRange): WindowRow[] {
     return this.sql
       .exec(
-        `SELECT path, tool, outcome, SUM(calls) AS calls FROM usage_day WHERE day >= ? AND day < ? GROUP BY path, tool, outcome`,
-        dayOf(range.from), dayOf(range.to),
+        `SELECT path, tool, outcome, (conn = ?) AS kally, SUM(calls) AS calls FROM usage_day WHERE day >= ? AND day < ?
+         GROUP BY path, tool, outcome, (conn = ?)`,
+        KALLY_CONNECTION, dayOf(range.from), dayOf(range.to), KALLY_CONNECTION,
       )
       .toArray()
-      .map((r) => ({ path: r.path as UsagePath, tool: String(r.tool), outcome: String(r.outcome), calls: Number(r.calls) }));
+      .map((r) => ({ path: r.path as UsagePath, tool: String(r.tool), outcome: String(r.outcome), calls: Number(r.calls), kally: Number(r.kally) === 1 }));
+  }
+
+  /** mcp-usage-ledger.SINGLE.2 — reservations made in the window still waiting for their record, per road. */
+  pending(range: { from: number; to: number }): PendingCounts {
+    const out: PendingCounts = {};
+    for (const r of this.sql
+      .exec(`SELECT path, COUNT(*) AS n FROM use_reserve WHERE live = 1 AND at >= ? AND at < ? GROUP BY path`, range.from, range.to)
+      .toArray()) {
+      out[r.path as UsagePath] = Number(r.n);
+    }
+    return out;
   }
 
   windowCount(range: WindowRange): WindowCount {
-    return countWindow(range, this.windowRows(range));
+    return countWindow(range, this.windowRows(range), this.pending(range));
+  }
+
+  /**
+   * mcp-usage-ledger.SINGLE.4, SINGLE.6, IDEMPOTENCY.1-2 — reserve (all or nothing; a live id is a duplicate; past the
+   * limit nothing is counted when enforced) or give back (only live reservations of those ids, or `count` anonymous ones
+   * of the road this week). The caller runs it inside one transaction.
+   */
+  use(req: UseRequest, now: number): UseAnswer {
+    const week = currentWindow("week", now);
+    const resetsAt = new Date(week.to).toISOString();
+    const offset = Math.max(0, Math.floor(req.offset ?? 0));
+    const answer = (ok: boolean, counted: number, duplicates: number, refunded: number): UseAnswer => {
+      const used = this.windowCount(week).counted + offset;
+      return { ok, counted, duplicates, refunded, used, limit: req.limit, left: req.limit === null ? null : Math.max(0, req.limit - used), resetsAt };
+    };
+    const ids = req.actionIds?.length ? [...new Set(req.actionIds)] : null;
+    if (req.change === "refund") {
+      let refunded = 0;
+      if (ids) {
+        for (const id of ids) {
+          // A recorded call that failed was recorded as failed (not counted): giving it back changes nothing either.
+          const live = this.sql.exec(`SELECT 1 AS x FROM use_reserve WHERE id = ? AND live > 0`, id).toArray().length > 0;
+          if (!live) continue;
+          this.sql.exec(`UPDATE use_reserve SET live = 0 WHERE id = ?`, id);
+          refunded++;
+        }
+      } else {
+        const n = Math.max(1, Math.floor(req.count ?? 1));
+        const rows = this.sql
+          .exec(`SELECT id FROM use_reserve WHERE live > 0 AND path = ? AND id LIKE 'anon:%' AND at >= ? ORDER BY at DESC LIMIT ?`, req.path, week.from, n)
+          .toArray();
+        for (const r of rows) this.sql.exec(`UPDATE use_reserve SET live = 0 WHERE id = ?`, String(r.id));
+        refunded = rows.length;
+      }
+      return answer(true, 0, 0, refunded);
+    }
+    let fresh: string[];
+    if (ids) {
+      fresh = ids.filter((id) => this.sql.exec(`SELECT 1 AS x FROM use_reserve WHERE id = ? AND live > 0`, id).toArray().length === 0);
+    } else {
+      const n = Math.max(1, Math.floor(req.count ?? 1));
+      fresh = Array.from({ length: n }, () => `anon:${req.path}:${crypto.randomUUID()}`);
+    }
+    const duplicates = ids ? ids.length - fresh.length : 0;
+    if (fresh.length === 0) return answer(true, 0, duplicates, 0);
+    if (req.enforce && req.limit !== null) {
+      // SINGLE.2 — the week's count with these reservations added (the other written form's included, SINGLE.14).
+      const after = this.windowCount(week).counted + fresh.length + offset;
+      if (after > req.limit) return answer(false, 0, duplicates, 0);
+    }
+    for (const id of fresh) {
+      this.sql.exec(
+        `INSERT INTO use_reserve (id, path, at, live) VALUES (?, ?, ?, 1) ON CONFLICT (id) DO UPDATE SET path = excluded.path, at = excluded.at, live = 1`,
+        id, req.path, now,
+      );
+    }
+    return answer(true, fresh.length, duplicates, 0);
+  }
+
+  /** mcp-usage-ledger.SINGLE.2 — a cloud call's reservation becomes recorded with its cell (same transaction). */
+  settleReservation(id: string): void {
+    this.sql.exec(`UPDATE use_reserve SET live = 2 WHERE id = ? AND live = 1`, id);
+  }
+
+  /**
+   * mcp-usage-ledger.SINGLE.2 — a device batch carries every call the device finished before it was sent, so the
+   * device roads' pending reservations made before now are recorded by it (Kally rows are never reserved).
+   */
+  settleDeviceRoads(paths: UsagePath[], now: number): void {
+    for (const path of new Set(paths)) {
+      if (path === "cloud") continue;
+      this.sql.exec(`UPDATE use_reserve SET live = 2 WHERE live = 1 AND path = ? AND at <= ?`, path, now);
+    }
   }
 
   /** mcp-usage-ledger.PLAN.4 — the cached plan and when it was fetched, or null. */
@@ -192,18 +329,22 @@ export class LedgerStore {
         pool: r.pool_ref ? { ref: String(r.pool_ref), numbers: Number(r.pool_numbers ?? 1) } : null,
         enforcedBy: (String(r.enforced_by) as LedgerPlan["enforcedBy"]) || "none",
         ttlSeconds: Number(r.ttl_s),
+        enforce: Number(r.enforce ?? 0) === 1,
+        message: r.message ? String(r.message) : null,
+        lang: r.lang ? String(r.lang) : null,
       },
     };
   }
 
   setPlan(plan: LedgerPlan, now: number): void {
     this.sql.exec(
-      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET fetched_at = excluded.fetched_at, ttl_s = excluded.ttl_s, tier = excluded.tier,
          period = excluded.period, lim = excluded.lim, pool_ref = excluded.pool_ref, pool_numbers = excluded.pool_numbers,
-         enforced_by = excluded.enforced_by`,
+         enforced_by = excluded.enforced_by, enforce = excluded.enforce, message = excluded.message, lang = excluded.lang`,
       now, plan.ttlSeconds, plan.tier, plan.period, plan.limit, plan.pool?.ref ?? null, plan.pool?.numbers ?? null, plan.enforcedBy,
+      plan.enforce ? 1 : 0, plan.message ?? null, plan.lang ?? null,
     );
   }
 
@@ -223,6 +364,7 @@ export class LedgerStore {
     this.sql.exec(`DELETE FROM usage_hour WHERE hour < ?`, now - HOURLY_RETENTION_DAYS * DAY_MS);
     this.sql.exec(`DELETE FROM usage_day WHERE day < ?`, dayOf(now - DAILY_RETENTION_DAYS * DAY_MS));
     this.sql.exec(`DELETE FROM batch WHERE at < ?`, now - BATCH_RETENTION_DAYS * DAY_MS);
+    this.sql.exec(`DELETE FROM use_reserve WHERE at < ?`, now - RESERVE_RETENTION_DAYS * DAY_MS);
     this.sql.exec(`DELETE FROM conn WHERE last_at < ?`, now - DAILY_RETENTION_DAYS * DAY_MS);
   }
 }
@@ -429,12 +571,15 @@ export class UsageLedger extends DurableObject<Env> {
    */
   async record(
     cells: UsageCell[],
-    options: { batchId?: string; accountTag?: string; settle?: string; uncharged?: string } = {},
+    options: { batchId?: string; accountTag?: string; settle?: string; uncharged?: string; reservation?: string; deviceBatch?: boolean } = {},
   ): Promise<{ accepted: number; duplicate: boolean; settled?: { charged: boolean } | null }> {
     const now = Date.now();
     let settled: { charged: boolean } | null = null;
     const accepted = this.state.storage.transactionSync(() => {
       if (options.batchId && !this.store.claimBatch(options.batchId, now)) return -1;
+      // mcp-usage-ledger.SINGLE.2 — the call's reservation is now in the cells (cloud: by id; a device batch: its roads).
+      if (options.reservation) this.store.settleReservation(options.reservation);
+      if (options.deviceBatch) this.store.settleDeviceRoads(cells.filter((c) => c.connection !== KALLY_CONNECTION).map((c) => c.path), now);
       if (options.settle) {
         const hold = this.meter.settle(options.settle);
         settled = hold ? { charged: hold.charged } : null;
@@ -456,6 +601,56 @@ export class UsageLedger extends DurableObject<Env> {
     }
     this.state.waitUntil(ensureDailyAlarm(this.state, now).catch(() => undefined));
     return { accepted, duplicate: false, ...(options.settle ? { settled } : {}) };
+  }
+
+  /** mcp-usage-ledger.SINGLE.2 — a cloud reservation whose call was recorded another way (the meter's settle). */
+  async settleReservation(actionId: string): Promise<void> {
+    this.store.settleReservation(actionId);
+  }
+
+  /** mcp-usage-ledger.SINGLE.6 — one reservation or refund, decided and written in one transaction. */
+  async use(req: UseRequest, now = Date.now()): Promise<UseAnswer> {
+    const answer = this.state.storage.transactionSync(() => this.store.use(req, now));
+    this.state.waitUntil(ensureDailyAlarm(this.state, now).catch(() => undefined));
+    return answer;
+  }
+
+  /**
+   * mcp-usage-ledger.PLAN.4-5, SINGLE.3, SINGLE.5 — the plan this account is judged against: the cached one while fresh,
+   * the stale one while a fresh one is fetched in the background, and only with nothing cached a fetch the call waits
+   * for (null when rest-api cannot answer: the call runs).
+   */
+  async planFor(phone: string, now = Date.now(), fetchImpl: typeof fetch = fetch): Promise<LedgerPlan | null> {
+    const cached = this.store.plan();
+    if (cached && planFresh(cached.fetchedAt, cached.plan.ttlSeconds, now, cached.plan.period)) return cached.plan;
+    const refresh = fetchPlan(this.env, phone, fetchImpl).then((fresh) => {
+      if (fresh) this.store.setPlan(fresh, Date.now());
+      return fresh;
+    });
+    if (cached) {
+      this.state.waitUntil(refresh.catch(() => undefined));
+      return cached.plan;
+    }
+    return refresh.catch(() => null);
+  }
+
+  /**
+   * mcp-usage-ledger.SINGLE.4 — before one cloud call: for an enforced account reserve it (refused past the week's
+   * number); for any other account nothing is reserved. `offset` (SINGLE.14) reads the other written form's week.
+   */
+  async cloudBegin(
+    input: { phone: string; actionId: string; tool: string; offset?: () => Promise<number> },
+    now = Date.now(),
+    fetchImpl: typeof fetch = fetch,
+  ): Promise<CloudBegin> {
+    if (UNCOUNTED_TOOLS.has(input.tool)) return { state: "run", reserved: false, plan: null, use: null };
+    const plan = await this.planFor(input.phone, now, fetchImpl);
+    if (!plan?.enforce || plan.limit === null || plan.period !== "week") {
+      return { state: "run", reserved: false, plan, use: null };
+    }
+    const offset = input.offset ? await input.offset().catch(() => 0) : 0;
+    const use = await this.use({ change: "reserve", path: "cloud", actionIds: [input.actionId], limit: plan.limit, enforce: true, offset }, now);
+    return use.ok ? { state: "run", reserved: use.counted > 0, plan, use } : { state: "refused", reserved: false, plan, use };
   }
 
   /**
@@ -552,6 +747,16 @@ export class UsageTotals extends DurableObject<Env> {
     this.store.prune(now);
     await this.state.storage.setAlarm(now + DAY_MS);
   }
+}
+
+/** mcp-usage-ledger.SINGLE.4 — what the relay does with one cloud call. */
+export interface CloudBegin {
+  state: "run" | "refused";
+  /** The call holds a reservation: give it back if it fails (`use` refund), settle it with its record. */
+  reserved: boolean;
+  plan: LedgerPlan | null;
+  /** The week after the reservation (or the refusal), when one was asked for. */
+  use: UseAnswer | null;
 }
 
 export interface LedgerWindows {

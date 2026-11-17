@@ -24,8 +24,8 @@ export interface Env {
    */
   DISABLED_FULL_GATING_PHONES?: string;
   /**
-   * weekly-plan-limits.SERVER.13 (Kaption-AI monorepo) — phones whose cloud calls are counted on rest-api's weekly ledger
-   * ("*" = every account; unset or empty = nobody, every call runs as before). rest-api's own switch still decides.
+   * Not read since mcp-usage-ledger.SINGLE.15 (Kaption-AI monorepo): every account is counted in its ledger and rest-api's
+   * plan answer says who is held to a weekly number. Kept for a rollback to the previous relay.
    */
   WEEKLY_PLAN_LIMITS_PHONES?: string;
   /**
