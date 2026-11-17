@@ -26,6 +26,7 @@ import {
   type UsagePath,
 } from "./usage";
 import type { Env } from "./types";
+import { knownClientId } from "./client";
 import { UNCOUNTED_TOOLS } from "./weekly-usage";
 import { accountRefsForPhone } from "./phone-alias";
 import { MeterStore, type Allowance, type HoldInput, type LeaseAnswer, type LeaseRequest, type Peek, type Reservation } from "./meter";
@@ -81,6 +82,12 @@ const LEDGER_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS use_reserve_at ON use_reserve (at)`,
 ];
 
+/**
+ * mcp-local-hub-growth.CLIENT.8 — columns added to conn after it shipped (ALTER fails harmlessly when present, so an
+ * existing ledger upgrades on its next start). A connection without a client yet reads as "unknown".
+ */
+const CONN_COLUMNS = [`ALTER TABLE conn ADD COLUMN client TEXT`];
+
 /** mcp-usage-ledger.SINGLE.3 — columns added to plan_cache after it shipped (ALTER is a no-op error when present). */
 const PLAN_COLUMNS = [
   `ALTER TABLE plan_cache ADD COLUMN enforce INTEGER NOT NULL DEFAULT 0`,
@@ -122,7 +129,7 @@ export interface UseAnswer {
 export class LedgerStore {
   constructor(private sql: SqlLike) {
     for (const statement of LEDGER_SCHEMA) sql.exec(statement);
-    for (const statement of PLAN_COLUMNS) {
+    for (const statement of [...PLAN_COLUMNS, ...CONN_COLUMNS]) {
       try {
         sql.exec(statement);
       } catch {
@@ -151,10 +158,11 @@ export class LedgerStore {
       );
       const seen = Math.min(now, c.hour + 3_599_999);
       this.sql.exec(
-        `INSERT INTO conn (id, path, app, first_at, last_at) VALUES (?, ?, ?, ?, ?)
+        // mcp-local-hub-growth.CLIENT.8 — a cell that knows its client sets it; one that doesn't leaves it.
+        `INSERT INTO conn (id, path, app, first_at, last_at, client) VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET app = excluded.app, last_at = MAX(last_at, excluded.last_at),
-           first_at = MIN(first_at, excluded.first_at)`,
-        c.connection, c.path, c.app, seen, seen,
+           first_at = MIN(first_at, excluded.first_at), client = COALESCE(excluded.client, conn.client)`,
+        c.connection, c.path, c.app, seen, seen, c.client ?? null,
       );
     }
   }
@@ -172,7 +180,8 @@ export class LedgerStore {
     if (!range) return [];
     return this.sql
       .exec(
-        `SELECT d.day AS day, d.path AS path, d.conn AS connection, COALESCE(c.app, 'Other') AS app, d.tool AS tool,
+        `SELECT d.day AS day, d.path AS path, d.conn AS connection, COALESCE(c.app, 'Other') AS app,
+                COALESCE(c.client, 'unknown') AS client, d.tool AS tool,
                 d.kind AS kind, d.outcome AS outcome, d.calls AS calls, d.repeats AS repeats
          FROM usage_day d LEFT JOIN conn c ON c.id = d.conn
          WHERE d.day >= ? AND d.day < ?`,
@@ -184,6 +193,7 @@ export class LedgerStore {
         path: r.path as UsagePath,
         connection: String(r.connection),
         app: String(r.app),
+        client: knownClientId(r.client) ?? "unknown",
         tool: String(r.tool),
         kind: String(r.kind),
         outcome: r.outcome as DayRow["outcome"],

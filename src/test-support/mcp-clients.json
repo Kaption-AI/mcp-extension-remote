@@ -1,0 +1,29 @@
+{
+  "about": "mcp-local-hub-growth.CLIENT.4-5 — MCP client normalization. TS kext/src/core/mcp/mcpClient.ts, Rust kaption-core/crates/core/src/domains/mcp/client.rs and the relay (Kaption-AI/mcp-extension-remote src/client.ts) must all answer these.",
+  "cases": [
+    { "name": "claude-ai", "version": "0.1.0", "path": "local", "expected": { "mcpClient": "claude-desktop", "mcpClientName": "claude-ai", "mcpClientVersion": "0.1.0" } },
+    { "name": "claude-ai", "version": "0.1.0", "path": "cloud", "expected": { "mcpClient": "claude-ai", "mcpClientName": "claude-ai", "mcpClientVersion": "0.1.0" } },
+    { "name": "Claude", "version": null, "path": "cloud", "expected": { "mcpClient": "claude-ai", "mcpClientName": "Claude", "mcpClientVersion": "" } },
+    { "name": "Claude Desktop", "version": "1.2.3", "path": "cloud", "expected": { "mcpClient": "claude-desktop", "mcpClientName": "Claude Desktop", "mcpClientVersion": "1.2.3" } },
+    { "name": "claude-code", "version": "2.0.31", "path": "local", "expected": { "mcpClient": "claude-code", "mcpClientName": "claude-code", "mcpClientVersion": "2.0.31" } },
+    { "name": "Claude Code", "version": "", "path": "cloud", "expected": { "mcpClient": "claude-code", "mcpClientName": "Claude Code", "mcpClientVersion": "" } },
+    { "name": "openai-mcp", "version": "1.0.0", "path": "cloud", "expected": { "mcpClient": "chatgpt", "mcpClientName": "openai-mcp", "mcpClientVersion": "1.0.0" } },
+    { "name": "ChatGPT", "version": null, "path": "cloud", "expected": { "mcpClient": "chatgpt", "mcpClientName": "ChatGPT", "mcpClientVersion": "" } },
+    { "name": "cursor-vscode", "version": "1.0.0", "path": "local", "expected": { "mcpClient": "cursor", "mcpClientName": "cursor-vscode", "mcpClientVersion": "1.0.0" } },
+    { "name": "Visual Studio Code", "version": "1.105.1", "path": "local", "expected": { "mcpClient": "vscode", "mcpClientName": "Visual Studio Code", "mcpClientVersion": "1.105.1" } },
+    { "name": "Visual-Studio-Code-Insiders", "version": "1.106.0-insider", "path": "local", "expected": { "mcpClient": "vscode", "mcpClientName": "Visual-Studio-Code-Insiders", "mcpClientVersion": "1.106.0-insider" } },
+    { "name": "GitHub Copilot", "version": "x", "path": "cloud", "expected": { "mcpClient": "vscode", "mcpClientName": "GitHub Copilot", "mcpClientVersion": "x" } },
+    { "name": "windsurf-client", "version": "1.0.0", "path": "local", "expected": { "mcpClient": "windsurf", "mcpClientName": "windsurf-client", "mcpClientVersion": "1.0.0" } },
+    { "name": "Codeium", "version": "1", "path": "local", "expected": { "mcpClient": "windsurf", "mcpClientName": "Codeium", "mcpClientVersion": "1" } },
+    { "name": "codex-mcp-client", "version": "0.50.0", "path": "local", "expected": { "mcpClient": "other", "mcpClientName": "codex-mcp-client", "mcpClientVersion": "0.50.0" } },
+    { "name": "gemini-cli-mcp-client", "version": "0.1", "path": "local", "expected": { "mcpClient": "other", "mcpClientName": "gemini-cli-mcp-client", "mcpClientVersion": "0.1" } },
+    { "name": "", "version": "", "path": "local", "expected": { "mcpClient": "unknown", "mcpClientName": "", "mcpClientVersion": "" } },
+    { "name": null, "version": null, "path": "cloud", "expected": { "mcpClient": "unknown", "mcpClientName": "", "mcpClientVersion": "" } },
+    { "name": "   ", "version": "  ", "path": "cloud", "expected": { "mcpClient": "unknown", "mcpClientName": "", "mcpClientVersion": "" } },
+    { "name": "My client for joe@example.com <script>", "version": "1.0.0 beta!", "path": "local", "expected": { "mcpClient": "other", "mcpClientName": "My client for joeexample.com scr", "mcpClientVersion": "1.0.0beta" } },
+    { "name": "a-very-long-client-name-that-goes-past-thirty-two-characters", "version": "1.2.3.4.5.6.7.8.9.10", "path": "local", "expected": { "mcpClient": "other", "mcpClientName": "a-very-long-client-name-that-goe", "mcpClientVersion": "1.2.3.4.5.6.7.8." } },
+    { "name": "  Cursor  (1.7)\n", "version": "\t1.7.0", "path": "cloud", "expected": { "mcpClient": "cursor", "mcpClientName": "Cursor (1.7)", "mcpClientVersion": "1.7.0" } },
+    { "name": "Anthropic/ClaudeAI", "version": "3", "path": "local", "expected": { "mcpClient": "claude-desktop", "mcpClientName": "Anthropic/ClaudeAI", "mcpClientVersion": "3" } },
+    { "name": "kally", "version": null, "path": "local", "expected": { "mcpClient": "other", "mcpClientName": "kally", "mcpClientVersion": "" } }
+  ]
+}
