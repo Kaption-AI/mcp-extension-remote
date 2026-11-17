@@ -10,7 +10,7 @@
  */
 import { accountRefsForPhone } from "./phone-alias";
 import { mergeWindows, shadowOf, weekRange, type LedgerPlan, type ShadowWindow, type WindowCount } from "./ledger-windows";
-import { ledgerFor, type LedgerWindows } from "./usage-ledger";
+import { ledgerFor, type LedgerWindows, type UseRequest } from "./usage-ledger";
 import { monthRange } from "./usage";
 import type { Env } from "./types";
 
@@ -20,7 +20,7 @@ export interface LedgerUsage {
   week: WindowCount | null;
   month: WindowCount | null;
   since: string | null;
-  plan: (Omit<LedgerPlan, "enforcedBy" | "ttlSeconds"> & { enforced_by: LedgerPlan["enforcedBy"]; fetched_at: number }) | null;
+  plan: (Pick<LedgerPlan, "tier" | "period" | "limit" | "pool" | "enforce"> & { enforced_by: LedgerPlan["enforcedBy"]; fetched_at: number }) | null;
   shadow: { week: ShadowWindow | null; month: ShadowWindow | null };
 }
 
@@ -71,7 +71,7 @@ export function mergeLedgerWindows(parts: LedgerWindows[]): LedgerUsage {
     month,
     since,
     plan: plan
-      ? { tier: plan.tier, period: plan.period, limit: plan.limit, pool: plan.pool, enforced_by: plan.enforcedBy, fetched_at: plan.fetchedAt }
+      ? { tier: plan.tier, period: plan.period, limit: plan.limit, pool: plan.pool, enforced_by: plan.enforcedBy, enforce: plan.enforce === true, fetched_at: plan.fetchedAt }
       : null,
     shadow: { week: shadowFor("week", week, crossedWeek), month: shadowFor("month", month, crossedMonth) },
   };
@@ -98,4 +98,38 @@ export function sameSecret(a: string, b: string): boolean {
 export function internalCaller(authorization: string | undefined, env: Pick<Env, "INTERNAL_API_KEY">): boolean {
   const auth = authorization ?? "";
   return auth.startsWith("Bearer ") && sameSecret(auth.slice(7), env.INTERNAL_API_KEY ?? "");
+}
+
+const ACTION_ID = /^[A-Za-z0-9_:.-]{8,96}$/;
+export const USE_MAX = 1000;
+
+/**
+ * mcp-usage-ledger.SINGLE.6 — POST /internal/ledger/use's body read strictly: {phone, change reserve | refund, source
+ * local | webmcp, actionIds (1-1000 ids) | count (1-1000), limit (whole number or null), enforce}. Ids are kept per road
+ * (local:<id>, webmcp:<id>), as rest-api's old ledger did.
+ */
+export function parseUseRequest(body: Record<string, unknown>): { phone: string; change: UseRequest["change"]; use: UseRequest } | { error: string } {
+  const phone = readPhone(body.phone);
+  if (!phone) return { error: "phone must be 7-15 digits." };
+  const change = body.change ?? "reserve";
+  if (change !== "reserve" && change !== "refund") return { error: "change must be reserve or refund." };
+  const source = body.source ?? "local";
+  if (source !== "local" && source !== "webmcp") return { error: "source must be local or webmcp." };
+  const rawIds = body.actionIds;
+  let actionIds: string[] | undefined;
+  if (rawIds !== undefined) {
+    if (!Array.isArray(rawIds) || rawIds.length < 1 || rawIds.length > USE_MAX || !rawIds.every((a) => typeof a === "string" && ACTION_ID.test(a))) {
+      return { error: `actionIds must hold 1-${USE_MAX} ids of 8-96 letters, digits, _ : . or -.` };
+    }
+    actionIds = (rawIds as string[]).map((a) => `${source}:${a}`);
+  }
+  const count = body.count ?? 1;
+  if (!Number.isInteger(count) || (count as number) < 1 || (count as number) > USE_MAX) return { error: `count must be 1-${USE_MAX}.` };
+  const limit = body.limit ?? null;
+  if (limit !== null && !(Number.isInteger(limit) && (limit as number) >= 0 && (limit as number) <= 100_000)) return { error: "limit must be a whole number or null." };
+  return {
+    phone,
+    change,
+    use: { change, path: source, ...(actionIds ? { actionIds } : { count: count as number }), limit: limit as number | null, enforce: body.enforce === true },
+  };
 }

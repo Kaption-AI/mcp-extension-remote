@@ -83,9 +83,9 @@
     // disabled-account answer; "*" = everyone, empty = nobody. Widen together with rest-api's DISABLED_FULL_GATING_PHONES.
     // Launch 2026-11-06 (owner go): every account. Rollback: set back to "17373427172,17374202658" and merge.
     "DISABLED_FULL_GATING_PHONES": "*",
-    // weekly-plan-limits.SERVER.13 (monorepo) — phones whose cloud calls are counted on rest-api's weekly ledger; "*" =
-    // everyone, empty = nobody. Turn on together with rest-api's WEEKLY_PLAN_LIMITS_PHONES (owner test: "17373427172").
-    // Owner test 2026-11-08: 17373427172 only (never 17374202658). Rollback: "" and merge.
+    // mcp-usage-ledger.SINGLE.15 (monorepo) — no longer read: every account's calls are counted in its ledger, and who is
+    // held to the weekly number is rest-api's decision (its /__internal/mcp-ledger/plan answer). Kept only so a rollback
+    // to the previous relay finds it as it was.
     "WEEKLY_PLAN_LIMITS_PHONES": "17373427172",
     // mcp-usage-pricing.USAGE.5-8 — "on"/"*" or a phone list: tool results say what is left. Empty/"off": unchanged.
     // Owner test 2026-11-08: 17373427172 only. Rollback: "" and merge.

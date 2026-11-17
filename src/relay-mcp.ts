@@ -37,10 +37,20 @@ import {
   usageKind,
   type UsageCell,
 } from "./usage";
-import { ledgerFor } from "./usage-ledger";
+import { ledgerFor, type CloudBegin } from "./usage-ledger";
 import { shadowPhone } from "./ledger-windows";
 import { DISABLED_CODE, DisabledGate } from "./disabled-gate";
-import { beginUse, refundUse, usageConfigured, usageLine, usageMeta, type UseAnswer } from "./weekly-usage";
+import { ledgerUsage, refusalFallback, usageLang, usageLine, usageMeta, usagePhone, type Usage, type UsageLang } from "./weekly-usage";
+
+/** mcp-usage-ledger.SINGLE.4 — what the ledger said about one cloud call. */
+interface LedgerGate {
+  state: "run" | "refused";
+  /** The reservation to settle with the record (or give back when the call fails). */
+  reservation: string | null;
+  message: string | null;
+  usage: Usage | null;
+  lang: UsageLang;
+}
 
 export class RelayMCP extends McpAgent<Env> {
   server = new McpServer({
@@ -168,9 +178,10 @@ export class RelayMCP extends McpAgent<Env> {
             isError: true,
           };
         }
-        // weekly-plan-limits.SERVER.13 — a listed phone's call is counted on rest-api's weekly ledger before it runs
-        // (refused at the limit); mcp-usage-pricing.USAGE.5 — a usage phone also learns what is left. Unlisted: nothing.
-        const weekly = await this.weeklyUse(accountRef, tool.name);
+        // mcp-usage-ledger.SINGLE.4 — an account rest-api holds to a weekly number has this call reserved in its ledger
+        // before it runs and refused past the number; mcp-usage-pricing.USAGE.5 — a usage phone also learns what is left.
+        const weekly = await this.ledgerGate(accountRef, tool.name);
+        usage.reservation = weekly?.reservation ?? null;
         if (weekly?.state === "refused") {
           failure = { code: REFUSED_CODE };
           this.recordUsage(usage, failure, Date.now() - started);
@@ -238,8 +249,8 @@ export class RelayMCP extends McpAgent<Env> {
           };
         } catch (err: any) {
           failure = err ?? new Error("Tool call failed");
-          // weekly-plan-limits.LIMITS.14 — a failed call gives its weekly slot (or its charge) back.
-          if (weekly?.state === "run" && weekly.counted) this.refundWeeklyUse(accountRef, weekly.actionId);
+          // weekly-plan-limits.LIMITS.14, mcp-usage-ledger.SINGLE.4 — a failed call gives its reservation back.
+          if (weekly?.reservation) this.refundReservation(accountRef, weekly.reservation);
           return {
             content: [
               {
@@ -298,6 +309,8 @@ export class RelayMCP extends McpAgent<Env> {
       repeat: this.repeats.isRepeat(tool, args, at).catch(() => false),
       /** business-plans.MCP_LEDGER.8, MCP_ASYNC.9 — the meter's gate: the call is recorded once its reservation is known. */
       gate: null as CloudGate | null,
+      /** mcp-usage-ledger.SINGLE.2 — the call's weekly reservation, settled by its record. */
+      reservation: null as string | null,
     };
   }
 
@@ -317,26 +330,40 @@ export class RelayMCP extends McpAgent<Env> {
   }
 
   /**
-   * weekly-plan-limits.SERVER.13, mcp-usage-pricing.USAGE.5 — count this call on the weekly ledger and/or fetch what is
-   * left. Null (the call runs as before) when both switches are unset, the phone is not listed, or anything fails.
+   * mcp-usage-ledger.SINGLE.3-5, SINGLE.14, mcp-usage-pricing.USAGE.5 — the ledger's decision for this call (a reservation
+   * for an enforced account) and, for a usage phone, what is left. Null (the call runs as before) when the ledger is off
+   * or anything fails (SINGLE.5: a ledger failure never refuses a call).
    */
-  private async weeklyUse(accountRef: string, tool: string): Promise<UseAnswer | null> {
-    // lifetime-local.HOLDER.7 — rest-api's /access (the disabled gate's cached answer) says this account counts by the
-    // week (every Lifetime account): its cloud calls are counted on the weekly ledger like a listed phone's.
-    const weekly = this.disabledGate?.weekly() === true;
-    if (!usageConfigured(this.env) && !weekly) return null;
+  private async ledgerGate(accountRef: string, tool: string): Promise<LedgerGate | null> {
+    if (this.env.USAGE_LEDGER_ENABLED === "off" || !this.env.USAGE_LEDGER) return null;
     try {
       const phone = await meteringPhoneWithAlias(this.env, accountRef);
-      return await beginUse(this.env, phone, tool, crypto.randomUUID(), fetch, { weekly });
+      if (!phone) return null;
+      const ledger = ledgerFor(this.env, accountRef);
+      const actionId = `cloud:${crypto.randomUUID()}`;
+      const begin = (await ledger.cloudBegin({ phone, actionId, tool, accountRef })) as CloudBegin;
+      const show = usagePhone(phone, this.env);
+      let window = begin.use ? { counted: begin.use.used, to: begin.use.resetsAt } : null;
+      if (show && !window && begin.plan?.period) {
+        const w = await ledger.windows();
+        window = begin.plan.period === "month" ? w.month : w.week;
+      }
+      const usage = show ? ledgerUsage(begin.plan, window) : null;
+      const lang = usageLang(begin.plan?.lang);
+      if (begin.state === "refused") {
+        return { state: "refused", reservation: null, message: begin.plan?.message ?? refusalFallback(begin.plan?.limit ?? 0), usage, lang };
+      }
+      return { state: "run", reservation: begin.reserved ? actionId : null, message: null, usage, lang };
     } catch (error) {
-      console.error("[weekly-usage] check failed:", error instanceof Error ? error.message : error);
+      console.error("[ledger] gate failed:", error instanceof Error ? error.message : error);
       return null;
     }
   }
 
-  private refundWeeklyUse(accountRef: string, actionId: string): void {
-    const work = meteringPhoneWithAlias(this.env, accountRef)
-      .then((phone) => (phone ? refundUse(this.env, phone, actionId) : undefined))
+  /** weekly-plan-limits.LIMITS.14 — a failed call's reservation is given back (in the background). */
+  private refundReservation(accountRef: string, actionId: string): void {
+    const work = ledgerFor(this.env, accountRef)
+      .use({ change: "refund", path: "cloud", actionIds: [actionId], limit: null, enforce: false })
       .catch(() => undefined);
     try {
       (this as any).ctx?.waitUntil?.(work);
@@ -411,8 +438,10 @@ export class RelayMCP extends McpAgent<Env> {
       // hold settled in the same transaction, a failed charged call credited back once).
       if (usage.gate?.metered && this.meter) {
         await this.meter.finish(usage.gate, cell, usage.accountRef);
+        if (usage.reservation) await ledgerFor(this.env, usage.accountRef).settleReservation(usage.reservation);
       } else {
-        await ledgerFor(this.env, usage.accountRef).record([cell], { accountTag: usage.accountRef });
+        // mcp-usage-ledger.SINGLE.2 — the record settles the call's reservation (a failed one was given back already).
+        await ledgerFor(this.env, usage.accountRef).record([cell], { accountTag: usage.accountRef, ...(usage.reservation ? { reservation: usage.reservation } : {}) });
       }
       // mcp-usage-ledger.SHADOW.1-2, HOT_PATH.6 — after the call was answered and recorded: judge the window, never enforce.
       if (String(this.env.LEDGER_SHADOW ?? "").trim()) {
