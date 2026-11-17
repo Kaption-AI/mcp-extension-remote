@@ -57,6 +57,8 @@ interface WsAttachment {
 /** business-plans.MCP_LEDGER.9 — what the relay adds beside a call's params (the extension's cloud bridge reads it). */
 export interface RelayCallExtra {
   metered?: boolean;
+  /** mcp-local-hub-growth.CLIENT.3 — the MCP session's clientInfo (already sanitized, CLIENT.5). */
+  client?: { name: string; version: string } | null;
 }
 
 /** mcp-manage-kaption.LIST.2 — MCP sessions (RelayMCP Durable Object ids) told when this room's manage tools change. */
@@ -220,6 +222,8 @@ export class RelayRoom extends DurableObject<Env> {
             params,
             // business-plans.MCP_LEDGER.9 — the ledger already decided this call: the cloud bridge must not charge it.
             ...(extra.metered ? { kaption: { metered: true } } : {}),
+            // mcp-local-hub-growth.CLIENT.3 — which AI app made the call, outside the tool's params.
+            ...(extra.client ? { client: { name: extra.client.name, version: extra.client.version } } : {}),
           }),
         );
       } catch (err) {

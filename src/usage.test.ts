@@ -220,6 +220,73 @@ describe("local batches (mcp-usage-accounting.LOCAL.8)", () => {
   });
 });
 
+describe("mcp-local-hub-growth.CLIENT.8 the ledger keeps the normalized client per connection", () => {
+  it("mcp-local-hub-growth.CLIENT.8 — an existing ledger (conn without client) upgrades in place; old connections read unknown", () => {
+    const sql = sqlite();
+    // The ledger as it shipped before CLIENT.8, with a connection and its calls.
+    sql.exec(`CREATE TABLE conn (id TEXT PRIMARY KEY, path TEXT NOT NULL, app TEXT NOT NULL, first_at INTEGER NOT NULL, last_at INTEGER NOT NULL)`);
+    sql.exec(`CREATE TABLE usage_day (
+       day TEXT NOT NULL, path TEXT NOT NULL, conn TEXT NOT NULL, tool TEXT NOT NULL, kind TEXT NOT NULL,
+       outcome TEXT NOT NULL, calls INTEGER NOT NULL, repeats INTEGER NOT NULL DEFAULT 0,
+       PRIMARY KEY (day, path, conn, tool, kind, outcome)) WITHOUT ROWID`);
+    sql.exec(`INSERT INTO conn (id, path, app, first_at, last_at) VALUES ('grant-old', 'cloud', 'Claude', 1, 1)`);
+    sql.exec(`INSERT INTO usage_day (day, path, conn, tool, kind, outcome, calls, repeats) VALUES ('2026-10-29', 'cloud', 'grant-old', 'query', '', 'ok', 3, 0)`);
+
+    const store = new LedgerStore(sql);
+    new LedgerStore(sql); // a second start: the migration is idempotent
+    const columns = sql.exec(`SELECT name FROM pragma_table_info('conn')`).toArray().map((r) => r.name);
+    expect(columns).toContain("client");
+    expect(store.monthRows("2026-10")).toEqual([expect.objectContaining({ connection: "grant-old", app: "Claude", client: "unknown", calls: 3 })]);
+
+    const now = Date.UTC(2026, 9, 30, 15);
+    store.add([cell({ connection: "grant-old", app: "Claude", client: "claude-ai" })], now);
+    expect(store.monthRows("2026-10").every((r) => r.client === "claude-ai")).toBe(true);
+    // A cell that doesn't know its client (a meter hold) leaves the connection's client as it is.
+    store.add([cell({ connection: "grant-old", app: "Claude" })], now);
+    expect(store.monthRows("2026-10").every((r) => r.client === "claude-ai")).toBe(true);
+  });
+
+  it("mcp-local-hub-growth.CLIENT.8 — a local batch row's client is the hub's raw name normalized as local", () => {
+    const now = Date.UTC(2026, 9, 30, 15, 20);
+    const hour = Date.UTC(2026, 9, 30, 14);
+    const row = { hour, tool: "query", kind: "messages", outcome: "ok", latency: "<1s", calls: 1 };
+    const parsed = parseLocalBatch({ batchId: "batch_client1", rows: [
+      { ...row, client: "claude-ai" },
+      { ...row, client: "cursor-vscode" },
+      { ...row, client: "" },
+      { ...row, client: "codex-mcp-client" },
+    ] }, now);
+    if ("error" in parsed) throw new Error(parsed.error);
+    expect(parsed.cells.map((c) => [c.app, c.client])).toEqual([
+      ["Claude Desktop (local)", "claude-desktop"],
+      ["Cursor (local)", "cursor"],
+      ["Local app", "unknown"],
+      ["Codex (local)", "other"],
+    ]);
+  });
+
+  it("mcp-local-hub-growth.CLIENT.8 — by_client counts counted and all calls per client, cloud and local; no client yet is unknown", () => {
+    const store = new LedgerStore(sqlite());
+    const now = Date.UTC(2026, 9, 30, 15);
+    store.add([
+      cell({ connection: "grant-a", app: "ChatGPT", client: "chatgpt", calls: 3 }),
+      cell({ connection: "grant-a", app: "ChatGPT", client: "chatgpt", outcome: "error" }),
+      cell({ connection: "grant-b", app: "Claude", client: "claude-ai", calls: 2 }),
+      cell({ connection: "local-claude-desktop", path: "local", app: "Claude Desktop (local)", client: "claude-desktop", calls: 5 }),
+      cell({ connection: "grant-old", app: "Other" }),
+    ], now);
+    const report = buildReport("2026-10", store.monthRows("2026-10"), store.connections(), store.since(), new Set(["grant-a"]), now);
+    expect(report.by_client).toEqual([
+      { client: "claude-desktop", counted: 5, calls: 5 },
+      { client: "chatgpt", counted: 3, calls: 4 },
+      { client: "claude-ai", counted: 2, calls: 2 },
+      { client: "unknown", counted: 1, calls: 1 },
+    ]);
+    // The existing breakdowns are unchanged.
+    expect(report.apps.map((a) => a.app).sort()).toEqual(["ChatGPT", "Claude", "Claude Desktop (local)", "Other"]);
+  });
+});
+
 describe("ledger storage (mcp-usage-accounting.STORE, RETAIN)", () => {
   it("adds exactly, by hour and by day, and reports the month", () => {
     const store = new LedgerStore(sqlite());
@@ -471,6 +538,30 @@ describe("usage routes", () => {
     const report = (await (await relay.call("/ext/usage", { headers })).json()) as { counted: number; apps: unknown[] };
     expect(report.counted).toBe(4);
     expect(report.apps).toEqual([{ app: "Claude Desktop (local)", path: "local", calls: 4, ok: 4 }]);
+  });
+
+  it("mcp-local-hub-growth.CLIENT.8 — GET /ext/usage adds by_client for cloud and local rows", async () => {
+    const relay = createRelay();
+    const account = (await deriveAccountRef(PHONE, PHONE_REF_SECRET))!;
+    const headers = { Authorization: `Bearer ${await kaptionJwt(PHONE)}`, "Content-Type": "application/json" };
+    const hour = Date.UTC(2026, 9, 30, 14);
+    await relay.ledgers.get(`usage:${account}`).record([cell({ hour, connection: "grant-a", client: "chatgpt", calls: 2 })]);
+    const batch = {
+      batchId: "batch_client2",
+      rows: [
+        { hour, client: "claude-code", tool: "query", kind: "messages", outcome: "ok", latency: "<1s", calls: 4 },
+        { hour, client: "Visual Studio Code", tool: "query", kind: "messages", outcome: "error", latency: "<1s", calls: 1 },
+      ],
+    };
+    expect((await relay.call("/ext/usage/local", { method: "POST", headers, body: JSON.stringify(batch) })).status).toBe(200);
+    const report = (await (await relay.call("/ext/usage", { headers })).json()) as { counted: number; by_client: unknown[]; apps: { app: string }[] };
+    expect(report.counted).toBe(6);
+    expect(report.by_client).toEqual([
+      { client: "claude-code", counted: 4, calls: 4 },
+      { client: "chatgpt", counted: 2, calls: 2 },
+      { client: "vscode", counted: 0, calls: 1 },
+    ]);
+    expect(report.apps.map((a) => a.app).sort()).toEqual(["ChatGPT", "Claude Code (local)", "VS Code (local)"]);
   });
 
   it("serves aggregate totals only with the internal key, without accounts (ADMIN.1-2)", async () => {

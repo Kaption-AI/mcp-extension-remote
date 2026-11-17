@@ -8,6 +8,8 @@
  * arguments, message text, chat ids, contacts or media (mcp-usage-accounting.PRIVACY.1).
  */
 
+import { knownClientId, normalizeMcpClient, type McpClientId } from "./client";
+
 export type UsagePath = "cloud" | "local" | "webmcp";
 
 /**
@@ -52,6 +54,11 @@ export interface UsageCell {
   connection: string;
   /** Normalized app name (normalizeCloudApp / normalizeLocalApp). */
   app: string;
+  /**
+   * mcp-local-hub-growth.CLIENT.8 — the connection's normalized MCP client (normalizeMcpClient). Absent: the
+   * connection's stored client is left as it is (meter holds and older callers don't know it).
+   */
+  client?: McpClientId;
   tool: string;
   /** Enum sub-type (usageKind), "" when none. */
   kind: string;
@@ -253,6 +260,8 @@ export function parseLocalBatch(body: unknown, now: number): LocalBatch | { erro
       path,
       connection,
       app,
+      // mcp-local-hub-growth.CLIENT.8 — the hub's raw clientInfo name, normalized as the local hub's.
+      client: normalizeMcpClient(client, "", "local").mcpClient,
       tool: row.tool,
       kind: knownKind(row.tool, kind),
       outcome: row.outcome as UsageOutcome,
@@ -331,6 +340,8 @@ export interface UsageReport {
   tools: { tool: string; calls: number; ok: number }[];
   kinds: { tool: string; kind: string; calls: number; ok: number }[];
   days: { day: string; app: string; calls: number; ok: number }[];
+  /** mcp-local-hub-growth.CLIENT.8 — counted (ok) and all calls per normalized MCP client, local and cloud. */
+  by_client: { client: McpClientId; counted: number; calls: number }[];
 }
 
 export const emptyTotals = (): UsageTotals => ({ calls: 0, ok: 0, error: 0, refused: 0, offline: 0, timeout: 0, repeats: 0 });
@@ -341,6 +352,8 @@ export interface DayRow {
   path: UsagePath;
   connection: string;
   app: string;
+  /** mcp-local-hub-growth.CLIENT.8 — the connection's client, "unknown" when it has none yet. */
+  client?: McpClientId;
   tool: string;
   kind: string;
   outcome: UsageOutcome;
@@ -374,6 +387,7 @@ export function buildReport(
   const tools = new Map<string, { tool: string; calls: number; ok: number }>();
   const kinds = new Map<string, { tool: string; kind: string; calls: number; ok: number }>();
   const days = new Map<string, { day: string; app: string; calls: number; ok: number }>();
+  const clients = new Map<string, { client: McpClientId; calls: number; ok: number }>();
   const lastAt = new Map(connections.map((c) => [c.id, c.lastAt]));
   const bump = <T extends { calls: number; ok: number }>(map: Map<string, T>, key: string, make: () => T, row: DayRow) => {
     let entry = map.get(key);
@@ -403,6 +417,9 @@ export function buildReport(
     bump(tools, row.tool, () => ({ tool: row.tool, calls: 0, ok: 0 }), row);
     if (row.kind) bump(kinds, `${row.tool}\u0000${row.kind}`, () => ({ tool: row.tool, kind: row.kind, calls: 0, ok: 0 }), row);
     bump(days, `${row.day}\u0000${row.app}`, () => ({ day: row.day, app: row.app, calls: 0, ok: 0 }), row);
+    // mcp-local-hub-growth.CLIENT.8 — a connection without a client yet reads as unknown.
+    const client = knownClientId(row.client) ?? "unknown";
+    bump(clients, client, () => ({ client, calls: 0, ok: 0 }), row);
   }
   const byCalls = <T extends { calls: number }>(map: Map<string, T>) => [...map.values()].sort((a, b) => b.calls - a.calls);
   return {
@@ -418,5 +435,6 @@ export function buildReport(
     tools: byCalls(tools),
     kinds: byCalls(kinds),
     days: [...days.values()].sort((a, b) => (a.day === b.day ? b.calls - a.calls : a.day < b.day ? -1 : 1)),
+    by_client: byCalls(clients).map((c) => ({ client: c.client, counted: c.ok, calls: c.calls })),
   };
 }

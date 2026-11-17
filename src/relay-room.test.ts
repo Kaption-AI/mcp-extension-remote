@@ -184,3 +184,22 @@ describe("business-plans.MCP_LEDGER.9, MCP_LEDGER.16 the metered marker and the 
     expect(await r2.meteringPhone()).toBeNull();
   });
 });
+
+describe("mcp-local-hub-growth.CLIENT.3 the calling AI app travels beside the call", () => {
+  it("mcp-local-hub-growth.CLIENT.3 — a call with a client carries client {name, version} at the top level beside kaption, outside params", async () => {
+    const ext = socket({ authenticated: true, accountRef: "acct_test", room: "acct_test", authAt: 1 });
+    const r = room([ext]);
+    void r.handleMcpRequest("query", { entity: "messages" }, { metered: true, client: { name: "claude-ai", version: "0.1.0" } });
+    void r.handleMcpRequest("query", { entity: "messages" });
+    const sent = ext.sent.map((m) => JSON.parse(m));
+    expect(sent[0]).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "query",
+      params: { entity: "messages" },
+      kaption: { metered: true },
+      client: { name: "claude-ai", version: "0.1.0" },
+    });
+    expect(sent[1]).not.toHaveProperty("client");
+  });
+});

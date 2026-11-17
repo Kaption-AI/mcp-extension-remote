@@ -40,6 +40,7 @@ import {
 import { ledgerFor, type CloudBegin } from "./usage-ledger";
 import { shadowPhone } from "./ledger-windows";
 import { DISABLED_CODE, DisabledGate } from "./disabled-gate";
+import { normalizeMcpClient, sanitizeClientInfo, sanitizeClientName, type McpClientId, type McpClientInfo } from "./client";
 import { ledgerUsage, refusalFallback, usageLang, usageLine, usageMeta, usagePhone, type Usage, type UsageLang } from "./weekly-usage";
 
 /** mcp-usage-ledger.SINGLE.4 — what the ledger said about one cloud call. */
@@ -51,6 +52,9 @@ interface LedgerGate {
   usage: Usage | null;
   lang: UsageLang;
 }
+
+/** mcp-local-hub-growth.CLIENT.3 — where a session's clientInfo is kept across evictions (DO storage). */
+const CLIENT_INFO_KEY = "mcpClientInfo";
 
 export class RelayMCP extends McpAgent<Env> {
   server = new McpServer({
@@ -208,8 +212,9 @@ export class RelayMCP extends McpAgent<Env> {
           // properties (AbortSignal etc.) into the args object
           const cleanArgs = JSON.parse(JSON.stringify(routed.params));
           const { sanitizeAccountRefForLog } = await import("./otp");
+          // mcp-local-hub-growth.CLIENT.9 — the log adds the normalized client id only.
           console.log(
-            `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)} app=${await this.appName(accountRef)}`,
+            `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)} app=${await this.appName(accountRef)} client=${await this.normalizedClient(accountRef)}`,
           );
           let result = await this.relayToExtension(accountRef, routed.method, cleanArgs, usage.gate?.metered ?? false);
 
@@ -270,6 +275,10 @@ export class RelayMCP extends McpAgent<Env> {
 
   private repeats = new RepeatDetector();
   private app: string | null = null;
+  /** The OAuth client registration's own name (raw), looked up with the app (CLIENT.3 fallback). */
+  private oauthClientName: string | null = null;
+  /** mcp-local-hub-growth.CLIENT.3 — this session's clientInfo once known (sanitized, CLIENT.5). */
+  private sessionClientInfo: McpClientInfo | null = null;
 
   /** The OAuth grant this session was opened with (set by the MCP handlers, mcp-usage-accounting.RECORD.7). */
   private getGrantId(): string | null {
@@ -296,8 +305,64 @@ export class RelayMCP extends McpAgent<Env> {
         clientName = null;
       }
     }
+    this.oauthClientName = clientName;
     this.app = normalizeCloudApp(clientName);
     return this.app;
+  }
+
+  /**
+   * mcp-local-hub-growth.CLIENT.3 — the MCP `initialize` clientInfo of this session. The SDK server knows it after
+   * initialize; an evicted and rehydrated Durable Object may not (yet), so it is kept in DO storage the first time it is
+   * seen and read back from there (or from the initialize request the agent stored) when absent. Null when the session
+   * never said one.
+   */
+  async sessionClient(): Promise<McpClientInfo | null> {
+    if (this.sessionClientInfo) return this.sessionClientInfo;
+    const storage = (this as any).ctx?.storage;
+    let live: unknown = null;
+    try {
+      live = this.server?.server?.getClientVersion?.() ?? null;
+    } catch {
+      live = null;
+    }
+    let info = sanitizeClientInfo(live);
+    if (info) {
+      try {
+        await storage?.put?.(CLIENT_INFO_KEY, info);
+      } catch {
+        // Kept in memory for this life of the object; the next one asks the server again.
+      }
+    } else {
+      try {
+        info = sanitizeClientInfo(await storage?.get?.(CLIENT_INFO_KEY));
+        if (!info) {
+          const init = (await storage?.get?.("initializeRequest")) as { params?: { clientInfo?: unknown } } | undefined;
+          info = sanitizeClientInfo(init?.params?.clientInfo);
+        }
+      } catch {
+        info = null;
+      }
+    }
+    this.sessionClientInfo = info;
+    return info;
+  }
+
+  /**
+   * mcp-local-hub-growth.CLIENT.3 — the client sent beside every relayed call: the session's clientInfo, else the OAuth
+   * client registration's name with version ''. Null when neither says a name.
+   */
+  private async callClient(accountRef: string): Promise<McpClientInfo | null> {
+    const own = await this.sessionClient();
+    if (own) return own;
+    await this.appName(accountRef);
+    const name = sanitizeClientName(this.oauthClientName);
+    return name ? { name, version: "" } : null;
+  }
+
+  /** mcp-local-hub-growth.CLIENT.4, CLIENT.8 — this session's normalized client id (cloud). */
+  private async normalizedClient(accountRef: string): Promise<McpClientId> {
+    const client = await this.callClient(accountRef).catch(() => null);
+    return normalizeMcpClient(client?.name, client?.version, "cloud").mcpClient;
   }
 
   private usageContext(accountRef: string, tool: string, args: unknown, at: number) {
@@ -427,6 +492,8 @@ export class RelayMCP extends McpAgent<Env> {
         path: "cloud",
         connection: this.getGrantId() ?? "unknown",
         app: await this.appName(usage.accountRef),
+        // mcp-local-hub-growth.CLIENT.8 — the connection's normalized client (cloud path).
+        client: await this.normalizedClient(usage.accountRef),
         tool: usage.tool,
         kind: usage.kind,
         outcome: outcomeOf(failure),
@@ -472,7 +539,12 @@ export class RelayMCP extends McpAgent<Env> {
     params: Record<string, unknown>,
     metered = false,
   ): Promise<unknown> {
+    // mcp-local-hub-growth.CLIENT.3 — the session's client travels beside the call (beside `kaption`).
+    const client = await this.callClient(accountRef).catch(() => null);
     // mcp.CLOUD_RELAY.17 — follows a Brazilian number's other form when this account has no extension.
-    return relayWithAliasSettled(this.env, accountRef, method, params, metered ? { metered: true } : {});
+    return relayWithAliasSettled(this.env, accountRef, method, params, {
+      ...(metered ? { metered: true } : {}),
+      ...(client ? { client } : {}),
+    });
   }
 }

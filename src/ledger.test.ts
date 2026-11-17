@@ -300,6 +300,20 @@ describe("internal read API (mcp-usage-ledger.READ.2-4)", () => {
     expect(report.counted).toBe(window.month.counted);
   });
 
+  it("mcp-local-hub-growth.CLIENT.8 — the internal month report for rest-api adds by_client too (uncounted tools out)", async () => {
+    const r = relayEnv();
+    await (await ledgerOf(r)).record([
+      cell({ calls: 4, client: "claude-ai" }),
+      cell({ calls: 2, tool: "kaption_help", client: "claude-ai" }),
+      cell({ calls: 3, path: "local", connection: "local-x", client: "cursor" }),
+    ]);
+    const report = (await (await r.call(`/internal/ledger/report?phone=${PHONE}&month=2026-11`, { headers: auth })).json()) as { by_client: unknown[] };
+    expect(report.by_client).toEqual([
+      { client: "claude-ai", counted: 4, calls: 4 },
+      { client: "cursor", counted: 3, calls: 3 },
+    ]);
+  });
+
   it("mcp-usage-ledger.READ.3 — a Brazilian line's two written forms are one answer", async () => {
     const r = relayEnv();
     await (await ledgerOf(r, BR_PHONE)).record([cell({ calls: 2 })]);
