@@ -27,6 +27,7 @@ import {
 } from "./usage";
 import type { Env } from "./types";
 import { UNCOUNTED_TOOLS } from "./weekly-usage";
+import { accountRefsForPhone } from "./phone-alias";
 import { MeterStore, type Allowance, type HoldInput, type LeaseAnswer, type LeaseRequest, type Peek, type Reservation } from "./meter";
 import {
   countWindow,
@@ -639,7 +640,7 @@ export class UsageLedger extends DurableObject<Env> {
    * number); for any other account nothing is reserved. `offset` (SINGLE.14) reads the other written form's week.
    */
   async cloudBegin(
-    input: { phone: string; actionId: string; tool: string; offset?: () => Promise<number> },
+    input: { phone: string; actionId: string; tool: string; accountRef?: string },
     now = Date.now(),
     fetchImpl: typeof fetch = fetch,
   ): Promise<CloudBegin> {
@@ -648,7 +649,7 @@ export class UsageLedger extends DurableObject<Env> {
     if (!plan?.enforce || plan.limit === null || plan.period !== "week") {
       return { state: "run", reserved: false, plan, use: null };
     }
-    const offset = input.offset ? await input.offset().catch(() => 0) : 0;
+    const offset = input.accountRef ? await otherFormsWeek(this.env, input.phone, input.accountRef, now).catch(() => 0) : 0;
     const use = await this.use({ change: "reserve", path: "cloud", actionIds: [input.actionId], limit: plan.limit, enforce: true, offset }, now);
     return use.ok ? { state: "run", reserved: use.counted > 0, plan, use } : { state: "refused", reserved: false, plan, use };
   }
@@ -795,6 +796,16 @@ export function totalsNames(env: Pick<Env, "USAGE_TOTALS_SHARDS">): string[] {
 function totalsFor(env: Env, accountTag: string) {
   const ns = env.USAGE_TOTALS!;
   return ns.get(ns.idFromName(totalsShardName(accountTag.slice(0, 16), totalsShards(env))));
+}
+
+/** mcp-usage-ledger.SINGLE.14 — this week's counted actions in the ledgers of the phone's other written form. */
+export async function otherFormsWeek(env: Pick<Env, "USAGE_LEDGER" | "PHONE_REF_SECRET">, phone: string, ownRef: string, now = Date.now()): Promise<number> {
+  const refs = await accountRefsForPhone(phone, env.PHONE_REF_SECRET);
+  const others = refs.filter((ref) => ref !== ownRef);
+  if (!others.length) return 0;
+  const week = currentWindow("week", now).period;
+  const parts = await Promise.all(others.map((ref) => ledgerFor(env, ref).windows({ week }, now) as Promise<LedgerWindows>));
+  return parts.reduce((n, p) => n + (p.week?.counted ?? 0), 0);
 }
 
 /** The ledger of an account. */

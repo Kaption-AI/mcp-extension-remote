@@ -24,6 +24,7 @@ vi.mock("./deployment-chain", () => ({ DeploymentChainDO: class DeploymentChainD
 import { RelayMCP } from "./relay-mcp";
 import { createFetchHandler } from "./index";
 import { deriveAccountRef } from "./otp";
+import { brazilMobileVariant } from "./phone-alias";
 import { countWindow, parsePlan, windowRange } from "./ledger-windows";
 import { parseUseRequest } from "./ledger-read";
 import { UsageLedger, type SqlLike } from "./usage-ledger";
@@ -291,6 +292,22 @@ describe("mcp-usage-ledger.SINGLE.6 POST /internal/ledger/use", () => {
     expect(parseUseRequest({ phone: PHONE, count: 1001 })).toHaveProperty("error");
     expect(parseUseRequest({ phone: PHONE, limit: -1 })).toHaveProperty("error");
     expect(parseUseRequest({ phone: PHONE, actionIds: ["mcp:abcdefgh"] })).toMatchObject({ use: { path: "local", actionIds: ["local:mcp:abcdefgh"], limit: null, enforce: false } });
+  });
+});
+
+describe("mcp-usage-ledger.SINGLE.14 a Brazilian line's two written forms are one count", () => {
+  it("mcp-usage-ledger.SINGLE.14 — 20 actions in the other form's ledger refuse the 21st in this one", async () => {
+    vi.stubGlobal("fetch", restApi().fetcher);
+    const w = await world();
+    const BR = "5511987654321";
+    const own = (await deriveAccountRef(BR, SECRET))!;
+    const other = (await deriveAccountRef(brazilMobileVariant(BR)!, SECRET))!;
+    const ns = w.env.USAGE_LEDGER as any;
+    await ns.get(`usage:${other}`).use({ change: "reserve", path: "local", count: 20, limit: null, enforce: false });
+    const begin = await ns.get(`usage:${own}`).cloudBegin({ phone: BR, actionId: "cloud:br-0001", tool: "query", accountRef: own });
+    expect(begin).toMatchObject({ state: "refused", use: { used: 20, limit: 20, left: 0 } });
+    const alone = await ns.get(`usage:${own}`).cloudBegin({ phone: BR, actionId: "cloud:br-0002", tool: "query" });
+    expect(alone.state).toBe("run");
   });
 });
 

@@ -38,9 +38,8 @@ import {
   type UsageCell,
 } from "./usage";
 import { ledgerFor, type CloudBegin } from "./usage-ledger";
-import { currentWindow, shadowPhone } from "./ledger-windows";
+import { shadowPhone } from "./ledger-windows";
 import { DISABLED_CODE, DisabledGate } from "./disabled-gate";
-import { accountRefsForPhone } from "./phone-alias";
 import { ledgerUsage, refusalFallback, usageLang, usageLine, usageMeta, usagePhone, type Usage, type UsageLang } from "./weekly-usage";
 
 /** mcp-usage-ledger.SINGLE.4 — what the ledger said about one cloud call. */
@@ -342,7 +341,7 @@ export class RelayMCP extends McpAgent<Env> {
       if (!phone) return null;
       const ledger = ledgerFor(this.env, accountRef);
       const actionId = `cloud:${crypto.randomUUID()}`;
-      const begin = (await ledger.cloudBegin({ phone, actionId, tool, offset: () => this.otherFormsWeek(phone, accountRef) })) as CloudBegin;
+      const begin = (await ledger.cloudBegin({ phone, actionId, tool, accountRef })) as CloudBegin;
       const show = usagePhone(phone, this.env);
       let window = begin.use ? { counted: begin.use.used, to: begin.use.resetsAt } : null;
       if (show && !window && begin.plan?.period) {
@@ -359,16 +358,6 @@ export class RelayMCP extends McpAgent<Env> {
       console.error("[ledger] gate failed:", error instanceof Error ? error.message : error);
       return null;
     }
-  }
-
-  /** mcp-usage-ledger.SINGLE.14 — this week's counted actions in the ledgers of the phone's other written form. */
-  private async otherFormsWeek(phone: string, accountRef: string): Promise<number> {
-    const refs = await accountRefsForPhone(phone, this.env.PHONE_REF_SECRET);
-    const others = refs.filter((ref) => ref !== accountRef);
-    if (!others.length) return 0;
-    const week = currentWindow("week", Date.now()).period;
-    const parts = await Promise.all(others.map((ref) => ledgerFor(this.env, ref).windows({ week })));
-    return parts.reduce((n, p) => n + (p.week?.counted ?? 0), 0);
   }
 
   /** weekly-plan-limits.LIMITS.14 — a failed call's reservation is given back (in the background). */
