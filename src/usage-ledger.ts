@@ -29,6 +29,7 @@ import type { Env } from "./types";
 import { knownClientId } from "./client";
 import { UNCOUNTED_TOOLS } from "./weekly-usage";
 import { accountRefsForPhone } from "./phone-alias";
+import { OverageStore, type BillMark, type CycleOverage, type PlanOverage } from "./overage";
 import { MeterStore, type Allowance, type HoldInput, type LeaseAnswer, type LeaseRequest, type Peek, type Reservation } from "./meter";
 import {
   countWindow,
@@ -95,6 +96,8 @@ const PLAN_COLUMNS = [
   `ALTER TABLE plan_cache ADD COLUMN lang TEXT`,
   // mcp-usage-ledger.KALLY_COUNT.2 — rest-api's kally_counts (0 = Kally's data calls are recorded, not counted).
   `ALTER TABLE plan_cache ADD COLUMN kally_counts INTEGER NOT NULL DEFAULT 0`,
+  // mcp-overage-billing.LEDGER.1 — the plan's postpaid overage (JSON), or null.
+  `ALTER TABLE plan_cache ADD COLUMN overage TEXT`,
 ];
 
 /** mcp-usage-ledger.IDEMPOTENCY.4 — reservations are kept 40 days. */
@@ -113,6 +116,10 @@ export interface UseRequest {
   enforce: boolean;
   /** mcp-usage-ledger.SINGLE.14 — counted actions of the account's other written form this week. */
   offset?: number;
+  /** mcp-overage-billing.LEDGER.1 — the window the limit is for (default the week). */
+  period?: WindowKind;
+  /** mcp-overage-billing.LEDGER.2-3 — past the limit, extra actions within this cap run and are recorded. */
+  overage?: PlanOverage | null;
 }
 
 export interface UseAnswer {
@@ -125,11 +132,19 @@ export interface UseAnswer {
   limit: number | null;
   left: number | null;
   resetsAt: string;
+  /** mcp-overage-billing.LEDGER.2 — how many of these reservations were recorded as extra actions. */
+  overage?: number;
+  /** mcp-overage-billing.LEDGER.3 — why a reservation was refused: the plan's number, or the overage cap. */
+  reason?: "limit" | "cap";
 }
 
 /** The ledger's storage logic, independent of the Durable Object runtime. */
 export class LedgerStore {
+  /** mcp-overage-billing.LEDGER — extra actions and bill marks, in the same storage (same transactions). */
+  readonly overage: OverageStore;
+
   constructor(private sql: SqlLike) {
+    this.overage = new OverageStore(sql);
     for (const statement of LEDGER_SCHEMA) sql.exec(statement);
     for (const statement of [...PLAN_COLUMNS, ...CONN_COLUMNS]) {
       try {
@@ -271,11 +286,13 @@ export class LedgerStore {
    */
   use(req: UseRequest, now: number): UseAnswer {
     const week = currentWindow("week", now);
-    const resetsAt = new Date(week.to).toISOString();
+    // mcp-overage-billing.LEDGER.1 — a month plan (Pro, Business) with overage is judged on its month.
+    const win = req.period === "month" ? currentWindow("month", now) : week;
+    const resetsAt = new Date(win.to).toISOString();
     const offset = Math.max(0, Math.floor(req.offset ?? 0));
-    const answer = (ok: boolean, counted: number, duplicates: number, refunded: number): UseAnswer => {
-      const used = this.windowCount(week).counted + offset;
-      return { ok, counted, duplicates, refunded, used, limit: req.limit, left: req.limit === null ? null : Math.max(0, req.limit - used), resetsAt };
+    const answer = (ok: boolean, counted: number, duplicates: number, refunded: number, extra: { overage?: number; reason?: "limit" | "cap" } = {}): UseAnswer => {
+      const used = this.windowCount(win).counted + offset;
+      return { ok, counted, duplicates, refunded, used, limit: req.limit, left: req.limit === null ? null : Math.max(0, req.limit - used), resetsAt, ...extra };
     };
     const ids = req.actionIds?.length ? [...new Set(req.actionIds)] : null;
     if (req.change === "refund") {
@@ -286,6 +303,8 @@ export class LedgerStore {
           const live = this.sql.exec(`SELECT 1 AS x FROM use_reserve WHERE id = ? AND live > 0`, id).toArray().length > 0;
           if (!live) continue;
           this.sql.exec(`UPDATE use_reserve SET live = 0 WHERE id = ?`, id);
+          // mcp-overage-billing.LEDGER.4 — never billed.
+          this.overage.refund(id);
           refunded++;
         }
       } else {
@@ -293,7 +312,10 @@ export class LedgerStore {
         const rows = this.sql
           .exec(`SELECT id FROM use_reserve WHERE live > 0 AND path = ? AND id LIKE 'anon:%' AND at >= ? ORDER BY at DESC LIMIT ?`, req.path, week.from, n)
           .toArray();
-        for (const r of rows) this.sql.exec(`UPDATE use_reserve SET live = 0 WHERE id = ?`, String(r.id));
+        for (const r of rows) {
+          this.sql.exec(`UPDATE use_reserve SET live = 0 WHERE id = ?`, String(r.id));
+          this.overage.refund(String(r.id));
+        }
         refunded = rows.length;
       }
       return answer(true, 0, 0, refunded);
@@ -307,10 +329,17 @@ export class LedgerStore {
     }
     const duplicates = ids ? ids.length - fresh.length : 0;
     if (fresh.length === 0) return answer(true, 0, duplicates, 0);
+    let extra: string[] = [];
     if (req.enforce && req.limit !== null) {
-      // SINGLE.2 — the week's count with these reservations added (the other written form's included, SINGLE.14).
-      const after = this.windowCount(week).counted + fresh.length + offset;
-      if (after > req.limit) return answer(false, 0, duplicates, 0);
+      // SINGLE.2 — the window's count with these reservations added (the other written form's included, SINGLE.14).
+      const after = this.windowCount(win).counted + fresh.length + offset;
+      if (after > req.limit) {
+        // mcp-overage-billing.LEDGER.2-3 — past the number: the last ones are extra actions, within the cap or none.
+        if (!req.overage) return answer(false, 0, duplicates, 0, { reason: "limit" });
+        const over = Math.min(fresh.length, after - req.limit);
+        if (!this.overage.room(req.overage, over, now)) return answer(false, 0, duplicates, 0, { reason: "cap" });
+        extra = fresh.slice(fresh.length - over);
+      }
     }
     for (const id of fresh) {
       this.sql.exec(
@@ -318,12 +347,14 @@ export class LedgerStore {
         id, req.path, now,
       );
     }
-    return answer(true, fresh.length, duplicates, 0);
+    if (extra.length && req.overage) this.overage.add(extra, req.overage, now);
+    return answer(true, fresh.length, duplicates, 0, req.overage ? { overage: extra.length } : {});
   }
 
   /** mcp-usage-ledger.SINGLE.2 — a cloud call's reservation becomes recorded with its cell (same transaction). */
   settleReservation(id: string): void {
     this.sql.exec(`UPDATE use_reserve SET live = 2 WHERE id = ? AND live = 1`, id);
+    this.overage.settle(id);
   }
 
   /**
@@ -334,6 +365,7 @@ export class LedgerStore {
     for (const path of new Set(paths)) {
       if (path === "cloud") continue;
       this.sql.exec(`UPDATE use_reserve SET live = 2 WHERE live = 1 AND path = ? AND at <= ?`, path, now);
+      this.overage.settleRoad(path, now);
     }
   }
 
@@ -354,20 +386,21 @@ export class LedgerStore {
         message: r.message ? String(r.message) : null,
         lang: r.lang ? String(r.lang) : null,
         kallyCounts: Number(r.kally_counts ?? 0) === 1,
+        overage: overageFromCache(r.overage),
       },
     };
   }
 
   setPlan(plan: LedgerPlan, now: number): void {
     this.sql.exec(
-      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang, kally_counts)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang, kally_counts, overage)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET fetched_at = excluded.fetched_at, ttl_s = excluded.ttl_s, tier = excluded.tier,
          period = excluded.period, lim = excluded.lim, pool_ref = excluded.pool_ref, pool_numbers = excluded.pool_numbers,
          enforced_by = excluded.enforced_by, enforce = excluded.enforce, message = excluded.message, lang = excluded.lang,
-         kally_counts = excluded.kally_counts`,
+         kally_counts = excluded.kally_counts, overage = excluded.overage`,
       now, plan.ttlSeconds, plan.tier, plan.period, plan.limit, plan.pool?.ref ?? null, plan.pool?.numbers ?? null, plan.enforcedBy,
-      plan.enforce ? 1 : 0, plan.message ?? null, plan.lang ?? null, plan.kallyCounts ? 1 : 0,
+      plan.enforce ? 1 : 0, plan.message ?? null, plan.lang ?? null, plan.kallyCounts ? 1 : 0, plan.overage ? JSON.stringify(plan.overage) : null,
     );
   }
 
@@ -389,6 +422,20 @@ export class LedgerStore {
     this.sql.exec(`DELETE FROM batch WHERE at < ?`, now - BATCH_RETENTION_DAYS * DAY_MS);
     this.sql.exec(`DELETE FROM use_reserve WHERE at < ?`, now - RESERVE_RETENTION_DAYS * DAY_MS);
     this.sql.exec(`DELETE FROM conn WHERE last_at < ?`, now - DAILY_RETENTION_DAYS * DAY_MS);
+    this.overage.prune(now);
+  }
+}
+
+/** The cached plan's overage (JSON written by setPlan), or null. */
+function overageFromCache(raw: unknown): PlanOverage | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const o = JSON.parse(raw);
+    return o && Number.isInteger(o.priceMc) && Number.isInteger(o.capMc) && Number.isInteger(o.anchorMs)
+      ? { priceMc: o.priceMc, capMc: o.capMc, anchorMs: o.anchorMs, message: typeof o.message === "string" ? o.message : null }
+      : null;
+  } catch {
+    return null;
   }
 }
 
@@ -638,6 +685,21 @@ export class UsageLedger extends DurableObject<Env> {
     return answer;
   }
 
+  /** mcp-overage-billing.LEDGER.7 — a cycle's extra actions (read only). */
+  async overageCycle(range: { from: number; to: number }): Promise<CycleOverage> {
+    return this.store.overage.cycle(range);
+  }
+
+  /** mcp-overage-billing.LEDGER.8 — claim a cycle for billing (once). */
+  async overageClaim(range: { from: number; to: number }, now = Date.now()): Promise<{ ok: boolean; mark: BillMark | null }> {
+    return this.state.storage.transactionSync(() => this.store.overage.claim(range, now));
+  }
+
+  /** mcp-overage-billing.BILL.5-9 — the claimed cycle's outcome. */
+  async overageFinish(from: number, state: "billed" | "carried" | "none" | "failed", detail: { amountMc?: number; calls?: number; invoice?: string | null }, now = Date.now()): Promise<BillMark | null> {
+    return this.state.storage.transactionSync(() => this.store.overage.finish(from, state, detail, now));
+  }
+
   /**
    * mcp-usage-ledger.PLAN.4-5, SINGLE.3, SINGLE.5 — the plan this account is judged against: the cached one while fresh,
    * the stale one while a fresh one is fetched in the background, and only with nothing cached a fetch the call waits
@@ -668,11 +730,15 @@ export class UsageLedger extends DurableObject<Env> {
   ): Promise<CloudBegin> {
     if (UNCOUNTED_TOOLS.has(input.tool)) return { state: "run", reserved: false, plan: null, use: null };
     const plan = await this.planFor(input.phone, now, fetchImpl);
-    if (!plan?.enforce || plan.limit === null || plan.period !== "week") {
+    // mcp-overage-billing.LEDGER.1 — a month plan is reserved too when it has postpaid overage (parsePlan says enforce).
+    if (!plan?.enforce || plan.limit === null || !plan.period || (plan.period === "month" && !plan.overage)) {
       return { state: "run", reserved: false, plan, use: null };
     }
-    const offset = input.accountRef ? await otherFormsWeek(this.env, input.phone, input.accountRef, now).catch(() => 0) : 0;
-    const use = await this.use({ change: "reserve", path: "cloud", actionIds: [input.actionId], limit: plan.limit, enforce: true, offset }, now);
+    const offset = input.accountRef && plan.period === "week" ? await otherFormsWeek(this.env, input.phone, input.accountRef, now).catch(() => 0) : 0;
+    const use = await this.use(
+      { change: "reserve", path: "cloud", actionIds: [input.actionId], limit: plan.limit, enforce: true, offset, period: plan.period, overage: plan.overage ?? null },
+      now,
+    );
     return use.ok ? { state: "run", reserved: use.counted > 0, plan, use } : { state: "refused", reserved: false, plan, use };
   }
 

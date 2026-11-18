@@ -5,6 +5,7 @@
  */
 import { DAY_MS, dayOf, monthOf, monthRange, type UsagePath } from "./usage";
 import { UNCOUNTED_TOOLS } from "./weekly-usage";
+import { parseOverage, type PlanOverage } from "./overage";
 import type { Env } from "./types";
 
 export type WindowKind = "week" | "month";
@@ -153,6 +154,11 @@ export interface LedgerPlan {
    * the phone). Only an explicit true; absent (older rest-api, flag off) means not counted.
    */
   kallyCounts?: boolean;
+  /**
+   * mcp-overage-billing.LEDGER.1-3 — the account turned postpaid overage on: past the limit its actions run and are
+   * recorded as extra actions within the cap. null (or absent in an older cache): off.
+   */
+  overage?: PlanOverage | null;
 }
 
 export const DEFAULT_PLAN_TTL_S = 600;
@@ -173,12 +179,15 @@ export function parsePlan(d: unknown): LedgerPlan | null {
   const enforcedBy = v.enforced_by === "week_ledger" || v.enforced_by === "ledger" || v.enforced_by === "device" ? v.enforced_by : "none";
   const ttl = typeof v.ttl_seconds === "number" && v.ttl_seconds > 0 && v.ttl_seconds <= 86_400 ? Math.floor(v.ttl_seconds) : DEFAULT_PLAN_TTL_S;
   if (limit !== null && !period) return null;
-  // mcp-usage-ledger.SINGLE.3 — only a weekly number is enforced here (Pro and Business stay counted, SINGLE.10).
-  const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && period === "week" && limit !== null;
+  // mcp-overage-billing.LEDGER.1, LEDGER.6 — postpaid overage only with a number to pass.
+  const overage = limit !== null ? parseOverage(v.overage) : null;
+  // mcp-usage-ledger.SINGLE.3 — only a weekly number is enforced here (Pro and Business stay counted, SINGLE.10), unless
+  // the account turned postpaid overage on (mcp-overage-billing.LEDGER.1): then its month is held to limit + cap too.
+  const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && limit !== null && (period === "week" || (period === "month" && !!overage));
   const message = typeof v.message === "string" && v.message.trim() ? v.message.slice(0, 2000) : null;
   const lang = v.lang === "en" || v.lang === "es" || v.lang === "pt" ? v.lang : null;
   const kallyCounts = v.kally_counts === true; // mcp-usage-ledger.KALLY_COUNT.2
-  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang, kallyCounts };
+  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang, kallyCounts, overage };
 }
 
 /** mcp-usage-ledger.PLAN.1, PLAN.5 — the plan from rest-api, or null when it cannot answer (the caller fails open). */

@@ -12,6 +12,7 @@ import { accountRefsForPhone } from "./phone-alias";
 import { mergeWindows, shadowOf, weekRange, type LedgerPlan, type ShadowWindow, type WindowCount } from "./ledger-windows";
 import { ledgerFor, type LedgerWindows, type UseRequest } from "./usage-ledger";
 import { monthRange } from "./usage";
+import { parseOverage, type BillMark, type CycleOverage } from "./overage";
 import type { Env } from "./types";
 
 export const READ_BATCH_MAX = 200;
@@ -127,9 +128,55 @@ export function parseUseRequest(body: Record<string, unknown>): { phone: string;
   if (!Number.isInteger(count) || (count as number) < 1 || (count as number) > USE_MAX) return { error: `count must be 1-${USE_MAX}.` };
   const limit = body.limit ?? null;
   if (limit !== null && !(Number.isInteger(limit) && (limit as number) >= 0 && (limit as number) <= 100_000)) return { error: "limit must be a whole number or null." };
+  // mcp-overage-billing.LEDGER.1-2 — the window and the postpaid overage rest-api decided (absent: the week, none).
+  const period = body.period ?? "week";
+  if (period !== "week" && period !== "month") return { error: "period must be week or month." };
+  const overage = body.overage === undefined || body.overage === null ? null : parseOverage(body.overage);
+  if (body.overage && !overage) return { error: "overage must hold price_millicents, cap_millicents and anchor_ms." };
   return {
     phone,
     change,
-    use: { change, path: source, ...(actionIds ? { actionIds } : { count: count as number }), limit: limit as number | null, enforce: body.enforce === true },
+    use: {
+      change, path: source, ...(actionIds ? { actionIds } : { count: count as number }), limit: limit as number | null, enforce: body.enforce === true,
+      period, ...(overage ? { overage } : {}),
+    },
   };
 }
+
+// ─── Postpaid overage (kaptionai mcp-overage-billing.LEDGER.7-8) ─────────
+
+/** A cycle range the overage API accepts: epoch ms, from < to, at most 32 days long. */
+export function readCycle(from: unknown, to: unknown): { from: number; to: number } | null {
+  const f = typeof from === "string" ? Number(from) : from;
+  const t = typeof to === "string" ? Number(to) : to;
+  if (!Number.isInteger(f) || !Number.isInteger(t) || (f as number) < 0 || (t as number) <= (f as number)) return null;
+  if ((t as number) - (f as number) > 32 * 86_400_000) return null;
+  return { from: f as number, to: t as number };
+}
+
+/** mcp-overage-billing.LEDGER.7 — one answer from the ledgers of a phone's written forms (the first form's bill mark). */
+export function mergeCycles(parts: CycleOverage[]): CycleOverage {
+  const [first, ...rest] = parts;
+  const out = { ...first };
+  for (const p of rest) {
+    out.calls += p.calls;
+    out.amountMc += p.amountMc;
+    out.pending += p.pending;
+    out.pendingMc += p.pendingMc;
+    out.capMc = Math.max(out.capMc, p.capMc);
+    out.carriedMc += p.carriedMc;
+  }
+  return out;
+}
+
+/** The JSON shape rest-api reads (snake_case, as the other internal answers). */
+export function cycleJson(c: CycleOverage) {
+  return {
+    from: new Date(c.from).toISOString(), to: new Date(c.to).toISOString(), from_ms: c.from, to_ms: c.to,
+    calls: c.calls, amount_mc: c.amountMc, pending: c.pending, pending_mc: c.pendingMc, cap_mc: c.capMc, carried_mc: c.carriedMc,
+    bill: markJson(c.bill),
+  };
+}
+
+export const markJson = (m: BillMark | null) =>
+  m ? { state: m.state, at: new Date(m.at).toISOString(), amount_mc: m.amountMc, calls: m.calls, invoice: m.invoice } : null;
