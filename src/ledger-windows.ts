@@ -53,7 +53,10 @@ export interface WindowCount {
   counted: number;
   /** The same per road (Kally's calls are in local). */
   by_source: Record<UsagePath, number>;
-  /** mcp-usage-ledger.SINGLE.11 — Kally's counted calls (already inside by_source.local and counted). */
+  /**
+   * mcp-usage-ledger.SINGLE.11, KALLY_COUNT.3 — Kally's answered data calls of the window. Inside by_source.local and
+   * counted only while the plan says kally_counts (KALLY_COUNTS_MCP on); otherwise recorded and shown here, never counted.
+   */
   kally: number;
   /** mcp-usage-ledger.SINGLE.2 — reservations not yet recorded (already inside counted). */
   pending: number;
@@ -75,8 +78,11 @@ export interface WindowRow {
 /** mcp-usage-ledger.SINGLE.2 — reservations of the window still waiting for their record, per road. */
 export type PendingCounts = Partial<Record<UsagePath, number>>;
 
-/** mcp-usage-ledger.MODEL.2-4, SINGLE.2 — the window's numbers from its daily rows and its pending reservations. */
-export function countWindow(range: WindowRange, rows: WindowRow[], pending: PendingCounts = {}): WindowCount {
+/**
+ * mcp-usage-ledger.MODEL.2-4, SINGLE.2 — the window's numbers from its daily rows and its pending reservations.
+ * mcp-usage-ledger.KALLY_COUNT.3-4 — Kally's rows add to the count only with `kallyCounts` (the plan's kally_counts).
+ */
+export function countWindow(range: WindowRange, rows: WindowRow[], pending: PendingCounts = {}, kallyCounts = false): WindowCount {
   const out: WindowCount = {
     period: range.period,
     from: new Date(range.from).toISOString(),
@@ -92,7 +98,11 @@ export function countWindow(range: WindowRange, rows: WindowRow[], pending: Pend
     out.total += r.calls;
     if (r.outcome === "refused") out.refused += r.calls;
     if (r.outcome !== "ok" || UNCOUNTED_TOOLS.has(r.tool)) continue;
-    if (r.kally) out.kally += r.calls;
+    if (r.kally) {
+      out.kally += r.calls;
+      // mcp-usage-ledger.KALLY_COUNT.3 — flag off: recorded, never counted.
+      if (!kallyCounts) continue;
+    }
     if (r.path in out.by_source) out.by_source[r.path] += r.calls;
   }
   for (const path of Object.keys(out.by_source) as UsagePath[]) {
@@ -138,6 +148,11 @@ export interface LedgerPlan {
   message: string | null;
   /** en | es | pt for the usage line (mcp-usage-pricing.USAGE.4), or null. */
   lang: string | null;
+  /**
+   * mcp-usage-ledger.KALLY_COUNT.2-3 — Kally's data calls count toward this account's number (KALLY_COUNTS_MCP on for
+   * the phone). Only an explicit true; absent (older rest-api, flag off) means not counted.
+   */
+  kallyCounts?: boolean;
 }
 
 export const DEFAULT_PLAN_TTL_S = 600;
@@ -162,7 +177,8 @@ export function parsePlan(d: unknown): LedgerPlan | null {
   const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && period === "week" && limit !== null;
   const message = typeof v.message === "string" && v.message.trim() ? v.message.slice(0, 2000) : null;
   const lang = v.lang === "en" || v.lang === "es" || v.lang === "pt" ? v.lang : null;
-  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang };
+  const kallyCounts = v.kally_counts === true; // mcp-usage-ledger.KALLY_COUNT.2
+  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang, kallyCounts };
 }
 
 /** mcp-usage-ledger.PLAN.1, PLAN.5 — the plan from rest-api, or null when it cannot answer (the caller fails open). */
