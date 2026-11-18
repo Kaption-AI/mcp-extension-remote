@@ -12,6 +12,7 @@
  * and the decision flow (meterCall) live below it.
  */
 import {
+  KALLY_CONNECTION,
   DAY_MS,
   dayOf,
   hourOf,
@@ -152,7 +153,10 @@ interface LeaseRow {
 }
 
 export class MeterStore {
-  constructor(private sql: SqlLike) {
+  /**
+   * mcp-usage-ledger.KALLY_COUNT.3 — whether Kally's data calls count (the ledger's cached plan); default not counted.
+   */
+  constructor(private sql: SqlLike, private kallyCounts: () => boolean = () => false) {
     for (const statement of METER_SCHEMA) sql.exec(statement);
     // business-plans.TEST_ACCOUNT.3 — added after the table shipped: an older ledger gets the column once.
     let hasTest = false;
@@ -176,15 +180,21 @@ export class MeterStore {
     return !!row && String(row.month) === month && Number(row.test) === 1;
   }
 
-  /** mcp-usage-accounting.COUNT.1 — this month's calls answered without error, both paths. */
+  /**
+   * mcp-usage-accounting.COUNT.1 — this month's calls answered without error, both paths.
+   * mcp-usage-ledger.KALLY_COUNT.3 — Kally's rows only while they count.
+   */
   counted(month: string): number {
     const range = monthRange(month);
     if (!range) return 0;
+    const kally = this.kallyCounts();
     const row = this.sql
       .exec(
-        `SELECT COALESCE(SUM(calls), 0) AS n FROM usage_day WHERE day >= ? AND day < ? AND outcome = 'ok'`,
+        `SELECT COALESCE(SUM(calls), 0) AS n FROM usage_day WHERE day >= ? AND day < ? AND outcome = 'ok' AND (? = 1 OR conn <> ?)`,
         dayOf(range.from),
         dayOf(range.to),
+        kally ? 1 : 0,
+        KALLY_CONNECTION,
       )
       .toArray()[0];
     return Number(row?.n ?? 0);

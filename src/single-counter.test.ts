@@ -154,8 +154,8 @@ const reserveLocal = (w: Awaited<ReturnType<typeof world>>, body: Record<string,
 afterEach(() => vi.unstubAllGlobals());
 
 describe("mcp-usage-ledger.SINGLE one counter for every road", () => {
-  it("mcp-usage-ledger.SINGLE.1, SINGLE.2 — a cloud call, a local-bridge call and a Kally read all add to the same count", async () => {
-    const rest = restApi();
+  it("mcp-usage-ledger.SINGLE.1, SINGLE.2, KALLY_COUNT.4 — a cloud call, a local-bridge call and a Kally read (KALLY_COUNTS_MCP on) all add to the same count", async () => {
+    const rest = restApi(planAnswer({ kally_counts: true }));
     vi.stubGlobal("fetch", rest.fetcher);
     const w = await world();
     // Cloud: reserved and recorded by the relay.
@@ -178,7 +178,7 @@ describe("mcp-usage-ledger.SINGLE one counter for every road", () => {
   });
 
   it("mcp-usage-ledger.SINGLE.4, weekly-plan-limits.SERVER.17 — the 21st action of a free-past-60 account's week is refused with rest-api's words, whatever road used the first 20", async () => {
-    const rest = restApi();
+    const rest = restApi(planAnswer({ kally_counts: true }));
     vi.stubGlobal("fetch", rest.fetcher);
     const w = await world();
     for (let i = 0; i < 10; i++) expect((await w.tool("query", { action: "chats" })).isError).toBeFalsy();
@@ -311,16 +311,83 @@ describe("mcp-usage-ledger.SINGLE.14 a Brazilian line's two written forms are on
   });
 });
 
+describe("mcp-usage-ledger.KALLY_COUNT the KALLY_COUNTS_MCP switch", () => {
+  const month = () => new Date().toISOString().slice(0, 7);
+
+  it("mcp-usage-ledger.KALLY_COUNT.3 — flag off (no kally_counts): a Kally read leaves the week count unchanged, everywhere it is read", async () => {
+    vi.stubGlobal("fetch", restApi(planAnswer()).fetcher);
+    const w = await world();
+    expect((await w.tool("query", { action: "chats" })).isError).toBeFalsy();
+    expect((await w.week()).counted).toBe(1);
+    expect((await postBatch(w, "batch_kally_off1", [{ source: "kally", client: "", tool: "query" }])).status).toBe(200);
+    // Recorded (kally 1), not counted.
+    expect(await w.week()).toMatchObject({ counted: 1, by_source: { cloud: 1, local: 0, webmcp: 0 }, kally: 1 });
+    const read = await w.http(`/internal/ledger/usage?phone=${PHONE}`, { headers: auth });
+    expect(((await read.json()) as any).week).toMatchObject({ counted: 1, kally: 1 });
+    // The monthly meter and the month report leave it out too.
+    expect((w.ledger() as any).meter.counted(month())).toBe(1);
+    const report = await w.http(`/internal/ledger/report?phone=${PHONE}`, { headers: auth });
+    expect(((await report.json()) as any).counted).toBe(1);
+  });
+
+  it("mcp-usage-ledger.KALLY_COUNT.3, KALLY_COUNT.5 — flag off: Kally reads never use up a free-past-60 week", async () => {
+    vi.stubGlobal("fetch", restApi(planAnswer()).fetcher);
+    const w = await world();
+    for (let i = 0; i < 19; i++) expect((await w.tool("query", { action: "chats" })).isError).toBeFalsy();
+    expect((await postBatch(w, "batch_kally_off2", [{ source: "kally", client: "", calls: 50 }])).status).toBe(200);
+    expect(await w.week()).toMatchObject({ counted: 19, kally: 50 });
+    // The 20th cloud action still runs; the 21st is refused as before.
+    expect((await w.tool("query", { action: "chats" })).isError).toBeFalsy();
+    expect((await w.tool("query", { action: "chats" })).isError).toBe(true);
+  });
+
+  it("mcp-usage-ledger.KALLY_COUNT.4 — flag on (kally_counts true): a Kally read adds 1 to the week count", async () => {
+    vi.stubGlobal("fetch", restApi(planAnswer({ kally_counts: true })).fetcher);
+    const w = await world();
+    expect((await w.tool("query", { action: "chats" })).isError).toBeFalsy();
+    expect((await w.week()).counted).toBe(1);
+    expect((await postBatch(w, "batch_kally_on1", [{ source: "kally", client: "", tool: "query" }])).status).toBe(200);
+    expect(await w.week()).toMatchObject({ counted: 2, by_source: { cloud: 1, local: 1, webmcp: 0 }, kally: 1 });
+    expect((w.ledger() as any).meter.counted(month())).toBe(2);
+  });
+
+  it("mcp-usage-ledger.KALLY_COUNT.2 — no plan cached (rest-api unreachable): Kally is not counted", async () => {
+    vi.stubGlobal("fetch", restApi(() => new Response("down", { status: 503 })).fetcher);
+    const w = await world();
+    expect((await postBatch(w, "batch_kally_noplan", [{ source: "kally", client: "", tool: "query" }])).status).toBe(200);
+    expect(await w.week()).toMatchObject({ counted: 0, kally: 1 });
+  });
+});
+
 describe("mcp-usage-ledger.SINGLE pure rules", () => {
-  it("mcp-usage-ledger.SINGLE.2 — counted = recorded answered calls + pending reservations; Kally inside local", () => {
+  it("mcp-usage-ledger.SINGLE.2, KALLY_COUNT.4 — counted = recorded answered calls + pending reservations; Kally inside local when it counts", () => {
     const range = windowRange("week", "2026-11-16")!;
     const w = countWindow(range, [
       { path: "cloud", tool: "query", outcome: "ok", calls: 3 },
       { path: "local", tool: "query", outcome: "ok", calls: 2 },
       { path: "local", tool: "query", outcome: "ok", calls: 4, kally: true },
       { path: "local", tool: "kaption_help", outcome: "ok", calls: 9, kally: true },
-    ], { local: 1, webmcp: 2 });
+    ], { local: 1, webmcp: 2 }, true);
     expect(w).toMatchObject({ counted: 12, by_source: { cloud: 3, local: 7, webmcp: 2 }, kally: 4, pending: 3 });
+  });
+
+  it("mcp-usage-ledger.KALLY_COUNT.3 — Kally's rows are shown (kally) but not counted when KALLY_COUNTS_MCP is off (the default)", () => {
+    const range = windowRange("week", "2026-11-16")!;
+    const rows = [
+      { path: "cloud" as const, tool: "query", outcome: "ok", calls: 3 },
+      { path: "local" as const, tool: "query", outcome: "ok", calls: 2 },
+      { path: "local" as const, tool: "query", outcome: "ok", calls: 4, kally: true },
+    ];
+    expect(countWindow(range, rows, { local: 1 })).toMatchObject({ counted: 6, by_source: { cloud: 3, local: 3, webmcp: 0 }, kally: 4 });
+    expect(countWindow(range, rows, { local: 1 }, false)).toMatchObject({ counted: 6, kally: 4 });
+    expect(countWindow(range, rows, { local: 1 }, true)).toMatchObject({ counted: 10, kally: 4 });
+  });
+
+  it("mcp-usage-ledger.KALLY_COUNT.2 — only kally_counts true counts Kally; absent or anything else does not", () => {
+    expect(parsePlan(planAnswer())!.kallyCounts).toBe(false);
+    expect(parsePlan(planAnswer({ kally_counts: true }))!.kallyCounts).toBe(true);
+    expect(parsePlan(planAnswer({ kally_counts: "true" }))!.kallyCounts).toBe(false);
+    expect(parsePlan(planAnswer({ kally_counts: 1 }))!.kallyCounts).toBe(false);
   });
 
   it("mcp-usage-ledger.SINGLE.3 — enforce from rest-api (or an older rest-api's week_ledger); only a weekly number", () => {

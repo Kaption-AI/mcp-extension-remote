@@ -93,6 +93,8 @@ const PLAN_COLUMNS = [
   `ALTER TABLE plan_cache ADD COLUMN enforce INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE plan_cache ADD COLUMN message TEXT`,
   `ALTER TABLE plan_cache ADD COLUMN lang TEXT`,
+  // mcp-usage-ledger.KALLY_COUNT.2 — rest-api's kally_counts (0 = Kally's data calls are recorded, not counted).
+  `ALTER TABLE plan_cache ADD COLUMN kally_counts INTEGER NOT NULL DEFAULT 0`,
 ];
 
 /** mcp-usage-ledger.IDEMPOTENCY.4 — reservations are kept 40 days. */
@@ -251,7 +253,15 @@ export class LedgerStore {
   }
 
   windowCount(range: WindowRange): WindowCount {
-    return countWindow(range, this.windowRows(range), this.pending(range));
+    return countWindow(range, this.windowRows(range), this.pending(range), this.kallyCounts());
+  }
+
+  /**
+   * mcp-usage-ledger.KALLY_COUNT.2-3 — whether Kally's data calls count for this account: only while the cached plan
+   * says so (KALLY_COUNTS_MCP on for the phone). No plan cached, or an older rest-api: not counted.
+   */
+  kallyCounts(): boolean {
+    return this.plan()?.plan.kallyCounts === true;
   }
 
   /**
@@ -343,19 +353,21 @@ export class LedgerStore {
         enforce: Number(r.enforce ?? 0) === 1,
         message: r.message ? String(r.message) : null,
         lang: r.lang ? String(r.lang) : null,
+        kallyCounts: Number(r.kally_counts ?? 0) === 1,
       },
     };
   }
 
   setPlan(plan: LedgerPlan, now: number): void {
     this.sql.exec(
-      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang, kally_counts)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET fetched_at = excluded.fetched_at, ttl_s = excluded.ttl_s, tier = excluded.tier,
          period = excluded.period, lim = excluded.lim, pool_ref = excluded.pool_ref, pool_numbers = excluded.pool_numbers,
-         enforced_by = excluded.enforced_by, enforce = excluded.enforce, message = excluded.message, lang = excluded.lang`,
+         enforced_by = excluded.enforced_by, enforce = excluded.enforce, message = excluded.message, lang = excluded.lang,
+         kally_counts = excluded.kally_counts`,
       now, plan.ttlSeconds, plan.tier, plan.period, plan.limit, plan.pool?.ref ?? null, plan.pool?.numbers ?? null, plan.enforcedBy,
-      plan.enforce ? 1 : 0, plan.message ?? null, plan.lang ?? null,
+      plan.enforce ? 1 : 0, plan.message ?? null, plan.lang ?? null, plan.kallyCounts ? 1 : 0,
     );
   }
 
@@ -475,7 +487,7 @@ export class UsageLedger extends DurableObject<Env> {
     super(ctx, env);
     this.state = ctx as unknown as DoState;
     this.store = new LedgerStore(this.state.storage.sql);
-    this.meter = new MeterStore(this.state.storage.sql);
+    this.meter = new MeterStore(this.state.storage.sql, () => this.store.kallyCounts());
   }
 
   /**
@@ -715,7 +727,10 @@ export class UsageLedger extends DurableObject<Env> {
   async report(month: string): Promise<{ rows: DayRow[]; connections: ConnectionRow[]; since: string | null; uncharged: number; test: boolean }> {
     // business-plans.MCP_ASYNC.8 — the month's actions that ran and could not be charged.
     // business-plans.TEST_ACCOUNT.3 — and whether rest-api said this is a test account (charged on a test balance).
-    return { rows: this.store.monthRows(month), connections: this.store.connections(), since: this.store.since(), uncharged: this.meter.uncharged(month), test: this.meter.isTest(month) };
+    // mcp-usage-ledger.KALLY_COUNT.3 — while Kally does not count, its rows stay out of the report (counted = the window's).
+    const kally = this.store.kallyCounts();
+    const rows = this.store.monthRows(month).filter((r) => kally || r.connection !== KALLY_CONNECTION);
+    return { rows, connections: this.store.connections(), since: this.store.since(), uncharged: this.meter.uncharged(month), test: this.meter.isTest(month) };
   }
 
   async hours(from: number, to: number): Promise<Record<string, unknown>[]> {
