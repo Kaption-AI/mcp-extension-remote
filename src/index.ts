@@ -30,7 +30,7 @@ import {
   listConnections,
 } from "./connection-lifetime";
 import { UsageLedger, UsageTotals, ledgerFor, totalsNames } from "./usage-ledger";
-import { READ_BATCH_MAX, internalCaller, last4, parseUseRequest, readPhone, usageForPhone, validWindows } from "./ledger-read";
+import { READ_BATCH_MAX, cycleJson, internalCaller, last4, markJson, mergeCycles, parseUseRequest, readCycle, readPhone, usageForPhone, validWindows } from "./ledger-read";
 import { shadowPhone, weekOf } from "./ledger-windows";
 import {
   LOCAL_MAX_BODY_BYTES,
@@ -895,11 +895,63 @@ outerApp.post("/internal/ledger/use", async (c) => {
     }
     const answer = await ledgerFor(c.env, refs[0]).use({ ...req.use, offset }, now);
     const out = { ok: answer.ok, counted: answer.counted, duplicates: answer.duplicates, refunded: answer.refunded, used: answer.used,
-      limit: answer.limit, left: answer.left, resets_at: answer.resetsAt };
+      limit: answer.limit, left: answer.left, resets_at: answer.resetsAt,
+      // mcp-overage-billing.LEDGER.2-3 — extra actions recorded, and why a refusal happened.
+      ...(answer.overage !== undefined ? { overage: answer.overage } : {}), ...(answer.reason ? { reason: answer.reason } : {}) };
     return c.json(out, answer.ok ? 200 : 402, { "Cache-Control": "no-store" });
   } catch (e: any) {
     console.error(`[ledger] use failed for ${last4(req.phone)}:`, e?.message || e);
     return problem({ status: 503, code: "unavailable", detail: "Could not reserve usage" });
+  }
+});
+
+// mcp-overage-billing.LEDGER.7 — a cycle's extra actions for rest-api's end-of-cycle bill (Bearer INTERNAL_API_KEY).
+outerApp.get("/internal/ledger/overage", async (c) => {
+  if (!internalCaller(c.req.header("Authorization"), c.env)) return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
+  const phone = readPhone(c.req.query("phone"));
+  const cycle = readCycle(c.req.query("from"), c.req.query("to"));
+  if (!phone) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
+  if (!cycle) return problem({ status: 400, code: "invalid_cycle", detail: "from and to must be epoch ms, at most 32 days apart." });
+  if (!c.env.USAGE_LEDGER) return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
+  try {
+    const refs = await accountRefsForPhone(phone, c.env.PHONE_REF_SECRET);
+    if (!refs.length) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
+    const parts = await Promise.all(refs.map((ref) => ledgerFor(c.env, ref).overageCycle(cycle)));
+    return c.json(cycleJson(mergeCycles(parts)), 200, { "Cache-Control": "no-store" });
+  } catch (e: any) {
+    console.error(`[ledger] overage read failed for ${last4(phone)}:`, e?.message || e);
+    return problem({ status: 503, code: "unavailable", detail: "Could not read overage" });
+  }
+});
+
+// mcp-overage-billing.LEDGER.8, BILL.5-9 — claim a cycle for billing (once) and record its outcome.
+outerApp.post("/internal/ledger/overage/bill", async (c) => {
+  if (!internalCaller(c.req.header("Authorization"), c.env)) return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
+  const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+  const phone = readPhone(body.phone);
+  const cycle = readCycle(body.from, body.to);
+  const state = body.state;
+  if (!phone) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
+  if (!cycle) return problem({ status: 400, code: "invalid_cycle", detail: "from and to must be epoch ms, at most 32 days apart." });
+  if (state !== "claim" && state !== "billed" && state !== "carried" && state !== "none" && state !== "failed") {
+    return problem({ status: 400, code: "invalid_state", detail: "state must be claim, billed, carried, none or failed." });
+  }
+  const invoice = typeof body.invoice === "string" && /^[A-Za-z0-9_]{3,64}$/.test(body.invoice) ? body.invoice : null;
+  const num = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 ? (v as number) : 0);
+  if (!c.env.USAGE_LEDGER) return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
+  try {
+    const refs = await accountRefsForPhone(phone, c.env.PHONE_REF_SECRET);
+    if (!refs.length) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
+    const ledger = ledgerFor(c.env, refs[0]);
+    if (state === "claim") {
+      const claimed = await ledger.overageClaim(cycle);
+      return c.json({ ok: claimed.ok, bill: markJson(claimed.mark) }, claimed.ok ? 200 : 409, { "Cache-Control": "no-store" });
+    }
+    const mark = await ledger.overageFinish(cycle.from, state, { amountMc: num(body.amount_mc), calls: num(body.calls), invoice });
+    return c.json({ ok: !!mark && mark.state === state, bill: markJson(mark) }, 200, { "Cache-Control": "no-store" });
+  } catch (e: any) {
+    console.error(`[ledger] overage bill failed for ${last4(phone)}:`, e?.message || e);
+    return problem({ status: 503, code: "unavailable", detail: "Could not record the bill" });
   }
 });
 
