@@ -868,6 +868,7 @@ export const TOOLS: ToolDefinition[] = [
       last_n: z.number().optional().describe("Only the most recent N messages"),
       from: z.string().optional().describe("ISO 8601 start (or relative, like 30d)"),
       to: z.string().optional().describe("ISO 8601 end"),
+      transcribe_missing: z.boolean().optional().describe("First transcribe the chat's voice notes that have no transcript yet (up to 10 per call, newest first, inside from/to; Pro and above). The answer's transcribe_missing says how many were transcribed and how many are still missing; call again for more."),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
