@@ -159,6 +159,65 @@ export interface LedgerPlan {
    * recorded as extra actions within the cap. null (or absent in an older cache): off.
    */
   overage?: PlanOverage | null;
+  /** mcp-credits-simple.FLAG.2, ASK.1-7, FREE.1 — the simple extras (only with MCP_CREDITS_SIMPLE on), or null. */
+  credits?: PlanCredits | null;
+}
+
+/** mcp-credits-simple — what rest-api's plan answer says the assistant is told and asks (once). */
+export interface PlanCredits {
+  choice: "ask" | "keep" | "stop" | "free";
+  /** ASK.2, ASK.5 — hold a month plan to its allowance while asking or stopped. */
+  enforce: boolean;
+  askPct: number;
+  priceMc: number;
+  capCents: number;
+  /** ASK.1 — {used} and {limit} filled here. */
+  askMessage: string | null;
+  stopMessage: string | null;
+  upgradeMessage: string | null;
+}
+
+const CHOICES = ["ask", "keep", "stop", "free"] as const;
+const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.slice(0, 2000) : null);
+
+/** mcp-credits-simple.FLAG.2 — rest-api's `credits` block read defensively; null when absent or not one. */
+export function parseCredits(v: unknown): PlanCredits | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (!CHOICES.includes(o.choice as PlanCredits["choice"])) return null;
+  const n = (x: unknown, lo: number, hi: number, d: number) => (typeof x === "number" && Number.isFinite(x) && x >= lo && x <= hi ? x : d);
+  return {
+    choice: o.choice as PlanCredits["choice"],
+    enforce: o.enforce === true,
+    askPct: n(o.ask_pct, 1, 100, 90),
+    priceMc: n(o.price_millicents, 0, 1_000_000, 0),
+    capCents: n(o.cap_cents, 0, 100_000, 0),
+    askMessage: text(o.ask_message),
+    stopMessage: text(o.stop_message),
+    upgradeMessage: text(o.upgrade_message),
+  };
+}
+
+/** mcp-credits-simple.ASK.1 — the question with the counts filled in. */
+export const fillAsk = (template: string, used: number, limit: number) =>
+  template.replace(/\{used\}/g, String(used)).replace(/\{limit\}/g, String(limit));
+
+/**
+ * mcp-credits-simple.ASK.1-2, ASK.5, FREE.1 — what the assistant reads when the account is refused at its allowance
+ * (not at the overage cap): the question while asking, the US$0 words when stopped, subscribing for Free. null: none.
+ */
+export function creditsRefusal(credits: PlanCredits | null | undefined, used: number, limit: number): string | null {
+  if (!credits) return null;
+  if (credits.choice === "ask" && credits.askMessage) return fillAsk(credits.askMessage, used, limit);
+  if (credits.choice === "stop") return credits.stopMessage;
+  if (credits.choice === "free") return credits.upgradeMessage;
+  return null;
+}
+
+/** mcp-credits-simple.ASK.1, ASK.4 — the question after a call that ran, at askPct% or more, while asking only. */
+export function creditsAskLine(credits: PlanCredits | null | undefined, used: number, limit: number | null): string | null {
+  if (!credits || credits.choice !== "ask" || !credits.askMessage || !limit) return null;
+  return used * 100 >= limit * credits.askPct ? fillAsk(credits.askMessage, used, limit) : null;
 }
 
 export const DEFAULT_PLAN_TTL_S = 600;
@@ -181,13 +240,14 @@ export function parsePlan(d: unknown): LedgerPlan | null {
   if (limit !== null && !period) return null;
   // mcp-overage-billing.LEDGER.1, LEDGER.6 — postpaid overage only with a number to pass.
   const overage = limit !== null ? parseOverage(v.overage) : null;
+  const credits = parseCredits(v.credits);
   // mcp-usage-ledger.SINGLE.3 — only a weekly number is enforced here (Pro and Business stay counted, SINGLE.10), unless
   // the account turned postpaid overage on (mcp-overage-billing.LEDGER.1): then its month is held to limit + cap too.
-  const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && limit !== null && (period === "week" || (period === "month" && !!overage));
+  const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && limit !== null && (period === "week" || (period === "month" && (!!overage || !!credits?.enforce)));
   const message = typeof v.message === "string" && v.message.trim() ? v.message.slice(0, 2000) : null;
   const lang = v.lang === "en" || v.lang === "es" || v.lang === "pt" ? v.lang : null;
   const kallyCounts = v.kally_counts === true; // mcp-usage-ledger.KALLY_COUNT.2
-  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang, kallyCounts, overage };
+  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang, kallyCounts, overage, credits };
 }
 
 /** mcp-usage-ledger.PLAN.1, PLAN.5 — the plan from rest-api, or null when it cannot answer (the caller fails open). */
