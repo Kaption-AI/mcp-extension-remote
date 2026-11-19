@@ -47,6 +47,10 @@
           "type": "string",
           "description": "ISO 8601 end"
         },
+        "transcribe_missing": {
+          "type": "boolean",
+          "description": "First transcribe the chat's voice notes that have no transcript yet (up to 10 per call, newest first, inside from/to; Pro and above). The answer's transcribe_missing says how many were transcribed and how many are still missing; call again for more."
+        },
         "target_session": {
           "type": "string",
           "description": "Session ID for multi-account routing"
