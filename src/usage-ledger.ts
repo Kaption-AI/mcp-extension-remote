@@ -39,6 +39,7 @@ import {
   shadowOf,
   windowRange,
   type LedgerPlan,
+  type PlanCredits,
   type PlanTier,
   type PendingCounts,
   type ShadowWindow,
@@ -98,6 +99,8 @@ const PLAN_COLUMNS = [
   `ALTER TABLE plan_cache ADD COLUMN kally_counts INTEGER NOT NULL DEFAULT 0`,
   // mcp-overage-billing.LEDGER.1 — the plan's postpaid overage (JSON), or null.
   `ALTER TABLE plan_cache ADD COLUMN overage TEXT`,
+  // mcp-credits-simple.FLAG.2 — the plan's simple-extras block (JSON), or null.
+  `ALTER TABLE plan_cache ADD COLUMN credits TEXT`,
 ];
 
 /** mcp-usage-ledger.IDEMPOTENCY.4 — reservations are kept 40 days. */
@@ -387,21 +390,28 @@ export class LedgerStore {
         lang: r.lang ? String(r.lang) : null,
         kallyCounts: Number(r.kally_counts ?? 0) === 1,
         overage: overageFromCache(r.overage),
+        credits: creditsFromCache(r.credits),
       },
     };
   }
 
   setPlan(plan: LedgerPlan, now: number): void {
     this.sql.exec(
-      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang, kally_counts, overage)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang, kally_counts, overage, credits)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET fetched_at = excluded.fetched_at, ttl_s = excluded.ttl_s, tier = excluded.tier,
          period = excluded.period, lim = excluded.lim, pool_ref = excluded.pool_ref, pool_numbers = excluded.pool_numbers,
          enforced_by = excluded.enforced_by, enforce = excluded.enforce, message = excluded.message, lang = excluded.lang,
-         kally_counts = excluded.kally_counts, overage = excluded.overage`,
+         kally_counts = excluded.kally_counts, overage = excluded.overage, credits = excluded.credits`,
       now, plan.ttlSeconds, plan.tier, plan.period, plan.limit, plan.pool?.ref ?? null, plan.pool?.numbers ?? null, plan.enforcedBy,
       plan.enforce ? 1 : 0, plan.message ?? null, plan.lang ?? null, plan.kallyCounts ? 1 : 0, plan.overage ? JSON.stringify(plan.overage) : null,
+      plan.credits ? JSON.stringify(plan.credits) : null,
     );
+  }
+
+  /** mcp-credits-simple.ASK.3 — the cached plan dropped (after allow_extra_actions), so the next call asks rest-api. */
+  forgetPlan(): void {
+    this.sql.exec(`DELETE FROM plan_cache WHERE id = 1`);
   }
 
   /** mcp-usage-ledger.SHADOW.1 — the first time a window passed its limit is kept (later ones are ignored). */
@@ -427,6 +437,22 @@ export class LedgerStore {
 }
 
 /** The cached plan's overage (JSON written by setPlan), or null. */
+/** mcp-credits-simple.FLAG.2 — the cached block (stored as LedgerPlan["credits"]). */
+function creditsFromCache(raw: unknown): PlanCredits | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const o = JSON.parse(raw);
+    if (!o || !["ask", "keep", "stop", "free"].includes(o.choice)) return null;
+    const str = (v: unknown) => (typeof v === "string" ? v : null);
+    return {
+      choice: o.choice, enforce: o.enforce === true, askPct: Number(o.askPct) || 90, priceMc: Number(o.priceMc) || 0, capCents: Number(o.capCents) || 0,
+      askMessage: str(o.askMessage), stopMessage: str(o.stopMessage), upgradeMessage: str(o.upgradeMessage),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function overageFromCache(raw: unknown): PlanOverage | null {
   if (typeof raw !== "string" || !raw) return null;
   try {
@@ -719,6 +745,11 @@ export class UsageLedger extends DurableObject<Env> {
     return refresh.catch(() => null);
   }
 
+  /** mcp-credits-simple.ASK.3 — after the person said yes: the next call reads the new choice from rest-api. */
+  async forgetPlan(): Promise<void> {
+    this.store.forgetPlan();
+  }
+
   /**
    * mcp-usage-ledger.SINGLE.4 — before one cloud call: for an enforced account reserve it (refused past the week's
    * number); for any other account nothing is reserved. `offset` (SINGLE.14) reads the other written form's week.
@@ -730,8 +761,9 @@ export class UsageLedger extends DurableObject<Env> {
   ): Promise<CloudBegin> {
     if (UNCOUNTED_TOOLS.has(input.tool)) return { state: "run", reserved: false, plan: null, use: null };
     const plan = await this.planFor(input.phone, now, fetchImpl);
-    // mcp-overage-billing.LEDGER.1 — a month plan is reserved too when it has postpaid overage (parsePlan says enforce).
-    if (!plan?.enforce || plan.limit === null || !plan.period || (plan.period === "month" && !plan.overage)) {
+    // mcp-overage-billing.LEDGER.1 — a month plan is reserved too when it has postpaid overage (parsePlan says enforce),
+    // or (mcp-credits-simple.ASK.2, ASK.5) while the simple extras are asking or stopped.
+    if (!plan?.enforce || plan.limit === null || !plan.period || (plan.period === "month" && !plan.overage && !plan.credits?.enforce)) {
       return { state: "run", reserved: false, plan, use: null };
     }
     const offset = input.accountRef && plan.period === "week" ? await otherFormsWeek(this.env, input.phone, input.accountRef, now).catch(() => 0) : 0;

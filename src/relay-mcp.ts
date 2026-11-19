@@ -38,7 +38,8 @@ import {
   type UsageCell,
 } from "./usage";
 import { ledgerFor, type CloudBegin } from "./usage-ledger";
-import { shadowPhone } from "./ledger-windows";
+import { creditsAskLine, creditsRefusal, shadowPhone } from "./ledger-windows";
+import { ALLOW_EXTRA_DEFINITION, ALLOW_EXTRA_TOOL, allowExtra } from "./credits-tool";
 import { DISABLED_CODE, DisabledGate } from "./disabled-gate";
 import { normalizeMcpClient, sanitizeClientInfo, sanitizeClientName, type McpClientId, type McpClientInfo } from "./client";
 import { ledgerUsage, refusalFallback, usageLang, usageLine, usageMeta, usagePhone, type Usage, type UsageLang } from "./weekly-usage";
@@ -51,6 +52,8 @@ interface LedgerGate {
   message: string | null;
   usage: Usage | null;
   lang: UsageLang;
+  /** mcp-credits-simple.ASK.1 — the question after a call that ran (at 90%+ while asking), or null. */
+  askLine?: string | null;
 }
 
 /** mcp-local-hub-growth.CLIENT.3 — where a session's clientInfo is kept across evictions (DO storage). */
@@ -128,6 +131,40 @@ export class RelayMCP extends McpAgent<Env> {
       (this as any).ctx?.waitUntil?.(work);
     } catch {
       // The Durable Object stays alive while the promise runs.
+    }
+  }
+
+  private creditsTool: { remove(): void } | null = null;
+
+  /**
+   * mcp-credits-simple.FLAG.2, ASK.3 — allow_extra_actions is listed once this account's plan answer carried the credits
+   * block (registering it sends notifications/tools/list_changed). Never counted; rest-api decides and stores the yes.
+   */
+  private ensureCreditsTool(): void {
+    if (this.creditsTool) return;
+    try {
+      this.creditsTool = this.server.registerTool(
+        ALLOW_EXTRA_TOOL,
+        {
+          title: ALLOW_EXTRA_DEFINITION.title,
+          description: ALLOW_EXTRA_DEFINITION.description,
+          inputSchema: ALLOW_EXTRA_DEFINITION.inputSchema,
+          annotations: ALLOW_EXTRA_DEFINITION.annotations,
+          _meta: { securitySchemes: [{ type: "oauth2", scopes: ["kaption:access"] }] },
+        } as any,
+        async () => {
+          const accountRef = this.getAccountRef();
+          if (!accountRef) return { content: [{ type: "text" as const, text: NO_ACCOUNT_TEXT }], isError: true };
+          const phone = await meteringPhoneWithAlias(this.env, accountRef);
+          if (!phone) return { content: [{ type: "text" as const, text: NO_ACCOUNT_TEXT }], isError: true };
+          const answer = await allowExtra(this.env, phone);
+          // ASK.3-4 — the next call reads the new choice (no question again).
+          if (answer.ok) await ledgerFor(this.env, accountRef).forgetPlan().catch(() => undefined);
+          return { content: [{ type: "text" as const, text: answer.message }], ...(answer.ok ? {} : { isError: true }) };
+        },
+      );
+    } catch (error) {
+      console.error("[credits] register failed:", error instanceof Error ? error.message : error);
     }
   }
 
@@ -245,8 +282,10 @@ export class RelayMCP extends McpAgent<Env> {
                 text: typeof result === "string" ? result : JSON.stringify(result, null, 2),
               },
               ...(marked.notice ? [{ type: "text" as const, text: marked.notice }] : []),
+              // mcp-credits-simple.ASK.1 — the question (once the month is at 90%, while asking) replaces the short line.
+              ...(weekly?.askLine ? [{ type: "text" as const, text: weekly.askLine }] : []),
               // mcp-usage-pricing.USAGE.7 — one short line when little is left or overage is being spent.
-              ...(weekly?.usage && usageLine(weekly.usage, weekly.lang) ? [{ type: "text" as const, text: usageLine(weekly.usage, weekly.lang)! }] : []),
+              ...(!weekly?.askLine && weekly?.usage && usageLine(weekly.usage, weekly.lang) ? [{ type: "text" as const, text: usageLine(weekly.usage, weekly.lang)! }] : []),
             ],
             structuredContent: (isPlans ? plansStructuredContent(result) : undefined) ?? { result },
             // mcp-usage-pricing.USAGE.6 — what is left, on every result (only while MCP_USAGE_IN_RESULTS is on).
@@ -418,9 +457,24 @@ export class RelayMCP extends McpAgent<Env> {
       if (begin.state === "refused") {
         // mcp-overage-billing.LEDGER.3 — past the overage cap: the cap's words (rest-api's), else the plan's.
         const capped = begin.use?.reason === "cap" ? begin.plan?.overage?.message ?? null : null;
-        return { state: "refused", reservation: null, message: capped ?? begin.plan?.message ?? refusalFallback(begin.plan?.limit ?? 0), usage, lang };
+        // mcp-credits-simple.ASK.2, ASK.5, FREE.1 — at the allowance: the question, the US$0 words, or subscribing.
+        const limit = begin.plan?.limit ?? 0;
+        const simple = capped ? null : creditsRefusal(begin.plan?.credits, Math.max(begin.use?.used ?? limit, limit), limit);
+        return { state: "refused", reservation: null, message: capped ?? simple ?? begin.plan?.message ?? refusalFallback(limit), usage, lang };
       }
-      return { state: "run", reservation: begin.reserved ? actionId : null, message: null, usage, lang };
+      // mcp-credits-simple.ASK.1, ASK.4 — while asking, the question once the month is at 90% (never after a yes).
+      let askLine: string | null = null;
+      const credits = begin.plan?.credits;
+      if (credits) this.ensureCreditsTool();
+      if (credits?.choice === "ask" && begin.plan?.limit) {
+        let used = begin.use?.used ?? window?.counted ?? null;
+        if (used === null) {
+          const w = await ledger.windows();
+          used = (begin.plan.period === "month" ? w.month : w.week)?.counted ?? null;
+        }
+        askLine = used === null ? null : creditsAskLine(credits, used, begin.plan.limit);
+      }
+      return { state: "run", reservation: begin.reserved ? actionId : null, message: null, usage, lang, askLine };
     } catch (error) {
       console.error("[ledger] gate failed:", error instanceof Error ? error.message : error);
       return null;
