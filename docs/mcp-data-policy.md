@@ -27,7 +27,7 @@ when it is issued. Requests reach only the Kaption extension or app that has sig
 extension is connected, nothing answers: the relay itself cannot read your WhatsApp.
 
 **How to revoke.**
-- In Kaption: AI assistants → Connected apps → Disconnect. This ends that app's access at once.
+- In Kaption: AI Connectors → Connected apps → Disconnect. This ends that app's access at once.
 - Turn off the cloud connection in Kaption: no app can reach your WhatsApp while it is off.
 - Removing Kaption from the AI app's connectors stops the app from using it. Its remaining access token expires
   within an hour. Use Connected apps to end the connection on our side too.

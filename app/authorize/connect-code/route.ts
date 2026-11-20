@@ -27,7 +27,7 @@ import { withHeaders } from "@/src/problem";
 import { rateLimitHeaders, tooManyRequests } from "@/src/rate-limit";
 import { anotherAppMetadata, audit, gateSignIn, RATE_LIMITED_MESSAGE, takeConnection, UNAVAILABLE_MESSAGE } from "@/src/another-app";
 
-const EXPIRED = "This code doesn't work any more. Get a new one in Kaption → AI assistants, then paste it here.";
+const EXPIRED = "This code doesn't work any more. Get a new one in Kaption → AI Connectors, then paste it here.";
 
 export async function POST(request: Request): Promise<Response> {
   if (!request.headers.get("content-type")?.includes("application/json")) {
