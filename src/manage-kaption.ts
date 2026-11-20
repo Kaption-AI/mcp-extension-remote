@@ -16,6 +16,8 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { PLANS_UI_URI } from './tools';
+import { CARDS_UI_URI } from './cards';
+import { CARDS_UI_HTML, CARDS_UI_MIME_TYPE } from './cards-ui';
 import { PLANS_UI_HTML, PLANS_UI_MIME_TYPE } from './plans-ui';
 
 /** The families an account's extension said it may use (handshake / auth `features`). */
@@ -138,6 +140,8 @@ export interface ManageResourcesHost {
   visible(): Set<string> | Promise<Set<string>>;
   /** Calls the extension's kaption_help with these arguments and answers its result. */
   callHelp(args: Record<string, unknown>): Promise<unknown>;
+  /** mcp-apps-cards.FLAG.2-3 — whether MCP_APPS_CARDS is on (the cards page is listed and readable only then). */
+  cards?(): boolean | Promise<boolean>;
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -154,6 +158,14 @@ async function helpAnswer(host: ManageResourcesHost, args: Record<string, unknow
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+
+async function cardsOn(host: ManageResourcesHost): Promise<boolean> {
+  try {
+    return (await host.cards?.()) === true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * mcp-manage-kaption.HELP.3, PROMPTS.2, UI.1 — resources (one per guide, plus the plans UI) and prompts, answered
@@ -193,6 +205,16 @@ export function installManageResources(server: Server, host: ManageResourcesHost
         mimeType: PLANS_UI_MIME_TYPE,
       });
     }
+    // mcp-apps-cards.FLAG.2-3 — the cards page, only while MCP_APPS_CARDS is on.
+    if (await cardsOn(host)) {
+      resources.push({
+        uri: CARDS_UI_URI,
+        name: 'cards.html',
+        title: 'Kaption cards',
+        description: 'Shows chat search results, sent messages and scheduled messages as small cards with buttons.',
+        mimeType: CARDS_UI_MIME_TYPE,
+      });
+    }
     return { resources };
   });
 
@@ -210,6 +232,11 @@ export function installManageResources(server: Server, host: ManageResourcesHost
     if (uri === PLANS_UI_URI) {
       return {
         contents: [{ uri, mimeType: PLANS_UI_MIME_TYPE, text: PLANS_UI_HTML, _meta: { ui: { prefersBorder: true } } }],
+      };
+    }
+    if (uri === CARDS_UI_URI && (await cardsOn(host))) {
+      return {
+        contents: [{ uri, mimeType: CARDS_UI_MIME_TYPE, text: CARDS_UI_HTML, _meta: { ui: { prefersBorder: false } } }],
       };
     }
     if (uri.startsWith(GUIDE_URI_PREFIX) && (await host.visible()).has('kaption_help')) {

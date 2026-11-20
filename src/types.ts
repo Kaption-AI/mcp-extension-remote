@@ -38,6 +38,13 @@ export interface Env {
    * it, without enforcing anything ("*" = everyone; unset, empty or "off" = nobody: nothing is fetched or stored).
    */
   LEDGER_SHADOW?: string;
+  /**
+   * mcp-apps-cards.FLAG.1 (Kaption-AI monorepo) — "flags": ask the flags worker whether MCP_APPS_CARDS is on for the
+   * account; unset, empty or "off": no cards and no request (kill switch).
+   */
+  MCP_APPS_CARDS?: string;
+  /** The flags worker (default https://flags.kaptionai.com). */
+  FLAGS_URL?: string;
   /** mcp-usage-ledger.TOTALS.1 — global totals objects (default 16; "1" = the old single "global"). */
   USAGE_TOTALS_SHARDS?: string;
   OAUTH_KV: KVNamespace;

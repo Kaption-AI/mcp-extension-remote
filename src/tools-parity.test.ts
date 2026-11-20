@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import { TOOLS as CLOUD_TOOLS, zodToJsonSchema, type ToolDefinition } from "./tools";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 
 const localToolsPath = process.env.MCP_LOCAL_TOOLS_PATH || resolve(__dirname, "../../kaption-mcp/src/tools.ts");
@@ -55,6 +55,30 @@ describe.skipIf(!hasLocalBridge)("Tool parity: local ↔ cloud", () => {
     const cloud = await import("./plans-ui");
     expect(cloud.PLANS_UI_HTML).toBe(local.PLANS_UI_HTML);
     expect(cloud.PLANS_UI_MIME_TYPE).toBe(local.PLANS_UI_MIME_TYPE);
+  });
+
+  it("the same cards page and the same card data as the local hub (mcp-apps-cards.PARITY.1)", async () => {
+    const localUi = resolve(localToolsPath, "../cardsUi.ts");
+    const localCards = resolve(localToolsPath, "../cards.ts");
+    if (!existsSync(localUi) || !existsSync(localCards)) return;
+    const localPage = await import(/* @vite-ignore */ localUi);
+    const cloudPage = await import("./cards-ui");
+    expect(cloudPage.CARDS_UI_HTML).toBe(localPage.CARDS_UI_HTML);
+    expect(cloudPage.CARDS_UI_MIME_TYPE).toBe(localPage.CARDS_UI_MIME_TYPE);
+    // The mapping file is the same file in both repos.
+    expect(readFileSync(resolve(__dirname, "cards.ts"), "utf8")).toBe(readFileSync(localCards, "utf8"));
+    const local = await import(/* @vite-ignore */ localCards);
+    const cloud = await import("./cards");
+    expect(cloud.CARD_TOOLS).toEqual(local.CARD_TOOLS);
+    expect(cloud.cardToolMeta()).toEqual(local.cardToolMeta());
+    const answers = JSON.parse(readFileSync(resolve(__dirname, "test-support/mcp-apps-cards-answers.json"), "utf8"));
+    for (const [tool, args, answer] of [
+      ["query", { query: "delivery" }, answers.search],
+      ["send_message", {}, answers.sent_queued],
+      ["list_scheduled_messages", {}, answers.scheduled_list],
+    ] as const) {
+      expect(cloud.cardFor(tool, args, answer), tool).toEqual(local.cardFor(tool, args, answer));
+    }
   });
 
   it("same descriptions for every tool", () => {

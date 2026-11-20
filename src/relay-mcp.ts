@@ -6,6 +6,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  CARD_TOOL_OUTPUT_SCHEMA,
   CLOUD_TOOLS,
   PLANS_TOOL_OUTPUT_SCHEMA,
   PUBLIC_TOOL_OUTPUT_SCHEMA,
@@ -28,6 +29,20 @@ import {
   visibleManageTools,
 } from "./manage-kaption";
 import { withLiveGuide } from "./live-guide";
+import { z } from "zod";
+import {
+  AVATARS_TOOL,
+  AVATARS_TOOL_DESCRIPTION,
+  AVATARS_TOOL_TITLE,
+  avatarIds,
+  avatarsAnswer,
+  avatarsToolMeta,
+  cardFor,
+  cardToolMeta,
+  errorCardFor,
+  isCardTool,
+} from "./cards";
+import { CARDS_FLAG_TTL_MS, cardsOnForPhone } from "./cards-flag";
 import {
   RepeatDetector,
   hourOf,
@@ -67,13 +82,24 @@ export class RelayMCP extends McpAgent<Env> {
   private manageVisible = new Set<string>();
   private manageRefreshedAt = 0;
 
+  /** mcp-apps-cards.FLAG.1-4 — MCP_APPS_CARDS for this session's account, when it was last asked, the card tools. */
+  private cardsOn = false;
+  private cardsCheckedAt = 0;
+  private cardTools = new Map<string, { remove(): void }>();
+  /** mcp-apps-cards.AVATAR.1 — the card-only picture tool, registered only while the flag is on. */
+  private avatarsTool: { remove(): void } | null = null;
+
   async init() {
+    // mcp-apps-cards.FLAG.1 — asked before the tools are registered, so the first tools/list already says it.
+    this.cardsOn = await this.checkCards();
     // mcp.CLOUD_RELAY.6 — registers same ten tools; relays to RelayRoom, never executes locally
     // mcp-manage-kaption.LIST.2 — the manage tools only while this account's extension said so (refreshManageVisibility).
     for (const tool of CLOUD_TOOLS) {
       if (MANAGE_TOOL_FEATURE[tool.name]) continue;
-      this.registerCloudTool(tool);
+      const registered = this.registerCloudTool(tool);
+      if (isCardTool(tool.name)) this.cardTools.set(tool.name, registered);
     }
+    this.syncAvatarsTool();
     await this.refreshManageVisibility();
     // business-plans.MCP_ASYNC.2 — the session's view of its ledger, seeded in the background (switch on only).
     const seedRef = this.getAccountRef();
@@ -90,7 +116,40 @@ export class RelayMCP extends McpAgent<Env> {
         // mcp-manage-kaption.HELP.5 — a guide read answers its live page (kaption://guide/{topic}).
         return withLiveGuide(args, scrubInlineMedia(await this.relayToExtension(accountRef, "kaption_help", args)));
       },
+      // mcp-apps-cards.FLAG.2-3 — the cards page is listed and readable only while the flag is on.
+      cards: () => this.cardsOn,
     });
+  }
+
+  /** mcp-apps-cards.FLAG.1 — MCP_APPS_CARDS for this account's phone; anything that fails is off. */
+  private async checkCards(): Promise<boolean> {
+    this.cardsCheckedAt = Date.now();
+    if (String(this.env.MCP_APPS_CARDS ?? "").trim().toLowerCase() !== "flags") return false;
+    const accountRef = this.getAccountRef();
+    if (!accountRef) return false;
+    try {
+      return await cardsOnForPhone(this.env, await meteringPhoneWithAlias(this.env, accountRef));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * mcp-apps-cards.FLAG.4 — at most every 5 minutes (with the manage refresh): a change re-registers the card tools with
+   * or without _meta.ui (tools/list_changed) and announces the cards page (resources/list_changed).
+   */
+  private async refreshCards(): Promise<void> {
+    if (Date.now() - this.cardsCheckedAt < CARDS_FLAG_TTL_MS) return;
+    const on = await this.checkCards();
+    if (on === this.cardsOn) return;
+    this.cardsOn = on;
+    for (const [name, registered] of this.cardTools) {
+      registered.remove();
+      this.cardTools.set(name, this.registerCloudTool(CLOUD_TOOLS.find((t) => t.name === name)!));
+    }
+    this.syncAvatarsTool();
+    const connected = typeof this.server.isConnected === "function" && this.server.isConnected();
+    if (connected) notifyResourcesAndPromptsChanged(this.server.server);
   }
 
   /**
@@ -112,6 +171,7 @@ export class RelayMCP extends McpAgent<Env> {
       }
     }
     this.manageRefreshedAt = Date.now();
+    await this.refreshCards().catch(() => undefined);
     const next = visibleManageTools([features]);
     syncGatedTools(next, this.manageTools, (name) => this.registerCloudTool(CLOUD_TOOLS.find((t) => t.name === name)!));
     const connected = typeof this.server.isConnected === "function" && this.server.isConnected();
@@ -131,8 +191,52 @@ export class RelayMCP extends McpAgent<Env> {
     }
   }
 
+  /**
+   * mcp-apps-cards.AVATAR.1-5 — get_avatars, listed only while MCP_APPS_CARDS is on and only to the card (visibility
+   * app / openai private). Forwarded to the account's extension, which reads the pictures in the WhatsApp page; never
+   * metered, never counted, never in the usage ledger (the user didn't ask for it). A failure answers no pictures, so
+   * the card keeps its initials.
+   */
+  private syncAvatarsTool(): void {
+    if (!this.cardsOn) {
+      this.avatarsTool?.remove();
+      this.avatarsTool = null;
+      return;
+    }
+    if (this.avatarsTool) return;
+    this.avatarsTool = this.server.registerTool(
+      AVATARS_TOOL,
+      {
+        title: AVATARS_TOOL_TITLE,
+        description: AVATARS_TOOL_DESCRIPTION,
+        inputSchema: z.object({ ids: z.array(z.string()).max(50) }),
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        _meta: avatarsToolMeta(),
+      },
+      async (args: Record<string, unknown>) => {
+        const ids = avatarIds(args);
+        const accountRef = this.getAccountRef();
+        let answer = avatarsAnswer(ids, null);
+        if (accountRef && ids.length) {
+          try {
+            answer = avatarsAnswer(ids, await this.relayToExtension(accountRef, AVATARS_TOOL, { ids }));
+          } catch {
+            // An older extension, or no WhatsApp tab: initials.
+          }
+        }
+        const found = Object.values(answer.avatars).filter(Boolean).length;
+        return {
+          content: [{ type: "text" as const, text: `${found} of ${ids.length} profile pictures for the Kaption card.` }],
+          structuredContent: answer,
+        };
+      },
+    );
+  }
+
   private registerCloudTool(tool: ToolDefinition): { remove(): void } {
     const isPlans = tool.name === "kaption_plans";
+    // mcp-apps-cards.FLAG.2-3, DATA.4 — fixed for this registration: a flag change re-registers the tool.
+    const isCard = this.cardsOn && isCardTool(tool.name);
     // Use registerTool() with explicit config object — server.tool() has
     // ambiguous overloads that misinterpret ZodObject schemas as annotations
     // (because ZodObject has _def so isZodRawShapeCompat returns false).
@@ -143,7 +247,7 @@ export class RelayMCP extends McpAgent<Env> {
         description: tool.description,
         inputSchema: tool.inputSchema,
         // mcp-manage-kaption.UI.2 — kaption_plans answers its own JSON as structuredContent (the plans page reads it).
-        outputSchema: isPlans ? PLANS_TOOL_OUTPUT_SCHEMA : PUBLIC_TOOL_OUTPUT_SCHEMA,
+        outputSchema: isPlans ? PLANS_TOOL_OUTPUT_SCHEMA : isCard ? CARD_TOOL_OUTPUT_SCHEMA : PUBLIC_TOOL_OUTPUT_SCHEMA,
         annotations: tool.annotations,
         // The installed MCP SDK predates the top-level securitySchemes
         // field, so mirror it in _meta for ChatGPT compatibility. Endpoint
@@ -153,6 +257,7 @@ export class RelayMCP extends McpAgent<Env> {
           "openai/toolInvocation/invoking": `Running ${tool.title ?? tool.name}…`,
           "openai/toolInvocation/invoked": `${tool.title ?? tool.name} complete`,
           ...(tool._meta ?? {}),
+          ...(isCard ? cardToolMeta() : {}),
         },
       },
       async (args: Record<string, unknown>) => {
@@ -237,6 +342,8 @@ export class RelayMCP extends McpAgent<Env> {
           // mcp-usage-pricing.RELAY.1 — a usage warning from the extension becomes its own line after the result.
           const marked = takeUsageNotice(result);
           result = marked.result;
+          // mcp-apps-cards.DATA.1-2 — with the flag on, the card beside the answer (the text below is unchanged).
+          const card = isCard ? cardFor(tool.name, args, result) : null;
 
           return {
             content: [
@@ -248,7 +355,10 @@ export class RelayMCP extends McpAgent<Env> {
               // mcp-usage-pricing.USAGE.7 — one short line when little is left or overage is being spent.
               ...(weekly?.usage && usageLine(weekly.usage, weekly.lang) ? [{ type: "text" as const, text: usageLine(weekly.usage, weekly.lang)! }] : []),
             ],
-            structuredContent: (isPlans ? plansStructuredContent(result) : undefined) ?? { result },
+            structuredContent: {
+              ...((isPlans ? plansStructuredContent(result) : undefined) ?? { result }),
+              ...(card ? { card } : {}),
+            },
             // mcp-usage-pricing.USAGE.6 — what is left, on every result (only while MCP_USAGE_IN_RESULTS is on).
             ...(weekly?.usage ? { _meta: usageMeta(weekly.usage)! } : {}),
           };
@@ -256,14 +366,13 @@ export class RelayMCP extends McpAgent<Env> {
           failure = err ?? new Error("Tool call failed");
           // weekly-plan-limits.LIMITS.14, mcp-usage-ledger.SINGLE.4 — a failed call gives its reservation back.
           if (weekly?.reservation) this.refundReservation(accountRef, weekly.reservation);
+          const text = toolErrorText(tool.name, err);
+          // mcp-apps-cards.SENT.3 — a refused send_message carries its card too (flag on only).
+          const card = isCard ? errorCardFor(tool.name, args, text) : null;
           return {
-            content: [
-              {
-                type: "text" as const,
-                text: toolErrorText(tool.name, err),
-              },
-            ],
+            content: [{ type: "text" as const, text }],
             isError: true,
+            ...(card ? { structuredContent: { card } } : {}),
           };
         } finally {
           this.recordUsage(usage, failure, Date.now() - started);

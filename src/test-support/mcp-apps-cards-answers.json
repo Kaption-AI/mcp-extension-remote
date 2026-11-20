@@ -1,0 +1,68 @@
+{
+  "search": {
+    "conversations": [
+      { "id": "5511987654821@c.us", "name": "Marina Costa", "phone": "5511987654821", "isGroup": false },
+      { "id": "120363000000000001@g.us", "name": "Equipe Vendas SP", "isGroup": true }
+    ],
+    "contacts": [
+      { "id": "5511911112222@c.us", "name": "Rafael Lima", "phone": "5511911112222" }
+    ],
+    "messages": [
+      { "id": "m1", "chatId": "5511987654821@c.us", "fromMe": false, "timestamp": "2026-11-19T17:02:00.000Z", "type": "chat", "from": "5511987654821@c.us", "body": "The delivery is confirmed for Friday morning, before 11." },
+      { "id": "m2", "chatId": "5511987654821@c.us", "fromMe": true, "timestamp": "2026-11-19T17:05:00.000Z", "type": "chat", "from": "me", "body": "Great, can you send the delivery address again?" },
+      { "id": "m3", "chatId": "120363000000000001@g.us", "fromMe": false, "timestamp": "2026-11-18T21:40:00.000Z", "type": "chat", "from": "5511911112222@c.us", "body": "Delivery for the São Paulo order moved to Monday." },
+      { "id": "m4", "chatId": "5511933334444@c.us", "fromMe": false, "timestamp": "2026-11-17T12:15:00.000Z", "type": "chat", "from": "5511933334444@c.us", "body": "Is free delivery still on this week?" },
+      { "id": "m5", "chatId": "5511955556666@c.us", "fromMe": false, "timestamp": "2026-11-16T12:15:00.000Z", "type": "ptt", "from": "5511955556666@c.us", "body": "", "duration": 12, "transcription": null }
+    ]
+  },
+  "sent_read": {
+    "success": true,
+    "scheduled_message": { "id": "loc_1", "mode": "local", "message": "Oi Marina! The delivery is confirmed for Friday before 11.", "conversation_id": "5511987654821@c.us", "chat_name": "Marina Costa", "is_group": false, "status": "sent", "sent_at": "2026-11-19T17:06:12.000Z" },
+    "status": "sent", "sent": true, "sent_at": "2026-11-19T17:06:12.000Z", "whatsapp_status": "read",
+    "note": "Sent from the user's own WhatsApp at 2026-11-19T17:06:12.000Z; WhatsApp shows it as read. You can tell the user it went out."
+  },
+  "sent_queued": {
+    "success": true,
+    "scheduled_message": { "id": "loc_2", "mode": "local", "message": "Running 10 min late", "conversation_id": "5511987654821@c.us", "chat_name": "Marina Costa", "is_group": false, "status": "scheduled", "expected_at": "2026-11-19T17:32:00.000Z" },
+    "status": "queued", "sent": false, "expected_at": "2026-11-19T17:32:00.000Z", "waiting_reason": "per-hour",
+    "check": { "tool": "manage_scheduled_messages", "arguments": { "action": "get", "mode": "local", "id": "loc_2" } },
+    "note": "Queued, not sent yet - don't tell the user it went out."
+  },
+  "sent_sending": {
+    "success": true,
+    "scheduled_message": { "id": "loc_3", "mode": "local", "message": "On my way", "conversation_id": "120363000000000001@g.us", "chat_name": "Equipe Vendas SP", "is_group": true, "status": "unconfirmed" },
+    "status": "sending", "sent": false,
+    "check": { "tool": "manage_scheduled_messages", "arguments": { "action": "get", "mode": "local", "id": "loc_3" } }
+  },
+  "sent_failed": {
+    "success": true,
+    "scheduled_message": { "id": "loc_4", "mode": "local", "message": "See you", "conversation_id": "5511987654821@c.us", "chat_name": "Marina Costa", "is_group": false, "status": "failed", "failure_reason": "they-wrote" },
+    "status": "not_sent", "sent": false, "failure_reason": "they-wrote"
+  },
+  "sent_legacy_queued": {
+    "success": true,
+    "scheduled_message": { "id": "loc_5", "mode": "local", "message": "Hi", "conversation_id": "5511987654821@c.us", "chat_name": "Marina Costa", "is_group": false, "status": "scheduled", "datetime": "2026-11-19T17:10:00.000Z", "expected_at": "2026-11-19T17:12:00.000Z" },
+    "status": "queued", "sent": false, "expected_at": "2026-11-19T17:12:00.000Z",
+    "check": { "tool": "manage_scheduled_messages", "arguments": { "action": "get", "mode": "local", "id": "loc_5" } }
+  },
+  "refusal_text": "Error: Nothing was sent. This person isn't in the user's saved contacts and has never written to the user, and the user lets assistants start conversations only with saved contacts. Don't retry: ask the user to send it, or to turn on \"Also send to people who aren't in my contacts\" in Kaption's AI assistants screen (Connections). (reason: not-a-contact)",
+  "scheduled_list": {
+    "filter": "pending",
+    "scheduled_messages": [
+      { "id": "bot_1", "mode": "bot", "message": "Invoice 2231 is due Friday, can you confirm payment?", "contact": { "id": "5511977778888@c.us", "phone": "5511977778888", "name": "Pedro Costa" }, "datetime": "2026-11-26T13:00:00.000Z", "completed": false, "recurring": false, "notification_type": "automatic" },
+      { "id": "bot_2", "mode": "bot", "message": "Happy birthday, Lucas! Have a great day.", "contact": { "id": "5511933334444@c.us", "phone": "5511933334444", "name": "Lucas Almeida" }, "datetime": "2026-11-28T11:00:00.000Z", "completed": false, "recurring": true, "notification_type": "automatic" },
+      { "id": "loc_10", "mode": "local", "message": "Bom dia! Just confirming the delivery today before 11.", "conversation_id": "5511987654821@c.us", "chat_name": "Marina Costa", "is_group": false, "datetime": "2026-11-20T12:00:00.000Z", "status": "scheduled", "waiting_reason": "queued", "expected_at": null, "completed": false, "attachment": null },
+      { "id": "loc_11", "mode": "local", "message": "Weekly goals: please send your numbers by 18:00.", "conversation_id": "120363000000000001@g.us", "chat_name": "Equipe Vendas SP", "is_group": true, "datetime": "2026-11-18T11:30:00.000Z", "status": "missed", "missed_reason": "computer-off", "completed": false, "attachment": null }
+    ],
+    "count": 4,
+    "from_this_computer": { "available": true, "turned_on": true }
+  },
+  "scheduled_get": {
+    "scheduled_message": { "id": "loc_10", "mode": "local", "message": "Bom dia! Just confirming the delivery today before 11.", "conversation_id": "5511987654821@c.us", "chat_name": "Marina Costa", "is_group": false, "datetime": "2026-11-20T12:00:00.000Z", "status": "sent", "sent_at": "2026-11-20T12:00:40.000Z", "completed": true }
+  },
+  "scheduled_cancelled": {
+    "success": true,
+    "scheduled_message": { "id": "loc_10", "mode": "local", "message": "Bom dia!", "conversation_id": "5511987654821@c.us", "chat_name": "Marina Costa", "is_group": false, "datetime": "2026-11-20T12:00:00.000Z", "status": "canceled", "completed": true }
+  },
+  "scheduled_deleted": { "success": true, "deleted": "bot_1" }
+}
