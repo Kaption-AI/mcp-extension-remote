@@ -33,6 +33,15 @@ export const PUBLIC_TOOL_OUTPUT_SCHEMA = z.object({
 });
 
 /**
+ * mcp-apps-cards.DATA.4 — a card tool while MCP_APPS_CARDS is on: the same result envelope plus the card the Kaption
+ * cards page draws (mcp-apps-cards.DATA.1).
+ */
+export const CARD_TOOL_OUTPUT_SCHEMA = z.object({
+  result: z.unknown().describe("The JSON-compatible result returned by the Kaption extension"),
+  card: z.object({}).passthrough().optional().describe("What the Kaption card shows (kind search, sent or scheduled)"),
+});
+
+/**
  * mcp-manage-kaption.UI.2 — kaption_plans answers the extension's JSON itself as structuredContent (the plans page and
  * ChatGPT's output template read it there): any object.
  */

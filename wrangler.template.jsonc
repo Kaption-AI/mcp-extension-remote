@@ -97,6 +97,10 @@
     // mcp-usage-ledger.TOTALS.1 — the global totals are spread over this many objects (the old single "global" was a hot
     // spot). Rollback: "1" and merge (the old object is still read for the days before the split).
     "USAGE_TOTALS_SHARDS": "16",
+    // mcp-apps-cards.FLAG.1 (monorepo kext/features/mcp/mcp-apps-cards.feature.yaml) — "flags": each session asks the
+    // flags worker whether MCP_APPS_CARDS is on for its account (interactive cards in Claude / ChatGPT). Unset, "" or
+    // "off": no card for anyone and nothing is asked (kill switch). The flag row decides who gets them.
+    "MCP_APPS_CARDS": "flags",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },
