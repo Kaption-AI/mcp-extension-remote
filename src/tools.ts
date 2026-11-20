@@ -154,6 +154,7 @@ export const TOOLS: ToolDefinition[] = [
       label_name: z.string().optional().describe("Label name (for add/remove/create/delete)"),
       label_id: z.string().optional().describe("Label ID (alternative to label_name for add/remove/delete)"),
       conversation_id: z.union([z.string(), z.array(z.string())]).optional().describe("Conversation ID or array of IDs (required for add/remove)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -169,6 +170,7 @@ export const TOOLS: ToolDefinition[] = [
       action: z.enum(["set"]).describe("Note action to perform"),
       contact_id: z.string().describe("The contact ID"),
       note: z.string().describe("Note text that replaces the contact's current note"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -342,6 +344,7 @@ export const TOOLS: ToolDefinition[] = [
       limit: z.number().min(1).max(500).optional().describe("Max contacts to return (default 50, max 500)"),
       offset: z.number().min(0).optional().describe("Skip N contacts for pagination (default 0)"),
       is_my_contact: z.boolean().optional().describe("If true, only contacts saved in the user address book. If false, only un-saved contacts. Omit to include both."),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -358,6 +361,7 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: z.object({
       jid: z.string().optional().describe('Full WhatsApp JID (e.g. "5491155550001@c.us")'),
       phone: z.string().optional().describe('Phone number — leading "+" and "00" are stripped during matching'),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -370,6 +374,7 @@ export const TOOLS: ToolDefinition[] = [
     ].join("\n"),
     inputSchema: z.object({
       jid: z.string().describe("Contact JID — must be the full @c.us form (phone alone not accepted here)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -386,6 +391,7 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: z.object({
       query: z.string().optional().describe("Case-insensitive substring match against group name"),
       limit: z.number().min(1).max(500).optional().describe("Max groups to return (default 50, max 500)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -399,6 +405,7 @@ export const TOOLS: ToolDefinition[] = [
     ].join("\n"),
     inputSchema: z.object({
       jid: z.string().describe('Group JID — must end in "@g.us"'),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -419,6 +426,7 @@ export const TOOLS: ToolDefinition[] = [
       query: z.string().optional().describe("Optional case-insensitive substring filter (matches name, pushname, phone, JID)"),
       fields: z.array(z.string()).optional().describe("Whitelist of fields to include. Defaults to all six: jid, phone, name, pushname, is_my_contact, is_business"),
       is_my_contact: z.boolean().optional().describe("If true, only contacts saved in the user address book. If false, only un-saved. Omit to include both."),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -590,6 +598,7 @@ export const TOOLS: ToolDefinition[] = [
     description: "Read the note saved for a contact. Requires a WhatsApp Business account with notes enabled.",
     inputSchema: z.object({
       contact_id: z.string().describe("The contact ID"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   // mcp-manage-kaption.LIST.2, LIST.5 — the manage tools below are listed only while a connected extension said so in
@@ -599,7 +608,9 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "get_kaption_settings",
     description: "Reads Kaption's own settings for this WhatsApp account. Returns every visible setting, grouped (transcription, translation, dictation, media, notifications, app, features, backups, assistants, sending, plan), each with its id, current value, allowed values, what an assistant may do with it (change, off_only or read_only) and, for those it may not change, the Kaption screen where the user changes it. Also returns the local and cloud connections (connected, reconnecting or off) and which one carries this call. Sign-in, passwords, keys, the app lock and consents are never included. Changes nothing.",
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
   },
   {
     name: "update_kaption_settings",
@@ -607,6 +618,7 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: z.object({
       id: z.string().describe("The setting id, e.g. transcription.automatic"),
       value: z.unknown().optional().describe("The new value: one of the setting's allowed values (true/false, a choice, a number of bytes or a list of kinds)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -614,6 +626,7 @@ export const TOOLS: ToolDefinition[] = [
     description: "Restarts Kaption's local or cloud assistant connection when it is switched on and not connected. The connection that carries this call is never restarted, and a connection that is switched off stays off. Returns the connection's state.",
     inputSchema: z.object({
       bridge: z.enum(["local", "cloud"]).describe("Which connection to restart"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -622,6 +635,7 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: z.object({
       action: z.enum(["list", "read", "prompts"]).describe("list, read or prompts"),
       topic: z.string().optional().describe("For read: a topic id from list, e.g. pricing"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -631,6 +645,7 @@ export const TOOLS: ToolDefinition[] = [
       description: z.string().optional().describe("Step 1: what went wrong, in the user's words"),
       expected: z.string().optional().describe("Step 1, optional: what the user expected instead"),
       confirmation_token: z.string().optional().describe("Step 2: the token from the preview"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -640,6 +655,7 @@ export const TOOLS: ToolDefinition[] = [
       action: z.enum(["status", "get_instructions", "list_knowledge", "list_tools", "activity", "list_evals", "eval_results"]).optional().describe("What to read (default status)"),
       job_id: z.string().optional().describe("eval_results: the run id that manage_business_agent run_evals returned"),
       eval_case_ids: z.array(z.string()).optional().describe("eval_results: exactly one eval id adds that eval's transcript"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
@@ -654,12 +670,15 @@ export const TOOLS: ToolDefinition[] = [
       conversation_id: z.string().optional().describe("test_chat: continue an earlier test chat"),
       eval_case_ids: z.array(z.string()).optional().describe("run_evals: the evals to run (from get_business_agent list_evals); empty runs all"),
       confirmation_token: z.string().optional().describe("resume, publish, run_evals: the token from the first call"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   {
     name: "kaption_plans",
     description: "Reads Kaption's plans exactly as the plans window in Kaption shows them to this user now: each plan's price per month and for each billing period in the user's currency, what it includes, which one the user has, and which payment methods are offered (card, Pix in Brazil, Alipay where available). Changes nothing.",
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
+    }),
     _meta: { ui: { resourceUri: PLANS_UI_URI }, "openai/outputTemplate": PLANS_UI_URI },
   },
   {
@@ -669,6 +688,7 @@ export const TOOLS: ToolDefinition[] = [
       plan: z.enum(["pro", "business", "business_agent"]).describe("The plan"),
       period: z.enum(["yearly", "quarterly", "monthly"]).optional().describe("The billing period (default yearly)"),
       method: z.enum(["card", "alipay"]).optional().describe("alipay only where kaption_plans offers it; card covers card and, in Brazil, Pix (default card)"),
+      target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },
   // scheduled-status.MCP (kaptionai features/kext/scheduled-status.feature.yaml) — WhatsApp Status posts scheduled from
