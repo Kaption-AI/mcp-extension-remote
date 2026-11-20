@@ -45,7 +45,7 @@
     "status": "queued", "sent": false, "expected_at": "2026-11-19T17:12:00.000Z",
     "check": { "tool": "manage_scheduled_messages", "arguments": { "action": "get", "mode": "local", "id": "loc_5" } }
   },
-  "refusal_text": "Error: Nothing was sent. This person isn't in the user's saved contacts and has never written to the user, and the user lets assistants start conversations only with saved contacts. Don't retry: ask the user to send it, or to turn on \"Also send to people who aren't in my contacts\" in Kaption's AI assistants screen (Connections). (reason: not-a-contact)",
+  "refusal_text": "Error: Nothing was sent. This person isn't in the user's saved contacts and has never written to the user, and the user lets assistants start conversations only with saved contacts. Don't retry: ask the user to send it, or to turn on \"Also send to people who aren't in my contacts\" in Kaption's AI Connectors screen (Connections). (reason: not-a-contact)",
   "scheduled_list": {
     "filter": "pending",
     "scheduled_messages": [
