@@ -33,6 +33,7 @@ import answers from "./test-support/mcp-apps-cards-answers.json";
 const A: any = answers;
 const PIC = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
 const roomCalls: string[] = [];
+const roomParams: any[] = [];
 let avatarsDown = false;
 
 function fakeRoom(phone: string | null) {
@@ -44,6 +45,7 @@ function fakeRoom(phone: string | null) {
       return phone;
     },
     async handleMcpRequestSettled(method: string, params: any) {
+      roomParams.push(params);
       if (method === "query") return { ok: true, result: A.search };
       if (method === "send_message") {
         return params.message === "refuse"
@@ -254,5 +256,16 @@ describe("mcp-apps-cards.FLAG.1 the flags worker lookup", () => {
     expect(await cardsOnForPhone(env, "17374202658", f, 3 * CARDS_FLAG_TTL_MS)).toBe(false);
     expect(await cardsOnForPhone(env, "15555550100", f, 0)).toBe(false);
     expect(await cardsOnForPhone({ MCP_APPS_CARDS: "off" }, "17374202658", f, 0)).toBe(false);
+  });
+});
+
+describe("mcp.LOCAL_HUB.4 target_session in the cloud", () => {
+  it("is accepted by every tool but never sent to the extension", async () => {
+    const { client } = await session();
+    roomParams.length = 0;
+    await client.callTool({ name: "list_groups", arguments: { target_session: "sess_x" } });
+    await client.callTool({ name: "query", arguments: { query: "delivery", target_session: "sess_x" } });
+    expect(roomParams.length).toBe(2);
+    for (const p of roomParams) expect(p).not.toHaveProperty("target_session");
   });
 });

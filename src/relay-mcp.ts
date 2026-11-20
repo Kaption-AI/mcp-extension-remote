@@ -272,7 +272,10 @@ export class RelayMCP extends McpAgent<Env> {
         // mcp-usage-accounting.RECORD.1 — every tool call is counted, whatever its outcome.
         // mcp.TOOLS.19 — a read-only tool reaches the extension as its manage_* method and action, and is counted as
         // that call, so usage reads the same for every Kaption version.
-        const routed = routeToolCall(tool.name, args);
+        // mcp.LOCAL_HUB.4 — target_session is the local hub's routing between numbers; a cloud session is one account,
+        // so it is never sent to the extension.
+        const { target_session: _targetSession, ...forwardArgs } = args ?? {};
+        const routed = routeToolCall(tool.name, forwardArgs);
         const started = Date.now();
         const usage = this.usageContext(accountRef, routed.method, routed.params, started);
         let failure: unknown = null;
