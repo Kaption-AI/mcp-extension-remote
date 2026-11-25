@@ -126,7 +126,7 @@ const KIND_FIELDS: Record<string, { field: string; values: readonly string[] }> 
       "chat_detail", "export_chat", "export_contacts", "community_growth", "channel_growth",
     ],
   },
-  manage_labels: { field: "action", values: ["add", "remove", "create", "delete"] },
+  manage_labels: { field: "action", values: ["add", "remove", "create", "delete", "list"] },
   manage_notes: { field: "action", values: ["get", "set"] },
   manage_chat: {
     field: "action",
@@ -139,6 +139,8 @@ const KIND_FIELDS: Record<string, { field: string; values: readonly string[] }> 
   },
   manage_lists: { field: "action", values: ["list", "get", "create", "edit", "delete", "add_chat", "remove_chat"] },
   call_recordings: { field: "action", values: ["list", "get", "search"] },
+  // mcp-usage-ledger.CREDITS.3 — a status schedule is a send (2 credits), a cancel a change (1).
+  manage_status: { field: "action", values: ["schedule", "cancel", "list"] },
   // whatsapp-channels-communities.LEDGER.1 — the action of a channel or community call (its credit class is the extension's).
   manage_channels: {
     field: "action",
@@ -155,7 +157,9 @@ const KIND_FIELDS: Record<string, { field: string; values: readonly string[] }> 
 export function usageKind(tool: string, args: unknown): string {
   const spec = KIND_FIELDS[tool];
   if (!spec || !args || typeof args !== "object") return "";
-  const value = (args as Record<string, unknown>)[spec.field];
+  const raw = (args as Record<string, unknown>)[spec.field];
+  // mcp-usage-ledger.CREDITS.3 — the extension reads the action trimmed and lower-cased; so does the ledger.
+  const value = typeof raw === "string" ? raw.trim().toLowerCase() : raw;
   return typeof value === "string" && spec.values.includes(value) ? value : "";
 }
 

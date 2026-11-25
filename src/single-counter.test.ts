@@ -254,7 +254,7 @@ describe("mcp-usage-ledger.SINGLE one counter for every road", () => {
     for (let i = 0; i < 16; i++) await w.tool("query", { action: "chats" });
     const res = await w.tool("query", { action: "chats" });
     expect(res._meta.kaption.usage).toMatchObject({ period: "week", used: 17, limit: 20, left: 3, source: "ledger", overage: null });
-    expect(res.content.at(-1).text).toBe("Kaption: restam 3 de 20 ações do Claude e ChatGPT nesta semana (renova na segunda-feira).");
+    expect(res.content.at(-1).text).toBe("Kaption: restam 3 de 20 créditos do Claude e ChatGPT nesta semana (renova na segunda-feira).");
   });
 });
 

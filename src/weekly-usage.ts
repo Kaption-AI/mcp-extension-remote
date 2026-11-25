@@ -38,7 +38,7 @@ export const usageConfigured = (env: Pick<Env, "MCP_USAGE_IN_RESULTS">) =>
   String(env.MCP_USAGE_IN_RESULTS ?? "").split(",").some((s) => s.trim() && s.trim() !== "off");
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Copied verbatim from the monorepo's shared rules (kext/src/core/pricing/weeklyPlanLimits.ts at 44a6ef1a1); the fixture's
+// Copied verbatim from the monorepo's shared rules (kext/src/core/pricing/weeklyPlanLimits.ts, credits wording of owner 2026-11-25); the fixture's
 // usage section is replayed in weekly-usage.test.ts. Change it there first, then here.
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -111,25 +111,25 @@ export function usageLine(usage: unknown, lang: unknown): string | null {
     const spent = money(u.overage.spent, l);
     const cap = u.overage.cap === null ? null : money(u.overage.cap, l);
     if (l === 'es') {
-      const past = u.limit === null ? 'Kaption: acciones extra de Claude y ChatGPT' : `Kaption: superaste las ${u.limit} acciones ${week ? 'de esta semana' : 'de este mes'}`;
+      const past = u.limit === null ? 'Kaption: créditos extra de Claude y ChatGPT' : `Kaption: superaste los ${u.limit} créditos ${week ? 'de esta semana' : 'de este mes'}`;
       return cap ? `${past}; usaste ${spent} de tus ${cap}.` : `${past}; usaste ${spent}.`;
     }
     if (l === 'pt') {
-      const past = u.limit === null ? 'Kaption: ações extras do Claude e ChatGPT' : `Kaption: você passou das ${u.limit} ações ${week ? 'desta semana' : 'deste mês'}`;
+      const past = u.limit === null ? 'Kaption: créditos extras do Claude e ChatGPT' : `Kaption: você passou dos ${u.limit} créditos ${week ? 'desta semana' : 'deste mês'}`;
       return cap ? `${past}; usou ${spent} dos seus ${cap}.` : `${past}; usou ${spent}.`;
     }
-    const past = u.limit === null ? 'Kaption: extra Claude and ChatGPT actions' : `Kaption: past ${week ? "this week's" : "this month's"} ${u.limit} actions`;
+    const past = u.limit === null ? 'Kaption: extra Claude and ChatGPT credits' : `Kaption: past ${week ? "this week's" : "this month's"} ${u.limit} credits`;
     return cap ? `${past}; ${spent} of your ${cap} used.` : `${past}; ${spent} used.`;
   }
   if (u.limit === null || u.left === null || u.limit === 0) return null;
   if (u.left > u.limit * 0.2) return null;
   if (l === 'es') {
-    return `Kaption: ${u.left === 1 ? 'queda' : 'quedan'} ${u.left} de ${u.limit} acciones de Claude y ChatGPT ${week ? 'esta semana (se renueva el lunes)' : 'este mes (se renueva el día 1)'}.`;
+    return `Kaption: ${u.left === 1 ? 'queda' : 'quedan'} ${u.left} de ${u.limit} créditos de Claude y ChatGPT ${week ? 'esta semana (se renueva el lunes)' : 'este mes (se renueva el día 1)'}.`;
   }
   if (l === 'pt') {
-    return `Kaption: ${u.left === 1 ? 'resta' : 'restam'} ${u.left} de ${u.limit} ações do Claude e ChatGPT ${week ? 'nesta semana (renova na segunda-feira)' : 'neste mês (renova no dia 1)'}.`;
+    return `Kaption: ${u.left === 1 ? 'resta' : 'restam'} ${u.left} de ${u.limit} créditos do Claude e ChatGPT ${week ? 'nesta semana (renova na segunda-feira)' : 'neste mês (renova no dia 1)'}.`;
   }
-  return `Kaption: ${u.left} of ${u.limit} Claude and ChatGPT actions left ${week ? 'this week (resets Monday)' : 'this month (resets on the 1st)'}.`;
+  return `Kaption: ${u.left} of ${u.limit} Claude and ChatGPT credits left ${week ? 'this week (resets Monday)' : 'this month (resets on the 1st)'}.`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -155,8 +155,12 @@ export function usageHeaders(usage: Usage): Record<string, string> {
 }
 
 /** mcp-usage-ledger.SINGLE.4 — the refusal words when rest-api's plan answer carried none. */
-export function refusalFallback(limit: number): string {
-  return `This Kaption account has used this week's ${limit} Claude and ChatGPT actions. Tell the user they come back on Monday, or to choose a plan at https://kaptionai.com/pricing for more.`;
+export function refusalFallback(limit: number, period: "week" | "month" | null = "week", unit: "credits" | "actions" = "actions"): string {
+  // mcp-usage-ledger.CREDITS.8 — a credits month says so.
+  if (period === "month") {
+    return `This Kaption account has used this month's ${limit} Claude and ChatGPT ${unit}. Tell the user they come back on the 1st, or to choose a plan at https://kaptionai.com/pricing for more.`;
+  }
+  return `This Kaption account has used this week's ${limit} Claude and ChatGPT ${unit}. Tell the user they come back on Monday, or to choose a plan at https://kaptionai.com/pricing for more.`;
 }
 
 /**
@@ -164,9 +168,10 @@ export function refusalFallback(limit: number): string {
  * free and lifetime, month for Pro and Business) and its counted actions; null without a plan. Overage stays null (the
  * overage switches are off, mcp-usage-ledger.OVERAGE.7).
  */
-export function ledgerUsage(plan: LedgerPlan | null, window: Pick<WindowCount, "counted" | "to"> | null): Usage | null {
+export function ledgerUsage(plan: LedgerPlan | null, window: (Pick<WindowCount, "counted" | "to"> & { credits?: number }) | null): Usage | null {
   if (!plan || !window) return null;
-  const used = Math.max(0, window.counted);
+  // mcp-usage-ledger.CREDITS.5 — a credits plan shows credits.
+  const used = Math.max(0, plan.unit === "credits" ? window.credits ?? window.counted : window.counted);
   const limit = plan.limit;
   return {
     period: plan.period === "month" ? "month" : "week",
