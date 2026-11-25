@@ -341,7 +341,7 @@ describe("internal read API (mcp-usage-ledger.READ.2-4)", () => {
 
   it("mcp-usage-ledger.READ.3 — merging keeps the earliest crossing and the first form's plan", () => {
     const base = (counted: number, crossed: number | null, plan: LedgerWindows["plan"]): LedgerWindows => ({
-      week: { period: "2026-11-09", from: "", to: "", counted, by_source: { cloud: counted, local: 0, webmcp: 0 }, kally: 0, pending: 0, refused: 0, total: counted },
+      week: { period: "2026-11-09", from: "", to: "", counted, credits: counted, by_source: { cloud: counted, local: 0, webmcp: 0 }, kally: 0, pending: 0, refused: 0, total: counted },
       month: null,
       since: "2026-11-09",
       plan,

@@ -289,7 +289,8 @@ export class RelayMCP extends McpAgent<Env> {
         }
         // mcp-usage-ledger.SINGLE.4 — an account rest-api holds to a weekly number has this call reserved in its ledger
         // before it runs and refused past the number; mcp-usage-pricing.USAGE.5 — a usage phone also learns what is left.
-        const weekly = await this.ledgerGate(accountRef, tool.name);
+        // mcp-usage-ledger.CREDITS.3 — priced as the call the extension receives (a routed read is its manage_* read).
+        const weekly = await this.ledgerGate(accountRef, routed.method, usage.kind);
         usage.reservation = weekly?.reservation ?? null;
         if (weekly?.state === "refused") {
           failure = { code: REFUSED_CODE };
@@ -508,18 +509,22 @@ export class RelayMCP extends McpAgent<Env> {
    * for an enforced account) and, for a usage phone, what is left. Null (the call runs as before) when the ledger is off
    * or anything fails (SINGLE.5: a ledger failure never refuses a call).
    */
-  private async ledgerGate(accountRef: string, tool: string): Promise<LedgerGate | null> {
+  private async ledgerGate(accountRef: string, tool: string, kind = ""): Promise<LedgerGate | null> {
     if (this.env.USAGE_LEDGER_ENABLED === "off" || !this.env.USAGE_LEDGER) return null;
     try {
       const phone = await meteringPhoneWithAlias(this.env, accountRef);
       if (!phone) return null;
       const ledger = ledgerFor(this.env, accountRef);
       const actionId = `cloud:${crypto.randomUUID()}`;
-      const begin = (await ledger.cloudBegin({ phone, actionId, tool, accountRef })) as CloudBegin;
+      // mcp-usage-ledger.CREDITS.3 — the call's kind prices its reservation.
+      const begin = (await ledger.cloudBegin({ phone, actionId, tool, kind, accountRef })) as CloudBegin;
       const show = usagePhone(phone, this.env);
-      let window = begin.use ? { counted: begin.use.used, to: begin.use.resetsAt } : null;
+      // mcp-usage-ledger.CREDITS.5 — begin.use.used is already in the plan's unit.
+      let window: { counted: number; credits?: number; to: string } | null = begin.use
+        ? { counted: begin.use.used, credits: begin.use.used, to: begin.use.resetsAt }
+        : null;
       if (show && !window && begin.plan?.period) {
-        const w = await ledger.windows();
+        const w = await ledger.windows({ since: begin.plan.since ?? null });
         window = begin.plan.period === "month" ? w.month : w.week;
       }
       const usage = show ? ledgerUsage(begin.plan, window) : null;
@@ -527,7 +532,7 @@ export class RelayMCP extends McpAgent<Env> {
       if (begin.state === "refused") {
         // mcp-overage-billing.LEDGER.3 — past the overage cap: the cap's words (rest-api's), else the plan's.
         const capped = begin.use?.reason === "cap" ? begin.plan?.overage?.message ?? null : null;
-        return { state: "refused", reservation: null, message: capped ?? begin.plan?.message ?? refusalFallback(begin.plan?.limit ?? 0), usage, lang };
+        return { state: "refused", reservation: null, message: capped ?? begin.plan?.message ?? refusalFallback(begin.plan?.limit ?? 0, begin.plan?.period ?? "week", begin.plan?.unit === "credits" ? "credits" : "actions"), usage, lang };
       }
       return { state: "run", reservation: begin.reserved ? actionId : null, message: null, usage, lang };
     } catch (error) {

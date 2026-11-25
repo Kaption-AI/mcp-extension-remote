@@ -46,7 +46,9 @@ import {
   type WindowKind,
   type WindowRange,
   type WindowRow,
+  judgedRange,
 } from "./ledger-windows";
+import { creditsOf, reservationCredits } from "./credits";
 
 export const HOURLY_RETENTION_DAYS = 45;
 export const DAILY_RETENTION_DAYS = 400;
@@ -98,7 +100,13 @@ const PLAN_COLUMNS = [
   `ALTER TABLE plan_cache ADD COLUMN kally_counts INTEGER NOT NULL DEFAULT 0`,
   // mcp-overage-billing.LEDGER.1 — the plan's postpaid overage (JSON), or null.
   `ALTER TABLE plan_cache ADD COLUMN overage TEXT`,
+  // mcp-usage-ledger.CREDITS.1-2 — the plan's unit ("credits", or null: actions) and its since day (epoch ms).
+  `ALTER TABLE plan_cache ADD COLUMN unit TEXT`,
+  `ALTER TABLE plan_cache ADD COLUMN since INTEGER`,
 ];
+
+/** mcp-usage-ledger.CREDITS.4 — a reservation's credits (rows from before it count 1, as they did). */
+const RESERVE_COLUMNS = [`ALTER TABLE use_reserve ADD COLUMN credits INTEGER NOT NULL DEFAULT 1`];
 
 /** mcp-usage-ledger.IDEMPOTENCY.4 — reservations are kept 40 days. */
 export const RESERVE_RETENTION_DAYS = 40;
@@ -120,6 +128,12 @@ export interface UseRequest {
   period?: WindowKind;
   /** mcp-overage-billing.LEDGER.2-3 — past the limit, extra actions within this cap run and are recorded. */
   overage?: PlanOverage | null;
+  /** mcp-usage-ledger.CREDITS.5 — "credits": the limit and `used` are credits (absent: calls, as before). */
+  unit?: "credits" | "actions";
+  /** mcp-usage-ledger.CREDITS.2 — the window is judged from this UTC midnight (epoch ms) when inside it. */
+  since?: number | null;
+  /** mcp-usage-ledger.CREDITS.4 — the credits of each reservation (default 1). */
+  credits?: number;
 }
 
 export interface UseAnswer {
@@ -146,7 +160,7 @@ export class LedgerStore {
   constructor(private sql: SqlLike) {
     this.overage = new OverageStore(sql);
     for (const statement of LEDGER_SCHEMA) sql.exec(statement);
-    for (const statement of [...PLAN_COLUMNS, ...CONN_COLUMNS]) {
+    for (const statement of [...PLAN_COLUMNS, ...CONN_COLUMNS, ...RESERVE_COLUMNS]) {
       try {
         sql.exec(statement);
       } catch {
@@ -248,12 +262,13 @@ export class LedgerStore {
   windowRows(range: WindowRange): WindowRow[] {
     return this.sql
       .exec(
-        `SELECT path, tool, outcome, (conn = ?) AS kally, SUM(calls) AS calls FROM usage_day WHERE day >= ? AND day < ?
-         GROUP BY path, tool, outcome, (conn = ?)`,
+        // mcp-usage-ledger.CREDITS.3 — grouped by kind too, so each row can be weighed in credits.
+        `SELECT path, tool, kind, outcome, (conn = ?) AS kally, SUM(calls) AS calls FROM usage_day WHERE day >= ? AND day < ?
+         GROUP BY path, tool, kind, outcome, (conn = ?)`,
         KALLY_CONNECTION, dayOf(range.from), dayOf(range.to), KALLY_CONNECTION,
       )
       .toArray()
-      .map((r) => ({ path: r.path as UsagePath, tool: String(r.tool), outcome: String(r.outcome), calls: Number(r.calls), kally: Number(r.kally) === 1 }));
+      .map((r) => ({ path: r.path as UsagePath, tool: String(r.tool), kind: String(r.kind ?? ""), outcome: String(r.outcome), calls: Number(r.calls), kally: Number(r.kally) === 1 }));
   }
 
   /** mcp-usage-ledger.SINGLE.2 — reservations made in the window still waiting for their record, per road. */
@@ -267,8 +282,16 @@ export class LedgerStore {
     return out;
   }
 
+  /** mcp-usage-ledger.CREDITS.4 — the credits of the window's reservations still waiting for their record. */
+  pendingCredits(range: { from: number; to: number }): number {
+    const r = this.sql
+      .exec(`SELECT COALESCE(SUM(credits), 0) AS c FROM use_reserve WHERE live = 1 AND at >= ? AND at < ?`, range.from, range.to)
+      .toArray()[0];
+    return Number(r?.c ?? 0);
+  }
+
   windowCount(range: WindowRange): WindowCount {
-    return countWindow(range, this.windowRows(range), this.pending(range), this.kallyCounts());
+    return countWindow(range, this.windowRows(range), this.pending(range), this.kallyCounts(), this.pendingCredits(range));
   }
 
   /**
@@ -287,11 +310,16 @@ export class LedgerStore {
   use(req: UseRequest, now: number): UseAnswer {
     const week = currentWindow("week", now);
     // mcp-overage-billing.LEDGER.1 — a month plan (Pro, Business) with overage is judged on its month.
-    const win = req.period === "month" ? currentWindow("month", now) : week;
+    // mcp-usage-ledger.CREDITS.2 — judged from the since day when it falls inside the window.
+    const win = judgedRange(req.period === "month" ? currentWindow("month", now) : week, req.since);
     const resetsAt = new Date(win.to).toISOString();
     const offset = Math.max(0, Math.floor(req.offset ?? 0));
+    // mcp-usage-ledger.CREDITS.5 — a credits plan judges credits; an older caller (no unit) calls.
+    const inCredits = req.unit === "credits";
+    const each = inCredits ? reservationCredits(req.credits) : 1;
+    const usedOf = (c: WindowCount) => (inCredits ? c.credits : c.counted);
     const answer = (ok: boolean, counted: number, duplicates: number, refunded: number, extra: { overage?: number; reason?: "limit" | "cap" } = {}): UseAnswer => {
-      const used = this.windowCount(win).counted + offset;
+      const used = usedOf(this.windowCount(win)) + offset;
       return { ok, counted, duplicates, refunded, used, limit: req.limit, left: req.limit === null ? null : Math.max(0, req.limit - used), resetsAt, ...extra };
     };
     const ids = req.actionIds?.length ? [...new Set(req.actionIds)] : null;
@@ -332,19 +360,21 @@ export class LedgerStore {
     let extra: string[] = [];
     if (req.enforce && req.limit !== null) {
       // SINGLE.2 — the window's count with these reservations added (the other written form's included, SINGLE.14).
-      const after = this.windowCount(win).counted + fresh.length + offset;
+      const after = usedOf(this.windowCount(win)) + fresh.length * each + offset;
       if (after > req.limit) {
         // mcp-overage-billing.LEDGER.2-3 — past the number: the last ones are extra actions, within the cap or none.
         if (!req.overage) return answer(false, 0, duplicates, 0, { reason: "limit" });
-        const over = Math.min(fresh.length, after - req.limit);
+        // mcp-usage-ledger.CREDITS.5 — in credits, each reservation that passes the number is one extra action.
+        const over = Math.min(fresh.length, each > 0 ? Math.ceil((after - req.limit) / each) : 0);
         if (!this.overage.room(req.overage, over, now)) return answer(false, 0, duplicates, 0, { reason: "cap" });
         extra = fresh.slice(fresh.length - over);
       }
     }
     for (const id of fresh) {
       this.sql.exec(
-        `INSERT INTO use_reserve (id, path, at, live) VALUES (?, ?, ?, 1) ON CONFLICT (id) DO UPDATE SET path = excluded.path, at = excluded.at, live = 1`,
-        id, req.path, now,
+        `INSERT INTO use_reserve (id, path, at, live, credits) VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT (id) DO UPDATE SET path = excluded.path, at = excluded.at, live = 1, credits = excluded.credits`,
+        id, req.path, now, each,
       );
     }
     if (extra.length && req.overage) this.overage.add(extra, req.overage, now);
@@ -387,20 +417,23 @@ export class LedgerStore {
         lang: r.lang ? String(r.lang) : null,
         kallyCounts: Number(r.kally_counts ?? 0) === 1,
         overage: overageFromCache(r.overage),
+        unit: r.unit === "credits" ? "credits" : "actions",
+        since: r.since === null || r.since === undefined ? null : Number(r.since),
       },
     };
   }
 
   setPlan(plan: LedgerPlan, now: number): void {
     this.sql.exec(
-      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang, kally_counts, overage)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO plan_cache (id, fetched_at, ttl_s, tier, period, lim, pool_ref, pool_numbers, enforced_by, enforce, message, lang, kally_counts, overage, unit, since)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET fetched_at = excluded.fetched_at, ttl_s = excluded.ttl_s, tier = excluded.tier,
          period = excluded.period, lim = excluded.lim, pool_ref = excluded.pool_ref, pool_numbers = excluded.pool_numbers,
          enforced_by = excluded.enforced_by, enforce = excluded.enforce, message = excluded.message, lang = excluded.lang,
-         kally_counts = excluded.kally_counts, overage = excluded.overage`,
+         kally_counts = excluded.kally_counts, overage = excluded.overage, unit = excluded.unit, since = excluded.since`,
       now, plan.ttlSeconds, plan.tier, plan.period, plan.limit, plan.pool?.ref ?? null, plan.pool?.numbers ?? null, plan.enforcedBy,
       plan.enforce ? 1 : 0, plan.message ?? null, plan.lang ?? null, plan.kallyCounts ? 1 : 0, plan.overage ? JSON.stringify(plan.overage) : null,
+      plan.unit === "credits" ? "credits" : null, plan.since ?? null,
     );
   }
 
@@ -724,19 +757,26 @@ export class UsageLedger extends DurableObject<Env> {
    * number); for any other account nothing is reserved. `offset` (SINGLE.14) reads the other written form's week.
    */
   async cloudBegin(
-    input: { phone: string; actionId: string; tool: string; accountRef?: string },
+    input: { phone: string; actionId: string; tool: string; kind?: string; accountRef?: string },
     now = Date.now(),
     fetchImpl: typeof fetch = fetch,
   ): Promise<CloudBegin> {
     if (UNCOUNTED_TOOLS.has(input.tool)) return { state: "run", reserved: false, plan: null, use: null };
     const plan = await this.planFor(input.phone, now, fetchImpl);
-    // mcp-overage-billing.LEDGER.1 — a month plan is reserved too when it has postpaid overage (parsePlan says enforce).
-    if (!plan?.enforce || plan.limit === null || !plan.period || (plan.period === "month" && !plan.overage)) {
+    // mcp-overage-billing.LEDGER.1, mcp-usage-ledger.CREDITS.1 — a month plan is reserved when parsePlan says enforce
+    // (postpaid overage, or a credits month rest-api holds to its number: free and lifetime).
+    if (!plan?.enforce || plan.limit === null || !plan.period) {
       return { state: "run", reserved: false, plan, use: null };
     }
-    const offset = input.accountRef && plan.period === "week" ? await otherFormsWeek(this.env, input.phone, input.accountRef, now).catch(() => 0) : 0;
+    const unit = plan.unit === "credits" ? "credits" : "actions";
+    const offset = input.accountRef
+      ? await otherFormsUsed(this.env, input.phone, input.accountRef, { kind: plan.period, unit, since: plan.since ?? null }, now).catch(() => 0)
+      : 0;
     const use = await this.use(
-      { change: "reserve", path: "cloud", actionIds: [input.actionId], limit: plan.limit, enforce: true, offset, period: plan.period, overage: plan.overage ?? null },
+      {
+        change: "reserve", path: "cloud", actionIds: [input.actionId], limit: plan.limit, enforce: true, offset, period: plan.period,
+        overage: plan.overage ?? null, unit, since: plan.since ?? null, credits: creditsOf(input.tool, input.kind ?? ""),
+      },
       now,
     );
     return use.ok ? { state: "run", reserved: use.counted > 0, plan, use } : { state: "refused", reserved: false, plan, use };
@@ -746,9 +786,11 @@ export class UsageLedger extends DurableObject<Env> {
    * mcp-usage-ledger.MODEL.3, READ.3 — this account's week and month (the current ones unless named), the cached plan
    * and when each window passed it (SHADOW.3). Read only.
    */
-  async windows(opts: { week?: string; month?: string } = {}, now = Date.now()): Promise<LedgerWindows> {
+  async windows(opts: { week?: string; month?: string; since?: number | null } = {}, now = Date.now()): Promise<LedgerWindows> {
     const week = opts.week ? windowRange("week", opts.week) : currentWindow("week", now);
-    const month = opts.month ? windowRange("month", opts.month) : currentWindow("month", now);
+    const monthWhole = opts.month ? windowRange("month", opts.month) : currentWindow("month", now);
+    // mcp-usage-ledger.CREDITS.6 — the month from the since day, when one is asked for and falls inside it.
+    const month = monthWhole ? judgedRange(monthWhole, opts.since) : null;
     const cached = this.store.plan();
     return {
       week: week ? this.store.windowCount(week) : null,
@@ -779,8 +821,10 @@ export class UsageLedger extends DurableObject<Env> {
       }
       const plan = cached?.plan;
       if (!plan || plan.limit === null || !plan.period) return null;
-      const range = currentWindow(plan.period, now);
-      const counted = this.store.windowCount(range).counted;
+      const range = judgedRange(currentWindow(plan.period, now), plan.since);
+      const count = this.store.windowCount(range);
+      // mcp-usage-ledger.CREDITS.5 — a credits plan is compared in credits.
+      const counted = plan.unit === "credits" ? count.credits : count.counted;
       if (counted > plan.limit) this.store.markCrossed(plan.period, range.period, plan.limit, now);
       return shadowOf(plan.limit, counted, this.store.crossedAt(plan.period, range.period));
     } catch (error) {
@@ -891,12 +935,29 @@ function totalsFor(env: Env, accountTag: string) {
 
 /** mcp-usage-ledger.SINGLE.14 — this week's counted actions in the ledgers of the phone's other written form. */
 export async function otherFormsWeek(env: Pick<Env, "USAGE_LEDGER" | "PHONE_REF_SECRET">, phone: string, ownRef: string, now = Date.now()): Promise<number> {
+  return otherFormsUsed(env, phone, ownRef, { kind: "week", unit: "actions", since: null }, now);
+}
+
+/**
+ * mcp-usage-ledger.SINGLE.14, CREDITS.7 — what the phone's other written form used of the same window (the week, or the
+ * month from its since day), in the plan's unit.
+ */
+export async function otherFormsUsed(
+  env: Pick<Env, "USAGE_LEDGER" | "PHONE_REF_SECRET">,
+  phone: string,
+  ownRef: string,
+  w: { kind: WindowKind; unit: "credits" | "actions"; since: number | null },
+  now = Date.now(),
+): Promise<number> {
   const refs = await accountRefsForPhone(phone, env.PHONE_REF_SECRET);
   const others = refs.filter((ref) => ref !== ownRef);
   if (!others.length) return 0;
-  const week = currentWindow("week", now).period;
-  const parts = await Promise.all(others.map((ref) => ledgerFor(env, ref).windows({ week }, now) as Promise<LedgerWindows>));
-  return parts.reduce((n, p) => n + (p.week?.counted ?? 0), 0);
+  const opts = w.kind === "week" ? { week: currentWindow("week", now).period } : { month: currentWindow("month", now).period, since: w.since };
+  const parts = await Promise.all(others.map((ref) => ledgerFor(env, ref).windows(opts, now) as Promise<LedgerWindows>));
+  return parts.reduce((n, p) => {
+    const win = w.kind === "week" ? p.week : p.month;
+    return n + (w.unit === "credits" ? win?.credits ?? 0 : win?.counted ?? 0);
+  }, 0);
 }
 
 /** The ledger of an account. */

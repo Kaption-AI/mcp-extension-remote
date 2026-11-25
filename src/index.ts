@@ -833,7 +833,7 @@ outerApp.get("/admin/usage", async (c) => {
 outerApp.get("/internal/ledger/usage", async (c) => {
   if (!internalCaller(c.req.header("Authorization"), c.env)) return problem({ status: 401, code: "unauthorized", detail: "Unauthorized" });
   const phone = readPhone(c.req.query("phone"));
-  const windows = validWindows(c.req.query("week"), c.req.query("month"));
+  const windows = validWindows(c.req.query("week"), c.req.query("month"), c.req.query("since"));
   if (!phone) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
   if ("error" in windows) return problem({ status: 400, code: "invalid_window", detail: windows.error });
   if (!c.env.USAGE_LEDGER) return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
@@ -886,12 +886,18 @@ outerApp.post("/internal/ledger/use", async (c) => {
     const refs = await accountRefsForPhone(req.phone, c.env.PHONE_REF_SECRET);
     if (!refs.length) return problem({ status: 400, code: "invalid_phone", detail: "phone must be 7-15 digits." });
     const now = Date.now();
-    // SINGLE.14 — the other written form's week counts toward the same number.
+    // SINGLE.14, CREDITS.7 — the other written form's window (week, or month from its since day) counts toward the same
+    // number, in the request's unit.
     let offset = 0;
     if (req.change === "reserve" && refs.length > 1) {
-      const week = weekOf(now);
-      const parts = await Promise.all(refs.slice(1).map((ref) => ledgerFor(c.env, ref).windows({ week }, now)));
-      offset = parts.reduce((n, p) => n + (p.week?.counted ?? 0), 0);
+      const month = req.use.period === "month";
+      const opts = month ? { month: monthOf(now), since: req.use.since ?? null } : { week: weekOf(now) };
+      const parts = await Promise.all(refs.slice(1).map((ref) => ledgerFor(c.env, ref).windows(opts, now)));
+      const credits = req.use.unit === "credits";
+      offset = parts.reduce((n, p) => {
+        const w = month ? p.month : p.week;
+        return n + ((credits ? w?.credits : w?.counted) ?? 0);
+      }, 0);
     }
     const answer = await ledgerFor(c.env, refs[0]).use({ ...req.use, offset }, now);
     const out = { ok: answer.ok, counted: answer.counted, duplicates: answer.duplicates, refunded: answer.refunded, used: answer.used,
@@ -963,7 +969,7 @@ outerApp.post("/internal/ledger/usage/batch", async (c) => {
   if (!raw || raw.length === 0 || raw.length > READ_BATCH_MAX || phones.some((p) => !p)) {
     return problem({ status: 400, code: "invalid_phones", detail: `phones must hold 1-${READ_BATCH_MAX} phones of 7-15 digits.` });
   }
-  const windows = validWindows(body.week, body.month);
+  const windows = validWindows(body.week, body.month, body.since);
   if ("error" in windows) return problem({ status: 400, code: "invalid_window", detail: windows.error });
   if (!c.env.USAGE_LEDGER) return problem({ status: 503, code: "unavailable", detail: "Usage ledger not bound" });
   const now = Date.now();

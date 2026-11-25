@@ -9,7 +9,7 @@
  * Authorization: Bearer INTERNAL_API_KEY (rest-api's WRITE_API_KEY; no new secret).
  */
 import { accountRefsForPhone } from "./phone-alias";
-import { mergeWindows, shadowOf, weekRange, type LedgerPlan, type ShadowWindow, type WindowCount } from "./ledger-windows";
+import { mergeWindows, shadowOf, sinceOf, weekRange, type LedgerPlan, type ShadowWindow, type WindowCount } from "./ledger-windows";
 import { ledgerFor, type LedgerWindows, type UseRequest } from "./usage-ledger";
 import { monthRange } from "./usage";
 import { parseOverage, type BillMark, type CycleOverage } from "./overage";
@@ -21,7 +21,7 @@ export interface LedgerUsage {
   week: WindowCount | null;
   month: WindowCount | null;
   since: string | null;
-  plan: (Pick<LedgerPlan, "tier" | "period" | "limit" | "pool" | "enforce"> & { enforced_by: LedgerPlan["enforcedBy"]; fetched_at: number }) | null;
+  plan: (Pick<LedgerPlan, "tier" | "period" | "limit" | "pool" | "enforce" | "unit"> & { enforced_by: LedgerPlan["enforcedBy"]; fetched_at: number; since: string | null }) | null;
   shadow: { week: ShadowWindow | null; month: ShadowWindow | null };
 }
 
@@ -34,8 +34,14 @@ export function readPhone(v: unknown): string | null {
   return typeof v === "string" && /^\d{7,15}$/.test(d) ? d : null;
 }
 
-export function validWindows(week: unknown, month: unknown): { week?: string; month?: string } | { error: string } {
-  const out: { week?: string; month?: string } = {};
+export function validWindows(week: unknown, month: unknown, since?: unknown): { week?: string; month?: string; since?: number } | { error: string } {
+  const out: { week?: string; month?: string; since?: number } = {};
+  // mcp-usage-ledger.CREDITS.6 — the month window from this UTC day (ISO date or date-time).
+  if (since !== undefined && since !== null && since !== "") {
+    const day = sinceOf(since);
+    if (day === null) return { error: "since must be an ISO date-time." };
+    out.since = day;
+  }
   if (week !== undefined && week !== null && week !== "") {
     if (typeof week !== "string" || !weekRange(week)) return { error: "week must be a Monday, YYYY-MM-DD." };
     out.week = week;
@@ -66,20 +72,23 @@ export function mergeLedgerWindows(parts: LedgerWindows[]): LedgerUsage {
   }
   // SHADOW.3 — judged against the plan's own window only; the other window has no limit.
   const shadowFor = (kind: "week" | "month", w: WindowCount | null, crossed: number | null) =>
-    w && plan && plan.period === kind ? shadowOf(plan.limit, w.counted, crossed) : null;
+    w && plan && plan.period === kind ? shadowOf(plan.limit, plan.unit === "credits" ? w.credits : w.counted, crossed) : null;
   return {
     week,
     month,
     since,
     plan: plan
-      ? { tier: plan.tier, period: plan.period, limit: plan.limit, pool: plan.pool, enforced_by: plan.enforcedBy, enforce: plan.enforce === true, fetched_at: plan.fetchedAt }
+      ? {
+          tier: plan.tier, period: plan.period, limit: plan.limit, pool: plan.pool, enforced_by: plan.enforcedBy, enforce: plan.enforce === true,
+          fetched_at: plan.fetchedAt, unit: plan.unit === "credits" ? "credits" : "actions", since: plan.since ? new Date(plan.since).toISOString() : null,
+        }
       : null,
     shadow: { week: shadowFor("week", week, crossedWeek), month: shadowFor("month", month, crossedMonth) },
   };
 }
 
 /** mcp-usage-ledger.READ.2-3 — the usage of one phone (both written forms of a Brazilian line). */
-export async function usageForPhone(env: Env, phone: string, windows: { week?: string; month?: string }, now = Date.now()): Promise<LedgerUsage> {
+export async function usageForPhone(env: Env, phone: string, windows: { week?: string; month?: string; since?: number }, now = Date.now()): Promise<LedgerUsage> {
   const refs = await accountRefsForPhone(phone, env.PHONE_REF_SECRET);
   const parts = await Promise.all(refs.map((ref) => ledgerFor(env, ref).windows(windows, now) as Promise<LedgerWindows>));
   return mergeLedgerWindows(parts);
@@ -133,12 +142,20 @@ export function parseUseRequest(body: Record<string, unknown>): { phone: string;
   if (period !== "week" && period !== "month") return { error: "period must be week or month." };
   const overage = body.overage === undefined || body.overage === null ? null : parseOverage(body.overage);
   if (body.overage && !overage) return { error: "overage must hold price_millicents, cap_millicents and anchor_ms." };
+  // mcp-usage-ledger.CREDITS.6 — the unit, the since day and each reservation's credits (absent: calls, as before).
+  const unit = body.unit === undefined || body.unit === null ? "actions" : body.unit;
+  if (unit !== "credits" && unit !== "actions") return { error: "unit must be credits or actions." };
+  const since = body.since === undefined || body.since === null || body.since === "" ? null : sinceOf(body.since);
+  if (body.since && since === null) return { error: "since must be an ISO date-time." };
+  const credits = body.credits ?? 1;
+  if (!Number.isInteger(credits) || (credits as number) < 0 || (credits as number) > 100) return { error: "credits must be 0-100." };
   return {
     phone,
     change,
     use: {
       change, path: source, ...(actionIds ? { actionIds } : { count: count as number }), limit: limit as number | null, enforce: body.enforce === true,
       period, ...(overage ? { overage } : {}),
+      ...(unit === "credits" ? { unit: "credits" as const, since, credits: credits as number } : {}),
     },
   };
 }

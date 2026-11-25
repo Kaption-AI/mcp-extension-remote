@@ -5,6 +5,7 @@
  */
 import { DAY_MS, dayOf, monthOf, monthRange, type UsagePath } from "./usage";
 import { UNCOUNTED_TOOLS } from "./weekly-usage";
+import { creditsOf } from "./credits";
 import { parseOverage, type PlanOverage } from "./overage";
 import type { Env } from "./types";
 
@@ -52,6 +53,11 @@ export interface WindowCount {
    * out) plus the reservations still waiting for their record.
    */
   counted: number;
+  /**
+   * mcp-usage-ledger.CREDITS.3-4 — the same counted calls weighed in credits (mcp-usage-pricing.CREDIT.1), plus the
+   * credits of the reservations still waiting for their record.
+   */
+  credits: number;
   /** The same per road (Kally's calls are in local). */
   by_source: Record<UsagePath, number>;
   /**
@@ -70,6 +76,8 @@ export interface WindowCount {
 export interface WindowRow {
   path: UsagePath;
   tool: string;
+  /** mcp-usage-ledger.CREDITS.3 — the call's fixed-enum kind ("" or absent when unknown). */
+  kind?: string;
   outcome: string;
   calls: number;
   /** A Kally (in-app) row (SINGLE.11). */
@@ -83,12 +91,13 @@ export type PendingCounts = Partial<Record<UsagePath, number>>;
  * mcp-usage-ledger.MODEL.2-4, SINGLE.2 — the window's numbers from its daily rows and its pending reservations.
  * mcp-usage-ledger.KALLY_COUNT.3-4 — Kally's rows add to the count only with `kallyCounts` (the plan's kally_counts).
  */
-export function countWindow(range: WindowRange, rows: WindowRow[], pending: PendingCounts = {}, kallyCounts = false): WindowCount {
+export function countWindow(range: WindowRange, rows: WindowRow[], pending: PendingCounts = {}, kallyCounts = false, pendingCredits?: number): WindowCount {
   const out: WindowCount = {
     period: range.period,
     from: new Date(range.from).toISOString(),
     to: new Date(range.to).toISOString(),
     counted: 0,
+    credits: 0,
     by_source: { cloud: 0, local: 0, webmcp: 0 },
     kally: 0,
     pending: 0,
@@ -104,7 +113,11 @@ export function countWindow(range: WindowRange, rows: WindowRow[], pending: Pend
       // mcp-usage-ledger.KALLY_COUNT.3 — flag off: recorded, never counted.
       if (!kallyCounts) continue;
     }
-    if (r.path in out.by_source) out.by_source[r.path] += r.calls;
+    if (r.path in out.by_source) {
+      out.by_source[r.path] += r.calls;
+      // mcp-usage-ledger.CREDITS.3 — each counted call weighs its tool's and kind's credits.
+      out.credits += creditsOf(r.tool, r.kind ?? "") * r.calls;
+    }
   }
   for (const path of Object.keys(out.by_source) as UsagePath[]) {
     const n = Math.max(0, Math.floor(pending[path] ?? 0));
@@ -112,6 +125,8 @@ export function countWindow(range: WindowRange, rows: WindowRow[], pending: Pend
     out.pending += n;
   }
   out.counted = out.by_source.cloud + out.by_source.local + out.by_source.webmcp;
+  // mcp-usage-ledger.CREDITS.4 — a reservation waiting for its record counts its own credits (1 each when not given).
+  out.credits += Math.max(0, Math.floor(pendingCredits ?? out.pending));
   return out;
 }
 
@@ -120,6 +135,7 @@ export function mergeWindows(a: WindowCount, b: WindowCount): WindowCount {
   return {
     ...a,
     counted: a.counted + b.counted,
+    credits: (a.credits ?? 0) + (b.credits ?? 0),
     by_source: { cloud: a.by_source.cloud + b.by_source.cloud, local: a.by_source.local + b.by_source.local, webmcp: a.by_source.webmcp + b.by_source.webmcp },
     kally: (a.kally ?? 0) + (b.kally ?? 0),
     pending: (a.pending ?? 0) + (b.pending ?? 0),
@@ -130,7 +146,7 @@ export function mergeWindows(a: WindowCount, b: WindowCount): WindowCount {
 
 // ─── The plan (PLAN.1-5) ───────────────────────────────────────────────
 
-export type PlanTier = "free" | "lifetime" | "pro" | "business" | "unlimited" | "blocked";
+export type PlanTier = "free" | "lifetime" | "pro" | "business" | "business_agent" | "unlimited" | "blocked";
 
 export interface LedgerPlan {
   tier: PlanTier;
@@ -159,10 +175,30 @@ export interface LedgerPlan {
    * recorded as extra actions within the cap. null (or absent in an older cache): off.
    */
   overage?: PlanOverage | null;
+  /**
+   * mcp-usage-ledger.CREDITS.1, CREDITS.5 — "credits": the limit is credits and the window's credits are judged against
+   * it; "actions" (an older rest-api, no unit): calls, as before.
+   */
+  unit?: "credits" | "actions";
+  /** mcp-usage-ledger.CREDITS.2 — the month is judged from this UTC midnight (epoch ms) when it falls inside it, or null. */
+  since?: number | null;
 }
 
 export const DEFAULT_PLAN_TTL_S = 600;
-const TIERS: readonly PlanTier[] = ["free", "lifetime", "pro", "business", "unlimited", "blocked"];
+const TIERS: readonly PlanTier[] = ["free", "lifetime", "pro", "business", "business_agent", "unlimited", "blocked"];
+
+/** mcp-usage-ledger.CREDITS.2, CREDITS.6 — an ISO date-time (or epoch ms) floored to its UTC midnight, or null. */
+export function sinceOf(value: unknown): number | null {
+  const t = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Date.parse(value) : NaN;
+  if (!Number.isFinite(t) || t < Date.UTC(2020, 0, 1) || t > Date.UTC(2100, 0, 1)) return null;
+  return Math.floor(t / DAY_MS) * DAY_MS;
+}
+
+/** mcp-usage-ledger.CREDITS.2 — the part of a window the plan judges: from the since day when it falls inside. */
+export function judgedRange(range: WindowRange, since: number | null | undefined): WindowRange {
+  if (since === null || since === undefined || !(since > range.from)) return range;
+  return { ...range, from: Math.min(since, range.to) };
+}
 
 /** mcp-usage-ledger.PLAN.1 — rest-api's answer read defensively; null when it is not one. */
 export function parsePlan(d: unknown): LedgerPlan | null {
@@ -183,11 +219,15 @@ export function parsePlan(d: unknown): LedgerPlan | null {
   const overage = limit !== null ? parseOverage(v.overage) : null;
   // mcp-usage-ledger.SINGLE.3 — only a weekly number is enforced here (Pro and Business stay counted, SINGLE.10), unless
   // the account turned postpaid overage on (mcp-overage-billing.LEDGER.1): then its month is held to limit + cap too.
-  const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && limit !== null && (period === "week" || (period === "month" && !!overage));
+  const unit = v.unit === "credits" ? "credits" : "actions";
+  // mcp-usage-ledger.CREDITS.1 — a credits month is held to its number when rest-api says enforce (free and lifetime).
+  const enforce = (v.enforce === true || enforcedBy === "week_ledger" || enforcedBy === "ledger") && limit !== null &&
+    (period === "week" || (period === "month" && (!!overage || (unit === "credits" && v.enforce === true))));
   const message = typeof v.message === "string" && v.message.trim() ? v.message.slice(0, 2000) : null;
   const lang = v.lang === "en" || v.lang === "es" || v.lang === "pt" ? v.lang : null;
   const kallyCounts = v.kally_counts === true; // mcp-usage-ledger.KALLY_COUNT.2
-  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang, kallyCounts, overage };
+  const since = sinceOf(v.since);
+  return { tier: v.tier as PlanTier, period, limit, pool, enforcedBy, ttlSeconds: ttl, enforce, message, lang, kallyCounts, overage, unit, since };
 }
 
 /** mcp-usage-ledger.PLAN.1, PLAN.5 — the plan from rest-api, or null when it cannot answer (the caller fails open). */

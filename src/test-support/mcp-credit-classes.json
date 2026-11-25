@@ -1,0 +1,1700 @@
+{
+ "source": "kaptionai kaption-core/fixtures/stateless/mcp-usage-pricing.json (kind class)",
+ "cases": [
+  {
+   "method": "get_api_info",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "get_api_info",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "get_api_info",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "kaption_help",
+   "params": {
+    "action": "read"
+   },
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "kaption_help",
+   "params": {
+    "action": "read"
+   },
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "kaption_help",
+   "params": {
+    "action": "read"
+   },
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "get_kaption_settings",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "get_kaption_settings",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "get_kaption_settings",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "update_kaption_settings",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "update_kaption_settings",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "update_kaption_settings",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "reconnect_kaption_connection",
+   "params": {
+    "bridge": "local"
+   },
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "reconnect_kaption_connection",
+   "params": {
+    "bridge": "local"
+   },
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "reconnect_kaption_connection",
+   "params": {
+    "bridge": "local"
+   },
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "report_bug",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "report_bug",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "report_bug",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "kaption_plans",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "kaption_plans",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "kaption_plans",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "create_kaption_checkout_link",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "create_kaption_checkout_link",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "create_kaption_checkout_link",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "get_business_agent",
+   "params": {
+    "action": "eval_results"
+   },
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "get_business_agent",
+   "params": {
+    "action": "eval_results"
+   },
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "get_business_agent",
+   "params": {
+    "action": "eval_results"
+   },
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "manage_business_agent",
+   "params": {
+    "action": "publish"
+   },
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "manage_business_agent",
+   "params": {
+    "action": "publish"
+   },
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "manage_business_agent",
+   "params": {
+    "action": "publish"
+   },
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "kaption_settings",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "kaption_settings",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "kaption_settings",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "business_agent",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "business_agent",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "business_agent",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "tools/list",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "tools/list",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "tools/list",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "initialize",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "initialize",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "initialize",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "ping",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "ping",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "ping",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "notifications/initialized",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "notifications/initialized",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "notifications/initialized",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "debug_eval",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "debug_eval",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "debug_eval",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "",
+   "params": {},
+   "transcribed": 0,
+   "result": "free"
+  },
+  {
+   "method": "",
+   "params": {},
+   "transcribed": 1,
+   "result": "free"
+  },
+  {
+   "method": "",
+   "params": {},
+   "transcribed": 3,
+   "result": "free"
+  },
+  {
+   "method": "query",
+   "params": {
+    "entity": "messages"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "query",
+   "params": {
+    "entity": "messages"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "query",
+   "params": {
+    "entity": "messages"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "query",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "query",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "query",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "list_contacts",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "list_contacts",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "list_contacts",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_contact",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "get_contact",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_contact",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_contact_groups",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "get_contact_groups",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_contact_groups",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "list_groups",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "list_groups",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "list_groups",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_group",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "get_group",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_group",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_analytics",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "get_analytics",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_analytics",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "export_chat"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "export_chat"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "export_chat"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "export_contacts"
+   },
+   "transcribed": 0,
+   "result": "export"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "export_contacts"
+   },
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "export_contacts"
+   },
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "EXPORT_CONTACTS"
+   },
+   "transcribed": 0,
+   "result": "export"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "EXPORT_CONTACTS"
+   },
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "get_analytics",
+   "params": {
+    "section": "EXPORT_CONTACTS"
+   },
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "download_media",
+   "params": {},
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "download_media",
+   "params": {},
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "download_media",
+   "params": {},
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "export_contacts",
+   "params": {
+    "format": "csv"
+   },
+   "transcribed": 0,
+   "result": "export"
+  },
+  {
+   "method": "export_contacts",
+   "params": {
+    "format": "csv"
+   },
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "export_contacts",
+   "params": {
+    "format": "csv"
+   },
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "search"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "search"
+   },
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "search"
+   },
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 0,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {},
+   "transcribed": 0,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {},
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "call_recordings",
+   "params": {},
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "summarize_conversation",
+   "params": {},
+   "transcribed": 0,
+   "result": "summary"
+  },
+  {
+   "method": "summarize_conversation",
+   "params": {},
+   "transcribed": 1,
+   "result": "summary"
+  },
+  {
+   "method": "summarize_conversation",
+   "params": {},
+   "transcribed": 3,
+   "result": "summary"
+  },
+  {
+   "method": "send_message",
+   "params": {},
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "send_message",
+   "params": {},
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "send_message",
+   "params": {},
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "create_attachment_upload",
+   "params": {},
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "create_attachment_upload",
+   "params": {},
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "create_attachment_upload",
+   "params": {},
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_chat",
+   "params": {
+    "action": "archive"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": {
+    "action": "archive"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": {
+    "action": "archive"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": {
+    "action": "set_draft"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": {
+    "action": "set_draft"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": {
+    "action": "set_draft"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_labels",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_labels",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_labels",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_labels",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_labels",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_labels",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_notes",
+   "params": {
+    "action": "set"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_notes",
+   "params": {
+    "action": "set"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_notes",
+   "params": {
+    "action": "set"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_notes",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_notes",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_notes",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_lists",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_lists",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_lists",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_lists",
+   "params": {
+    "action": "edit"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_lists",
+   "params": {
+    "action": "edit"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_lists",
+   "params": {
+    "action": "edit"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "Update"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "Update"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "Update"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "complete"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "complete"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_reminders",
+   "params": {
+    "action": "complete"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "send_now"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "send_now"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "send_now"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "remove"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "remove"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_scheduled_messages",
+   "params": {
+    "action": "remove"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "schedule"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "schedule"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "schedule"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "cancel"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "cancel"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "cancel"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_status",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_status",
+   "params": {},
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_status",
+   "params": {},
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_status",
+   "params": {},
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": null,
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": null,
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_chat",
+   "params": null,
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "future_tool",
+   "params": "x",
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "future_tool",
+   "params": "x",
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "future_tool",
+   "params": "x",
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "get"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "scheduled"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "scheduled"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "scheduled"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "update"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "update"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "update"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "cancel"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "cancel"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "cancel"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "post"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "post"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "post"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "schedule"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "schedule"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "schedule"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "cross_post"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "cross_post"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_channels",
+   "params": {
+    "action": "cross_post"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "list"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "digest"
+   },
+   "transcribed": 0,
+   "result": "read"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "digest"
+   },
+   "transcribed": 1,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "digest"
+   },
+   "transcribed": 3,
+   "result": "read_transcribed"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "create"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "add_groups"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "add_groups"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "add_groups"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "remove_groups"
+   },
+   "transcribed": 0,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "remove_groups"
+   },
+   "transcribed": 1,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "remove_groups"
+   },
+   "transcribed": 3,
+   "result": "change"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "announce"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "announce"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "announce"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "schedule_announcement"
+   },
+   "transcribed": 0,
+   "result": "send"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "schedule_announcement"
+   },
+   "transcribed": 1,
+   "result": "send"
+  },
+  {
+   "method": "manage_communities",
+   "params": {
+    "action": "schedule_announcement"
+   },
+   "transcribed": 3,
+   "result": "send"
+  },
+  {
+   "method": "export_chat",
+   "params": {
+    "chat_id": "15555550101@c.us",
+    "format": "html"
+   },
+   "transcribed": 0,
+   "result": "export"
+  },
+  {
+   "method": "export_chat",
+   "params": {
+    "chat_id": "15555550101@c.us",
+    "format": "html"
+   },
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "export_chat",
+   "params": {
+    "chat_id": "15555550101@c.us",
+    "format": "html"
+   },
+   "transcribed": 3,
+   "result": "export"
+  },
+  {
+   "method": "export_chat",
+   "params": {},
+   "transcribed": 0,
+   "result": "export"
+  },
+  {
+   "method": "export_chat",
+   "params": {},
+   "transcribed": 1,
+   "result": "export"
+  },
+  {
+   "method": "export_chat",
+   "params": {},
+   "transcribed": 3,
+   "result": "export"
+  }
+ ]
+}
