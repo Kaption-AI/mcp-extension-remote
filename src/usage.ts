@@ -124,6 +124,8 @@ const KIND_FIELDS: Record<string, { field: string; values: readonly string[] }> 
       "overview", "kpis", "activity", "rankings", "response_times", "calls", "labels", "emojis", "words", "countries",
       "silences", "channels", "communities", "conversation_starters", "streaks", "gaps", "organization",
       "chat_detail", "export_chat", "export_contacts", "community_growth", "channel_growth",
+      // advanced-analytics.KPI.2 — the new sections are logged by name
+      "community_activity", "channel_posts", "post_detail", "community_changes", "message_reads",
     ],
   },
   manage_labels: { field: "action", values: ["add", "remove", "create", "delete", "list"] },
