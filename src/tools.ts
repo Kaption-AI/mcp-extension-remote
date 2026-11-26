@@ -255,7 +255,7 @@ export const TOOLS: ToolDefinition[] = [
     description: 'Queue a WhatsApp message from this computer for the earliest permitted delivery. Needs a newer Kaption version, sending from this computer turned on for the account, and the user\'s consent in Kaption. Supports an existing person chat or eligible group (@g.us) and one image, document, audio or video attachment (8 MiB max). Message is optional with an attachment; audio cannot have captions. Returns queued plus a schedule ID, not proof of delivery. Existing ask-first prompts, 8/hour, 20/day, group limits and delays apply. An assistant cannot accept consent or confirmation. Computer and WhatsApp must remain open. The returned ID can be read with get_scheduled_message (mode local) and cancelled with manage_scheduled_messages (mode local).',
     inputSchema: z.object({
       conversation_id: z.string().min(1).describe('Existing person chat ID or eligible group ID ending @g.us'),
-      message: z.string().max(2000).optional().describe('Message or attachment caption; omit for attachment-only sends'),
+      message: z.string().max(20000).optional().describe('Message or attachment caption (up to 2000 characters; text up to 20000 when the user turned on long messages); omit for attachment-only sends'),
       attachment: localAttachmentSchema.optional(),
       target_session: z.string().optional().describe('Session ID for multi-account routing'),
     }),
@@ -290,7 +290,7 @@ export const TOOLS: ToolDefinition[] = [
       mode: z.enum(["bot", "local"]).optional().describe('"bot" (default): sent from Kaption\'s WhatsApp number. "local": sent from the user\'s own WhatsApp number while this computer and WhatsApp are open, within safe limits kept automatically; needed for groups'),
       id: z.string().optional().describe("Scheduled message ID (required for update/delete/cancel/remove/send_now)"),
       conversation_id: z.string().optional().describe('Chat to send the message to (required for create): a person, or a group with mode "local"'),
-      message: z.string().optional().describe("Message text to send (required for create, optional for update). Bot: one line, max 800 characters. Local: text or caption up to 2000 characters; omit with an attachment"),
+      message: z.string().optional().describe("Message text to send (required for create, optional for update). Bot: one line, max 800 characters. Local: text or caption up to 2000 characters (text up to 20000 when the user turned on long messages); omit with an attachment"),
       attachment: localAttachmentSchema.nullable().optional().describe('Local create/update only. One attachment; null removes it on update. Omit message for attachment-only sends'),
       datetime: z.string().optional().describe("ISO 8601 datetime when the message should be sent (required for create, optional for update)"),
       notification_type: z.enum(["extension", "whatsapp", "automatic"]).optional().describe('Bot mode only. Notification type. Default: "automatic"'),
@@ -721,7 +721,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "manage_channels",
     description: [
-      "Change the user's WhatsApp Channels: create a channel, change its name or description, and post or schedule text updates to a channel they own or administer, one at a time, a plan of up to 14 posts, or the same post across up to 10 channels and communities (cross_post, spaced 2 minutes apart), or cancel a waiting post. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Connected AI can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; list_scheduled_channel_posts shows what is still waiting. To plan a week of posts: read the channel with get_channel (its latest posts show the tone), draft the posts and their times, show the user the whole plan, and after a yes call schedule with posts; at most 14 posts wait per channel. Text only (max 2000 characters). Channel ids end in @newsletter; community ids end in @g.us (a community means its announcement group).",
+      "Change the user's WhatsApp Channels: create a channel, change its name or description, and post or schedule text updates to a channel they own or administer, one at a time, a plan of up to 14 posts, or the same post across up to 10 channels and communities (cross_post: one separate post per channel or community, spaced at least 2 minutes apart and by the user's send limits), or cancel a waiting post. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Connected AI can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; list_scheduled_channel_posts shows what is still waiting. To plan a week of posts: read the channel with get_channel (its latest posts show the tone), draft the posts and their times, show the user the whole plan, and after a yes call schedule with posts; at most 14 posts wait per channel. Text only (max 2000 characters; up to 20000 when the user turned on long messages). Channel ids end in @newsletter; community ids end in @g.us (a community means its announcement group).",
       "",
       "Reading channels is list_channels and get_channel; waiting posts and announcements are list_scheduled_channel_posts.",
       "",
@@ -739,10 +739,10 @@ export const TOOLS: ToolDefinition[] = [
       id: z.string().optional().describe("Channel id (…@newsletter), or the scheduled post id (cancel)"),
       name: z.string().optional().describe("Channel name, 1-100 characters (create, update)"),
       description: z.string().optional().describe("Channel description, up to 2048 characters (create, update)"),
-      text: z.string().optional().describe("The post (max 2000 characters) (post, schedule, cross_post)"),
+      text: z.string().optional().describe("The post (max 2000 characters; up to 20000 when the user turned on long messages) (post, schedule, cross_post)"),
       datetime: z.string().optional().describe("ISO 8601 date-time in the future (schedule; optional for cross_post: omit to post as soon as the limits allow)"),
       posts: z.array(z.object({
-        text: z.string().describe("The post (max 2000 characters)"),
+        text: z.string().describe("The post (max 2000 characters; up to 20000 when the user turned on long messages)"),
         datetime: z.string().describe("ISO 8601 date-time in the future"),
       })).max(14).optional().describe("Up to 14 posts to schedule in one call, each { text, datetime } (instead of text + datetime)"),
       targets: z.array(z.union([
@@ -758,7 +758,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "manage_communities",
     description: [
-      "Change the user's WhatsApp Communities: create a community, add or remove groups, and post or schedule announcements (up to 14 in one call) to the announcement group of a community the user administers, or cancel a waiting announcement. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Connected AI can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; list_scheduled_channel_posts shows what is still waiting. Announcements count as group messages: a few a day at most. Text only (max 2000 characters). Community and group ids end in @g.us.",
+      "Change the user's WhatsApp Communities: create a community, add or remove groups, and post or schedule announcements (up to 14 in one call) to the announcement group of a community the user administers, or cancel a waiting announcement. Only when channels and communities are turned on for the account. Ask first: before any change or post, show the user the exact text, the channel or community and the time(s), and wait for a clear yes. Posts go out from the user's own WhatsApp on this computer through Kaption's \"From this computer\" scheduler: WhatsApp must be open at posting time, the person must have \"Connected AI can send messages\" on (an assistant cannot turn it on), and the mode's limits (per hour, per day, pending) and a short random delay apply. Queued or scheduled is not posted: never tell the user it went out; list_scheduled_channel_posts shows what is still waiting. Announcements count as group messages: a few a day at most. Text only (max 2000 characters; up to 20000 when the user turned on long messages). Community and group ids end in @g.us.",
       "",
       "Reading communities is list_communities and get_community; a summary of recent activity is get_community_digest; waiting announcements are list_scheduled_channel_posts.",
       "",
@@ -776,10 +776,10 @@ export const TOOLS: ToolDefinition[] = [
       name: z.string().optional().describe("Community name, 1-100 characters (create)"),
       description: z.string().optional().describe("Community description, up to 2048 characters (create)"),
       group_ids: z.array(z.string().describe("Group id (…@g.us)")).max(20).optional().describe("Up to 20 groups the user administers (create, add_groups, remove_groups)"),
-      text: z.string().optional().describe("The announcement (max 2000 characters) (announce, schedule_announcement)"),
+      text: z.string().optional().describe("The announcement (max 2000 characters; up to 20000 when the user turned on long messages) (announce, schedule_announcement)"),
       datetime: z.string().optional().describe("ISO 8601 date-time in the future (schedule_announcement)"),
       posts: z.array(z.object({
-        text: z.string().describe("The post (max 2000 characters)"),
+        text: z.string().describe("The post (max 2000 characters; up to 20000 when the user turned on long messages)"),
         datetime: z.string().describe("ISO 8601 date-time in the future"),
       })).max(14).optional().describe("Up to 14 posts to schedule in one call, each { text, datetime } (instead of text + datetime)"),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),

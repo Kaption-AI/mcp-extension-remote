@@ -1006,6 +1006,11 @@ describe('mcp-local-send schemas', () => {
   it('marks sending as a non-idempotent write', () => {
     expect(send.annotations).toMatchObject({ readOnlyHint: false, idempotentHint: false });
   });
+  // long-posts-multi-channel.MCP.1 — the account's limit (2000, or 20000 with long messages) is enforced by the extension; the schema must not cap below 20000.
+  it('long-posts-multi-channel.MCP.1 accepts a 10,000-character message and rejects 20,001', () => {
+    expect(send.inputSchema.safeParse({ conversation_id: '15555550100@c.us', message: 'a'.repeat(10000) }).success).toBe(true);
+    expect(send.inputSchema.safeParse({ conversation_id: '15555550100@c.us', message: 'a'.repeat(20001) }).success).toBe(false);
+  });
 });
 
 
