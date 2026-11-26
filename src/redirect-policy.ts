@@ -42,6 +42,9 @@ export const KNOWN_CLIENT_DOMAINS = [
   "manus.im",
   "tess.im",
   "glama.ai",
+  // Raycast's MCP sign-in returns to raycast.com/redirect; n8n Cloud's MCP Client to oauth.n8n.cloud
+  "raycast.com",
+  "n8n.cloud",
   // VS Code's web redirect (vscode.dev/redirect)
   "vscode.dev",
 ] as const;
@@ -63,6 +66,7 @@ export const KNOWN_APP_SCHEMES = [
   "vscode",
   "vscode-insiders",
   "windsurf",
+  "raycast",
   "workbuddy",
 ] as const;
 

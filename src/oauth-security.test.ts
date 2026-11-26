@@ -182,6 +182,11 @@ describe("mcp.CLOUD_RELAY.16 only known AI apps and this computer receive a sign
     expect(classifyRedirectUri("https://user:pw@claude.ai/x")).toBeNull();
     expect(classifyRedirectUri("https://claude.ai/x#frag")).toBeNull();
     expect(classifyRedirectUri("javascript:alert(1)")).toBeNull();
+    expect(classifyRedirectUri("https://raycast.com/redirect?packageName=Extension")).toBe("web");
+    expect(classifyRedirectUri("https://oauth.n8n.cloud/oauth2/callback")).toBe("web");
+    expect(classifyRedirectUri("raycast://oauth?package_name=Extension")).toBe("app");
+    expect(classifyRedirectUri("https://raycast.com.attacker.example/cb")).toBeNull();
+    expect(classifyRedirectUri("https://evil-n8n.cloud.example/cb")).toBeNull();
     expect(checkClientRegistration({ clientMetadata: { redirect_uris: [CLAUDE_REDIRECT] } })).toBeUndefined();
   });
 });
