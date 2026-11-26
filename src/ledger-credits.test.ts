@@ -188,6 +188,13 @@ describe("mcp-usage-ledger.CREDITS the credit table", () => {
     expect(creditsOf("query", "messages")).toBe(1);
   });
 
+  it("advanced-analytics.MCP.6 — each new get_analytics section costs one read credit", () => {
+    for (const section of ["community_activity", "channel_posts", "post_detail", "community_changes", "message_reads"]) {
+      const kind = usageKind("get_analytics", { section, chat_id: "120363000000000001@newsletter", post_id: "123" });
+      expect([section, kind, creditClass("get_analytics", kind), creditsOf("get_analytics", kind)]).toEqual([section, section, "read", 1]);
+    }
+  });
+
   it("mcp-usage-ledger.CREDITS.1 — the plan answer's unit, since and the business_agent tier are read; an older answer stays in actions", () => {
     const p = parsePlan(planAnswer({ since: "2026-11-25T00:00:00.000Z" }))!;
     expect(p).toMatchObject({ tier: "free", period: "month", limit: 100, unit: "credits", enforce: true, since: Date.UTC(2026, 10, 25) });
