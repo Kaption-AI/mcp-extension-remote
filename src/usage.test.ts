@@ -127,6 +127,12 @@ describe("usage vocabulary (mcp-usage-accounting.RECORD)", () => {
     expect(usageKind("export_chat", { chat_id: "15555550101@c.us" })).toBe("");
   });
 
+  it("advanced-analytics.KPI.2 — get_analytics calls to the new sections are logged by section name, never the chat or post id", () => {
+    for (const section of ["community_activity", "channel_posts", "post_detail", "community_changes", "message_reads"]) {
+      expect(usageKind("get_analytics", { section, chat_id: "120363000000000001@newsletter", post_id: "123", sort: "views" })).toBe(section);
+    }
+  });
+
   it("buckets latency coarsely (RECORD.3)", () => {
     expect([10, 999, 1000, 2999, 9999, 29_999, 30_000].map(latencyBucket)).toEqual([
       "<1s", "<1s", "1-3s", "1-3s", "3-10s", "10-30s", ">30s",

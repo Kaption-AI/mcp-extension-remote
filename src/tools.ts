@@ -457,6 +457,11 @@ export const TOOLS: ToolDefinition[] = [
       "  export_contacts       — Export contacts in format (requires format)",
       "  community_growth      — Community member count history over time",
       "  channel_growth        — Channel subscriber count history over time",
+      "  community_activity    — Messages per community and sub-group",
+      "  channel_posts         — Per-post views, reactions and forwards for channels you own or administer (Business plans)",
+      "  post_detail           — One channel post's readings over time (requires chat_id + post_id)",
+      "  community_changes     — Joins and leaves per community per day (Business plans)",
+      "  message_reads         — Delivered / read-at-least rates for messages you sent (Business plans, opt-in)",
       "",
       "Examples:",
       '  Overview: {}',
@@ -465,6 +470,8 @@ export const TOOLS: ToolDefinition[] = [
       '  Chat detail: { section: "chat_detail", chat_id: "120363406792713578@g.us" }',
       '  Export CSV: { section: "export_chat", chat_id: "...", format: "csv", limit: 100 }',
       '  Export contacts: { section: "export_contacts", format: "vcf" }',
+      '  Post insights: { section: "channel_posts", chat_id: "120363000000000001@newsletter", sort: "views" }',
+      '  Post detail: { section: "post_detail", chat_id: "...@newsletter", post_id: "123" }',
     ].join("\n"),
     inputSchema: z.object({
       section: z.enum([
@@ -473,6 +480,9 @@ export const TOOLS: ToolDefinition[] = [
         "communities", "conversation_starters", "streaks", "gaps", "organization",
         "chat_detail", "export_chat", "export_contacts",
         "community_growth", "channel_growth",
+        // advanced-analytics.MCP.1-5 — community_activity (already served by the extension and Rust core) and the
+        // Advanced Analytics sections; the extension refuses the flagged ones while their flags are off (FLAGS.3).
+        "community_activity", "channel_posts", "post_detail", "community_changes", "message_reads",
       ]).optional().default("overview").describe("Analytics section to retrieve"),
       date_range: z.enum(["7d", "30d", "90d", "1y", "all"]).optional().describe('Preset date range (default: "30d")'),
       date_from: z.string().optional().describe("Custom start date (ISO 8601) — overrides date_range"),
@@ -483,6 +493,8 @@ export const TOOLS: ToolDefinition[] = [
       chat_type: z.enum(["all", "dm", "group"]).optional().describe("Filter rankings by chat type"),
       limit: z.number().min(1).max(500).optional().describe("Max items for paginated sections (default 20, max 500)"),
       offset: z.number().min(0).optional().describe("Skip N items for pagination"),
+      post_id: z.string().optional().describe("Channel post server id (post_detail)"), // advanced-analytics.MCP.2
+      sort: z.enum(["views", "reactions", "forwards", "date"]).optional().describe("Order for channel_posts (default date)"), // advanced-analytics.MCP.1
       format: z.enum(["json", "csv", "txt", "vcf"]).optional().describe("Export format (required for export_chat/export_contacts)"),
       query: z.string().optional().describe("Search keyword — filter analytics to only messages containing this text. Shows activity patterns for conversations mentioning a topic."),
       include_transcriptions: z.boolean().optional().describe("Include audio transcriptions in exports (default true)"),
