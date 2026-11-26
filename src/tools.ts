@@ -868,6 +868,7 @@ export const TOOLS: ToolDefinition[] = [
       "Export one WhatsApp chat as a file, from the backup Kaption keeps on this computer: its whole history in the same format as Kaption's Export chat (html, a self-contained page with transcripts and embedded media, or csv with one row per message). The file comes back as base64_data with filename, mimetype and size, plus missing: what is not in the file and why (files WhatsApp no longer has, files past the 16 MB answer, messages left out). Costs 5 credits. Changes nothing.",
       "",
       "Example: { chat_id: \"15555550101@c.us\", format: \"html\", media: [\"audio\", \"image\"], from: \"2026-10-01T00:00:00Z\" }",
+      "Nightly routine with missing transcripts: { chat_id: \"120363000000000001@g.us\", format: \"csv\", from: \"60d\", transcribe_missing: true }, repeated while transcribe_missing.done is false.",
     ].join("\n"),
     inputSchema: z.object({
       chat_id: z.string().describe("Chat id (phone number, …@c.us or …@g.us)"),
@@ -877,7 +878,8 @@ export const TOOLS: ToolDefinition[] = [
       last_n: z.number().optional().describe("Only the most recent N messages"),
       from: z.string().optional().describe("ISO 8601 start (or relative, like 30d)"),
       to: z.string().optional().describe("ISO 8601 end"),
-      transcribe_missing: z.boolean().optional().describe("First transcribe the chat's voice notes that have no transcript yet (up to 10 per call, newest first, inside from/to; Pro and above). The answer's transcribe_missing says how many were transcribed and how many are still missing; call again for more."),
+      // mcp-nightly-transcripts.MCP_TRANSCRIBE.11 (kaptionai) — back up to 60 days, with a done/next answer to go on.
+      transcribe_missing: z.boolean().optional().describe("First transcribe the chat's voice notes that have no transcript yet (newest first, inside from/to; Pro and above). It reaches back up to 60 days, loading older messages of the chat when WhatsApp has not loaded them, and takes up to 20 notes per call (older app versions: 10, only what is loaded). The answer's transcribe_missing says how many were transcribed, failed and are still missing; while done is false (or remaining is above 0), call again with the same arguments to go on."),
       target_session: z.string().optional().describe("Session ID for multi-account routing"),
     }),
   },

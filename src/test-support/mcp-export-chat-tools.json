@@ -2,7 +2,7 @@
   {
     "name": "export_chat",
     "title": "Export chat",
-    "description": "Export one WhatsApp chat as a file, from the backup Kaption keeps on this computer: its whole history in the same format as Kaption's Export chat (html, a self-contained page with transcripts and embedded media, or csv with one row per message). The file comes back as base64_data with filename, mimetype and size, plus missing: what is not in the file and why (files WhatsApp no longer has, files past the 16 MB answer, messages left out). Costs 5 credits. Changes nothing.\n\nExample: { chat_id: \"15555550101@c.us\", format: \"html\", media: [\"audio\", \"image\"], from: \"2026-10-01T00:00:00Z\" }",
+    "description": "Export one WhatsApp chat as a file, from the backup Kaption keeps on this computer: its whole history in the same format as Kaption's Export chat (html, a self-contained page with transcripts and embedded media, or csv with one row per message). The file comes back as base64_data with filename, mimetype and size, plus missing: what is not in the file and why (files WhatsApp no longer has, files past the 16 MB answer, messages left out). Costs 5 credits. Changes nothing.\n\nExample: { chat_id: \"15555550101@c.us\", format: \"html\", media: [\"audio\", \"image\"], from: \"2026-10-01T00:00:00Z\" }\nNightly routine with missing transcripts: { chat_id: \"120363000000000001@g.us\", format: \"csv\", from: \"60d\", transcribe_missing: true }, repeated while transcribe_missing.done is false.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -49,7 +49,7 @@
         },
         "transcribe_missing": {
           "type": "boolean",
-          "description": "First transcribe the chat's voice notes that have no transcript yet (up to 10 per call, newest first, inside from/to; Pro and above). The answer's transcribe_missing says how many were transcribed and how many are still missing; call again for more."
+          "description": "First transcribe the chat's voice notes that have no transcript yet (newest first, inside from/to; Pro and above). It reaches back up to 60 days, loading older messages of the chat when WhatsApp has not loaded them, and takes up to 20 notes per call (older app versions: 10, only what is loaded). The answer's transcribe_missing says how many were transcribed, failed and are still missing; while done is false (or remaining is above 0), call again with the same arguments to go on."
         },
         "target_session": {
           "type": "string",
