@@ -86,10 +86,10 @@ function restApi(answer: (() => Response) | Record<string, unknown> = planAnswer
   return { fetcher, asked };
 }
 
-function fakeRoom(phone: string, fail = false) {
+function fakeRoom(phone: string, fail = false, features: Record<string, boolean> = {}) {
   const room = {
     calls: [] as string[],
-    async watchManage() { return { manage_kaption: true, plans: true }; },
+    async watchManage() { return { manage_kaption: true, plans: true, ...features }; },
     async meteringPhone() { return phone; },
     async handleMcpRequestSettled(method: string) {
       room.calls.push(method);
@@ -100,8 +100,8 @@ function fakeRoom(phone: string, fail = false) {
   return room;
 }
 
-async function world(vars: Record<string, string> = {}, opts: { fail?: boolean } = {}) {
-  const room = fakeRoom(PHONE, opts.fail);
+async function world(vars: Record<string, string> = {}, opts: { fail?: boolean; features?: Record<string, boolean> } = {}) {
+  const room = fakeRoom(PHONE, opts.fail, opts.features);
   const envRef = { env: {} as Env };
   const ns = ledgers(envRef);
   envRef.env = {
@@ -186,6 +186,15 @@ describe("mcp-usage-ledger.CREDITS the credit table", () => {
     expect(creditsOf("get_analytics", "export_contacts")).toBe(5);
     expect(creditsOf("kaption_help", "")).toBe(0);
     expect(creditsOf("query", "messages")).toBe(1);
+  });
+
+  it("kaption-links.MCP.5 — create_tracked_links is a send (2 credits), list_tracked_links and get_link_clicks are reads (1)", () => {
+    expect(creditClass("create_tracked_links", "")).toBe("send");
+    expect(creditsOf("create_tracked_links", "")).toBe(2);
+    expect(creditClass("list_tracked_links", "")).toBe("read");
+    expect(creditsOf("list_tracked_links", "")).toBe(1);
+    expect(creditClass("get_link_clicks", "")).toBe("read");
+    expect(creditsOf("get_link_clicks", "")).toBe(1);
   });
 
   it("advanced-analytics.MCP.6 — each new get_analytics section costs one read credit", () => {
@@ -274,6 +283,21 @@ describe("mcp-usage-ledger.CREDITS a credits month", () => {
     expect((await w.month()).credits).toBe(103);
     const read = await w.http(`/internal/ledger/usage?phone=${PHONE}&since=${encodeURIComponent(since)}`, { headers: auth });
     expect(((await read.json()) as any).month).toMatchObject({ credits: 3, from: "2026-11-25T00:00:00.000Z" });
+  });
+
+  it("kaption-links.MCP.5 — relayed Kaption Links calls weigh 2 (create) and 1 (list, clicks) in the month, cloud and local alike", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.UTC(2026, 11, 10, 12) });
+    vi.stubGlobal("fetch", restApi(planAnswer({ tier: "business", limit: 2000, enforced_by: "none", enforce: false })).fetcher);
+    const w = await world({}, { features: { kaption_links: true } });
+    // Cloud: 2 creates (4), 1 list (1), 1 clicks read (1) = 6 credits.
+    for (let i = 0; i < 2; i++) expect((await w.tool("create_tracked_links", { links: [{ url: "https://example.com/sale" }] })).isError).toBeFalsy();
+    expect((await w.tool("list_tracked_links", { q: "sale" })).isError).toBeFalsy();
+    expect((await w.tool("get_link_clicks", {})).isError).toBeFalsy();
+    expect(w.room.calls).toEqual(["create_tracked_links", "create_tracked_links", "list_tracked_links", "get_link_clicks"]);
+    expect(await w.month()).toMatchObject({ counted: 4, credits: 6 });
+    // Local hub batch rows weigh the same.
+    expect((await postBatch(w, "batch_links_01", [{ tool: "create_tracked_links", calls: 3 }, { tool: "get_link_clicks" }])).status).toBe(200);
+    expect(await w.month()).toMatchObject({ counted: 8, credits: 13 });
   });
 
   it("mcp-usage-pricing.CREDITS_V2.4, mcp-usage-ledger.SINGLE.10 — a Pro month in credits is counted and shown, never refused", async () => {

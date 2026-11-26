@@ -35,6 +35,7 @@ import { PLANS_UI_HTML } from "./plans-ui";
 import { TOOLS, getToolsForMCP } from "./tools";
 import channelsCanonical from "./test-support/mcp-channels-communities-tools.json";
 import exportChatCanonical from "./test-support/mcp-export-chat-tools.json";
+import linksCanonical from "./test-support/mcp-links-tools.json";
 import { FakeKV } from "./test-support/fake-kv";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -276,8 +277,8 @@ describe("whatsapp-channels-communities.HUB the channels and communities tools o
 });
 
 describe("chat-export.MCP export_chat on the relay", () => {
-  it("chat-export.MCP.2, MCP.4 — is the pinned kaptionai definition, verbatim (read-only), last in TOOLS", async () => {
-    expect(TOOLS[TOOLS.length - 1].name).toBe("export_chat");
+  it("chat-export.MCP.2, MCP.4 — is the pinned kaptionai definition, verbatim (read-only), right before the Kaption Links tools", async () => {
+    expect(TOOLS[TOOLS.length - 1 - LINK_TOOLS.length].name).toBe("export_chat");
     const want = (exportChatCanonical as any[])[0];
     const got = getToolsForMCP().find((t) => t.name === "export_chat")!;
     expect({ name: got.name, title: got.title, description: got.description, inputSchema: normalized(got.inputSchema), annotations: got.annotations }).toEqual(want);
@@ -317,6 +318,73 @@ describe("chat-export.MCP export_chat on the relay", () => {
   });
 });
 
+const LINK_TOOLS = ["create_tracked_links", "list_tracked_links", "get_link_clicks"];
+
+describe("kaption-links.MCP the Kaption Links tools on the relay", () => {
+  it("kaption-links.MCP.1-3, MCP.10 — are the pinned kaptionai definitions, verbatim, last in TOOLS", async () => {
+    expect(TOOLS.slice(-LINK_TOOLS.length).map((t) => t.name)).toEqual(LINK_TOOLS);
+    expect((linksCanonical as any[]).map((t) => t.name)).toEqual(LINK_TOOLS);
+    const exported = getToolsForMCP();
+    const listed = (await (await session(fakeRoom({ kaption_links: true }))).client.listTools()).tools;
+    for (const want of linksCanonical as any[]) {
+      const got = exported.find((t) => t.name === want.name)!;
+      expect({ name: got.name, title: got.title, description: got.description, inputSchema: normalized(got.inputSchema), annotations: got.annotations }).toEqual(normalized(want));
+      const l = listed.find((t) => t.name === want.name)!;
+      expect(l.title, want.name).toBe(want.title);
+      expect(l.description, want.name).toBe(want.description);
+      expect(l.annotations, want.name).toEqual(want.annotations);
+      expect(normalized(l.inputSchema), want.name).toEqual(normalized(want.inputSchema));
+    }
+  });
+
+  it("kaption-links.MCP.10 — only features.kaption_links true shows them; false, absent or an older extension hides them", async () => {
+    expect([...visibleManageTools([{ kaption_links: true }])]).toEqual(LINK_TOOLS);
+    expect(readManageFeatures({ kaption_links: true, export_chat: "yes" })).toEqual({ kaption_links: true });
+    expect(readManageFeatures({ kaption_links: 1 })).toEqual({});
+    for (const features of [{}, null, { manage_kaption: true, export_chat: true, channels_communities: true }, { kaption_links: false }]) {
+      const names = (await (await session(fakeRoom(features))).client.listTools()).tools.map((t) => t.name);
+      for (const name of LINK_TOOLS) expect(names, JSON.stringify(features)).not.toContain(name);
+    }
+  });
+
+  it("kaption-links.MCP.10 — appear with list_changed and are forwarded unchanged by name; hidden calls never reach the extension", async () => {
+    const room = fakeRoom({ manage_kaption: true });
+    const s = await session(room);
+    const hidden: any = await s.client.callTool({ name: "create_tracked_links", arguments: { links: [{ url: "https://example.com" }] } });
+    expect(hidden.isError).toBe(true);
+    expect(room.calls).toEqual([]);
+    room.features = { manage_kaption: true, kaption_links: true };
+    await s.agent.refreshManageVisibility();
+    await flush();
+    expect(await s.manage()).toEqual(expect.arrayContaining(LINK_TOOLS));
+    expect(s.changed.tools).toBeGreaterThan(0);
+    const calls: Array<[string, Record<string, unknown>]> = [
+      ["create_tracked_links", { links: [{ url: "https://example.com/menu", title: "Menu", post_id: "weekly-menu-48", chat_id: "120363000000000001@newsletter" }] }],
+      ["list_tracked_links", { q: "sale", limit: 10, cursor: "c_1", target_session: "s_2" }],
+      ["get_link_clicks", { link: "l_0123456789abcdef", granularity: "hour", from: "2026-11-20" }],
+      ["get_link_clicks", {}],
+    ];
+    for (const [name, args] of calls) {
+      const res: any = await s.client.callTool({ name, arguments: args });
+      expect(res.isError, name).toBeFalsy();
+    }
+    expect(room.calls).toEqual(calls.map(([method, params]) => ({ method, params })));
+    // The pinned schemas are enforced before forwarding: 0 or 21 links, a 101 limit, an unknown field or granularity.
+    for (const [name, args] of [
+      ["create_tracked_links", { links: [] }],
+      ["create_tracked_links", { links: Array.from({ length: 21 }, () => ({ url: "https://example.com" })) }],
+      ["create_tracked_links", { links: [{ url: "https://example.com", phone: "x" }] }],
+      ["list_tracked_links", { limit: 101 }],
+      ["list_tracked_links", { limit: 2.5 }],
+      ["get_link_clicks", { granularity: "week" }],
+    ] as Array<[string, Record<string, unknown>]>) {
+      const res: any = await s.client.callTool({ name, arguments: args });
+      expect(res.isError, `${name} ${JSON.stringify(args)}`).toBe(true);
+    }
+    expect(room.calls).toHaveLength(calls.length);
+  });
+});
+
 describe("mcp-manage-kaption.LIST.2 an MCP session lists the manage tools from its extension's features", () => {
   it("hidden for an extension that said nothing, or when none is connected", async () => {
     expect(await (await session(fakeRoom({}))).manage()).toEqual([]);
@@ -331,7 +399,7 @@ describe("mcp-manage-kaption.LIST.2 an MCP session lists the manage tools from i
     expect(room.watchers).toEqual(["ab".repeat(32)]);
     expect(await s.manage()).toEqual(["get_kaption_settings", "update_kaption_settings", "reconnect_kaption_connection", "kaption_help", "report_bug"]);
 
-    room.features = { manage_kaption: true, business_agent: true, plans: true, scheduled_status: true, channels_communities: true, export_chat: true };
+    room.features = { manage_kaption: true, business_agent: true, plans: true, scheduled_status: true, channels_communities: true, export_chat: true, kaption_links: true };
     await s.agent.refreshManageVisibility();
     await flush();
     expect(await s.manage()).toEqual(MANAGE_KAPTION_TOOLS);

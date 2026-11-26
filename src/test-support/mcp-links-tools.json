@@ -1,0 +1,152 @@
+[
+  {
+    "name": "create_tracked_links",
+    "title": "Create tracked links",
+    "description": "Turn up to 20 web addresses into Kaption short links (go.kaptionai.com/…) that count clicks, so the user can see who opened what they shared. Business and Business Agent plans. Use it before the user posts a link in a channel, a group or Status, or sends it to many people. Each link can have a title (shown only to the user) and, to group clicks by post, the post id and the chat it goes to (a channel id ending in @newsletter, a group id ending in @g.us, or status@broadcast; never a person). Only public http and https addresses can be tracked. Creating the same link again within 10 minutes answers the existing one. This only creates links: nothing is sent, and the short link sends visitors straight to the original address. When the account doesn't have the plan, the answer says which plan adds it and gives the checkout link.\n\nExamples:\n  { links: [{ url: \"https://shop.example.com/sale\", title: \"Black Friday sale\" }] }\n  { links: [{ url: \"https://example.com/menu\", post_id: \"weekly-menu-48\", chat_id: \"120363000000000001@newsletter\" }] }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "links": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "The addresses to track (1 to 20)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "The full address, starting with https:// or http://"
+              },
+              "title": {
+                "type": "string",
+                "description": "A name for the link the user will recognise (at most 120 characters)"
+              },
+              "post_id": {
+                "type": "string",
+                "description": "Any id the user's post goes by, to group its clicks (at most 128 characters)"
+              },
+              "chat_id": {
+                "type": "string",
+                "description": "The channel (…@newsletter), group (…@g.us) or status@broadcast the link is posted to"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "required": [
+        "links"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Create tracked links",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "list_tracked_links",
+    "title": "List tracked links",
+    "description": "List the user's Kaption short links, newest first, each with its short address, the original address, title, post and chat, when it was made, and its clicks (total, unique visitors, last click). Unique visitors are an estimate. Filter by post_id, chat_id or q (words in the title or the address). Pages: when next_cursor is not null, call again with cursor = next_cursor. Changes nothing.\n\nExamples:\n  { }\n  { q: \"sale\", limit: 10 }\n  { chat_id: \"120363000000000001@newsletter\" }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "Words in the title or the original address"
+        },
+        "post_id": {
+          "type": "string",
+          "description": "Only the links of this post"
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Only the links posted to this channel, group or status@broadcast"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Links per page (default 20, at most 100)"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "next_cursor of the previous page"
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List tracked links",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "get_link_clicks",
+    "title": "Get link clicks",
+    "description": "Read who clicked the user's Kaption short links. With link (the link id from list_tracked_links, or the short address such as https://go.kaptionai.com/Ab12Cd3): that link's clicks over time (per day, or per hour for the last 30 days), the countries, the sites the clicks came from and the device types. With post_id and/or chat_id: the clicks per post and chat (a channel, a group or Status). With neither: the account's totals and its 10 most clicked links. Link previews made by WhatsApp and other apps are not counted as clicks (bots shows how many were left out). Unique visitors are an estimate. Times are UTC. Business and Business Agent plans; otherwise the answer says which plan adds it. Changes nothing.\n\nExamples:\n  { link: \"https://go.kaptionai.com/Ab12Cd3\" }\n  { link: \"l_0123456789abcdef\", granularity: \"hour\", from: \"2026-11-20\" }\n  { chat_id: \"120363000000000001@newsletter\" }\n  { }",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "link": {
+          "type": "string",
+          "description": "The link id (l_…) or its short address"
+        },
+        "post_id": {
+          "type": "string",
+          "description": "Clicks of this post's links"
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Clicks of the links posted to this channel, group or status@broadcast"
+        },
+        "granularity": {
+          "type": "string",
+          "enum": [
+            "day",
+            "hour"
+          ],
+          "description": "With link: clicks per day (default) or per hour"
+        },
+        "from": {
+          "type": "string",
+          "description": "Start, as a date or date and time (ISO 8601). Default: the last 30 days (2 days per hour)"
+        },
+        "to": {
+          "type": "string",
+          "description": "End, as a date or date and time (ISO 8601). Default: now"
+        },
+        "target_session": {
+          "type": "string",
+          "description": "Session ID for multi-account routing"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Get link clicks",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  }
+]
