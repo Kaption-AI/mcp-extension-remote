@@ -32,6 +32,9 @@ export interface ManageFeatures {
   channels_communities?: boolean;
   /** chat-export.MCP.6 — MCP_EXPORT_CHAT on for this account (export_chat). */
   export_chat?: boolean;
+  /** kaption-links.MCP.10 — MCP_KAPTION_LINKS on for this account (create_tracked_links, list_tracked_links,
+   * get_link_clicks). */
+  kaption_links?: boolean;
 }
 
 /** mcp-manage-kaption.LIST.2 — which `features` key shows each tool. */
@@ -56,11 +59,15 @@ export const MANAGE_TOOL_FEATURE: Readonly<Record<string, keyof ManageFeatures>>
   get_community: 'channels_communities',
   get_community_digest: 'channels_communities',
   export_chat: 'export_chat',
+  // kaption-links.MCP.10 — the Kaption Links tools, answered by the extension's account core.
+  create_tracked_links: 'kaption_links',
+  list_tracked_links: 'kaption_links',
+  get_link_clicks: 'kaption_links',
 });
 
 export const MANAGE_KAPTION_TOOLS: readonly string[] = Object.freeze(Object.keys(MANAGE_TOOL_FEATURE));
 
-const FEATURE_KEYS: Array<keyof ManageFeatures> = ['manage_kaption', 'business_agent', 'plans', 'scheduled_status', 'channels_communities', 'export_chat'];
+const FEATURE_KEYS: Array<keyof ManageFeatures> = ['manage_kaption', 'business_agent', 'plans', 'scheduled_status', 'channels_communities', 'export_chat', 'kaption_links'];
 
 /** Only booleans are kept; anything else (missing, "yes", 1) is unknown, which counts as no. */
 export function readManageFeatures(features: unknown): ManageFeatures {

@@ -35,6 +35,9 @@ export function creditClass(tool: string, kind: string): CreditClass {
   if (method === "get_analytics") return action === "export_contacts" ? "export" : "read";
   if (method === "call_recordings") return action === "list" || action === "search" ? "read" : "export";
   if (method === "send_message" || method === "create_attachment_upload") return "send";
+  // kaption-links.MCP.5 — create_tracked_links is a send (2 credits); list_tracked_links and get_link_clicks fall
+  // through to read (1).
+  if (method === "create_tracked_links") return "send";
   if (method.startsWith("manage_")) {
     if (READ_ACTIONS.has(action)) return "read";
     if (SEND_ACTIONS[method]?.has(action)) return "send";
