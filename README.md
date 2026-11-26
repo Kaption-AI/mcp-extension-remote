@@ -1,5 +1,7 @@
 # kaption-mcp-remote
 
+[![mcptry](https://mcptry.com/badge/io.github.Kaption-AI/mcp-extension-remote)](https://mcptry.com/servers/io.github.Kaption-AI/mcp-extension-remote)
+
 Cloud MCP relay for WhatsApp — lets AI assistants (Claude, ChatGPT, Cursor, etc.) interact with your WhatsApp conversations through the [Model Context Protocol](https://modelcontextprotocol.io/).
 
 **Setup guide:** [kaptionai.com/mcp](https://kaptionai.com/mcp/) — connect WhatsApp to Claude, ChatGPT or Cursor.
