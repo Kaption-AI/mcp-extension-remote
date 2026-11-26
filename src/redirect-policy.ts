@@ -42,6 +42,11 @@ export const KNOWN_CLIENT_DOMAINS = [
   "manus.im",
   "tess.im",
   "glama.ai",
+  // Raycast's MCP sign-in returns to raycast.com/redirect; n8n Cloud's MCP Client to oauth.n8n.cloud
+  "raycast.com",
+  "n8n.cloud",
+  // Instinct (personal AI assistant; connected apps at app.instinct.com)
+  "instinct.com",
   // VS Code's web redirect (vscode.dev/redirect)
   "vscode.dev",
 ] as const;
@@ -63,6 +68,7 @@ export const KNOWN_APP_SCHEMES = [
   "vscode",
   "vscode-insiders",
   "windsurf",
+  "raycast",
   "workbuddy",
 ] as const;
 
@@ -122,4 +128,23 @@ export function checkClientRegistration(options: {
       + "hello@kaptionai.com.",
     status: 400,
   };
+}
+
+/**
+ * The host (or app scheme) of each redirect a registration was refused for, for the logs only: no path or query, so
+ * no code or state can leak, and at most five, each cut to 100 characters. Tells us which AI app tried to connect.
+ */
+export function refusedRedirectHosts(redirectUris: unknown): string[] {
+  if (!Array.isArray(redirectUris)) return [];
+  return redirectUris
+    .filter((uri) => !isAllowedRedirectUri(uri))
+    .slice(0, 5)
+    .map((uri) => {
+      try {
+        const url = new URL(String(uri));
+        return (url.hostname || `${url.protocol}`).slice(0, 100);
+      } catch {
+        return "invalid";
+      }
+    });
 }

@@ -82,7 +82,7 @@ import {
   startLimit,
 } from "./connect-code";
 import { acceptsHtml, ensureProblemJson, problem } from "./problem";
-import { checkClientRegistration, isAllowedRedirectUri } from "./redirect-policy";
+import { checkClientRegistration, isAllowedRedirectUri, refusedRedirectHosts } from "./redirect-policy";
 import {
   audit,
   hasS256Pkce,
@@ -1210,7 +1210,7 @@ export function anotherAppRegistration(env: Pick<Env, "OAUTH_KV">) {
     const verdict = registrationVerdict(options.clientMetadata.redirect_uris, policy);
     // Refused registrations go to the logs only (KV writes would let anyone fill the audit log).
     if (!verdict.ok) {
-      console.warn("[another-app] registration refused");
+      console.warn("[another-app] registration refused", { hosts: refusedRedirectHosts(options.clientMetadata.redirect_uris) });
       return refusal;
     }
     const ip = options.request?.headers.get("cf-connecting-ip") || "unknown";
