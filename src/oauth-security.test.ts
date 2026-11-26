@@ -15,7 +15,7 @@ import {
   rememberPhoneAlias,
   relayWithAlias,
 } from "./phone-alias";
-import { checkClientRegistration, classifyRedirectUri } from "./redirect-policy";
+import { checkClientRegistration, classifyRedirectUri, refusedRedirectHosts } from "./redirect-policy";
 import { connectorAddress } from "./connector-address";
 import { FakeKV } from "./test-support/fake-kv";
 import { ANOTHER_APP_POLICY_KEY, resetAnotherAppPolicyCache } from "./another-app";
@@ -187,6 +187,11 @@ describe("mcp.CLOUD_RELAY.16 only known AI apps and this computer receive a sign
     expect(classifyRedirectUri("raycast://oauth?package_name=Extension")).toBe("app");
     expect(classifyRedirectUri("https://raycast.com.attacker.example/cb")).toBeNull();
     expect(classifyRedirectUri("https://evil-n8n.cloud.example/cb")).toBeNull();
+    expect(classifyRedirectUri("https://app.instinct.com/oauth/callback")).toBe("web");
+    expect(classifyRedirectUri("https://instinct.com.attacker.example/cb")).toBeNull();
+    expect(classifyRedirectUri("https://myinstinct.com/cb")).toBeNull();
+    // Refused registrations log only the host of each refused redirect, never its path or query.
+    expect(refusedRedirectHosts(["https://claude.ai/api/mcp/auth_callback", "https://new-app.example/cb?code=x", "junk"])).toEqual(["new-app.example", "invalid"]);
     expect(checkClientRegistration({ clientMetadata: { redirect_uris: [CLAUDE_REDIRECT] } })).toBeUndefined();
   });
 });
