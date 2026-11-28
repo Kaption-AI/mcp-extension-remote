@@ -114,7 +114,7 @@ export class RelayMCP extends McpAgent<Env> {
         const accountRef = this.getAccountRef();
         if (!accountRef) throw new Error(NO_ACCOUNT_TEXT);
         // mcp-manage-kaption.HELP.5 — a guide read answers its live page (kaption://guide/{topic}).
-        return withLiveGuide(args, scrubInlineMedia(await this.relayToExtension(accountRef, "kaption_help", args)));
+        return withLiveGuide(args, scrubInlineMedia(await this.relayToExtension(accountRef, "kaption_help", args, false, true)));
       },
       // mcp-apps-cards.FLAG.2-3 — the cards page is listed and readable only while the flag is on.
       cards: () => this.cardsOn,
@@ -219,7 +219,7 @@ export class RelayMCP extends McpAgent<Env> {
         let answer = avatarsAnswer(ids, null);
         if (accountRef && ids.length) {
           try {
-            answer = avatarsAnswer(ids, await this.relayToExtension(accountRef, AVATARS_TOOL, { ids }));
+            answer = avatarsAnswer(ids, await this.relayToExtension(accountRef, AVATARS_TOOL, { ids }, false, true));
           } catch {
             // An older extension, or no WhatsApp tab: initials.
           }
@@ -322,7 +322,14 @@ export class RelayMCP extends McpAgent<Env> {
           console.log(
             `[RelayMCP] Relaying ${tool.name} to account=${sanitizeAccountRefForLog(accountRef)} app=${await this.appName(accountRef)} client=${await this.normalizedClient(accountRef)}`,
           );
-          let result = await this.relayToExtension(accountRef, routed.method, cleanArgs, usage.gate?.metered ?? false);
+          let result = await this.relayToExtension(
+            accountRef,
+            routed.method,
+            cleanArgs,
+            usage.gate?.metered ?? false,
+            // mcp-bridge-resume.RELAY_HOLD.3 — only a read-only tool is ever sent twice.
+            tool.annotations?.readOnlyHint === true,
+          );
 
           // Inline media ONLY for an explicit download_media call.
           //   download_media (mcp.TOOLS.6 / mcp.CLOUD_RELAY.6): base64_data flows
@@ -654,6 +661,8 @@ export class RelayMCP extends McpAgent<Env> {
     method: string,
     params: Record<string, unknown>,
     metered = false,
+    // mcp-bridge-resume.RELAY_HOLD.3 — a read-only tool: the room may re-send it once after a bridge drop.
+    retry = false,
   ): Promise<unknown> {
     // mcp-local-hub-growth.CLIENT.3 — the session's client travels beside the call (beside `kaption`).
     const client = await this.callClient(accountRef).catch(() => null);
@@ -661,6 +670,7 @@ export class RelayMCP extends McpAgent<Env> {
     return relayWithAliasSettled(this.env, accountRef, method, params, {
       ...(metered ? { metered: true } : {}),
       ...(client ? { client } : {}),
+      ...(retry ? { resume: { retry: true } } : {}),
     });
   }
 }

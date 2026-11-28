@@ -83,7 +83,7 @@ describe("mcp-local-hub-growth.CLIENT.3 the session's client on every relayed ca
     const client = await connectClient(agent, "claude-ai", "0.1.0");
     const res = (await client.callTool({ name: "query", arguments: { entity: "conversations" } })) as any;
     expect(res.isError).toBeFalsy();
-    expect(room.extras).toEqual([{ client: { name: "claude-ai", version: "0.1.0" } }]);
+    expect(room.extras).toEqual([{ client: { name: "claude-ai", version: "0.1.0" }, resume: { retry: true } }]); // mcp-bridge-resume.RELAY_HOLD.3 (query is read-only)
     expect(storage.data.get("mcpClientInfo")).toEqual({ name: "claude-ai", version: "0.1.0" });
   });
 
@@ -91,7 +91,7 @@ describe("mcp-local-hub-growth.CLIENT.3 the session's client on every relayed ca
     const { agent, room } = await agentFor();
     const client = await connectClient(agent, "  Cursor  <x@y>\n", "1.7.0 beta!");
     await client.callTool({ name: "query", arguments: { entity: "conversations" } });
-    expect(room.extras).toEqual([{ client: { name: "Cursor xy", version: "1.7.0beta" } }]);
+    expect(room.extras).toEqual([{ client: { name: "Cursor xy", version: "1.7.0beta" }, resume: { retry: true } }]);
   });
 
   it("mcp-local-hub-growth.CLIENT.3 — after eviction, the rehydrated session sends the kept clientInfo", async () => {
