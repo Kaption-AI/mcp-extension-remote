@@ -14,7 +14,8 @@ describe("mcp-usage-ledger.SINGLE.4 the ledger's usage and refusal words", () =>
     expect(ledgerUsage(plan, { counted: 17, to: "2026-11-16T00:00:00.000Z" })).toEqual(WEEK);
     expect(ledgerUsage({ ...plan, limit: null, period: null }, { counted: 3, to: "x" })).toMatchObject({ limit: null, left: null });
     expect(ledgerUsage(null, { counted: 3, to: "x" })).toBeNull();
-    expect(refusalFallback(20)).toContain("20 Claude and ChatGPT actions");
+    // weekly-plan-limits.CREDITS_V2.7 — an answer without period or unit still says credits (a month).
+    expect(refusalFallback(20)).toContain("this month's 20 Claude and ChatGPT credits");
   });
 });
 

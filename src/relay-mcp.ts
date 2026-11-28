@@ -532,7 +532,7 @@ export class RelayMCP extends McpAgent<Env> {
       if (begin.state === "refused") {
         // mcp-overage-billing.LEDGER.3 — past the overage cap: the cap's words (rest-api's), else the plan's.
         const capped = begin.use?.reason === "cap" ? begin.plan?.overage?.message ?? null : null;
-        return { state: "refused", reservation: null, message: capped ?? begin.plan?.message ?? refusalFallback(begin.plan?.limit ?? 0, begin.plan?.period ?? "week", begin.plan?.unit === "credits" ? "credits" : "actions"), usage, lang };
+        return { state: "refused", reservation: null, message: capped ?? begin.plan?.message ?? refusalFallback(begin.plan?.limit ?? 0, begin.plan?.period ?? "month", "credits"), usage, lang };
       }
       return { state: "run", reservation: begin.reserved ? actionId : null, message: null, usage, lang };
     } catch (error) {
