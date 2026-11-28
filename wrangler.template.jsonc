@@ -101,6 +101,11 @@
     // flags worker whether MCP_APPS_CARDS is on for its account (interactive cards in Claude / ChatGPT). Unset, "" or
     // "off": no card for anyone and nothing is asked (kill switch). The flag row decides who gets them.
     "MCP_APPS_CARDS": "flags",
+    // mcp-bridge-resume.FLAG.2 (monorepo features/mcp/mcp-bridge-resume.feature.yaml) — "flags": each bridge sign-in asks
+    // the flags worker whether MCP_BRIDGE_RESUME is on for its phone; on, the room holds calls while the bridge
+    // reconnects, re-sends a cut-off read and keeps the tools listed for 10 minutes. The flag row decides who (owner
+    // numbers only at first). Rollback: "" and merge (nothing is asked, every room behaves as before).
+    "MCP_BRIDGE_RESUME": "flags",
     "BUILD_HASH": "__BUILD_HASH__",
     "COMMIT_SHA": "__COMMIT_SHA__"
   },

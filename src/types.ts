@@ -43,6 +43,11 @@ export interface Env {
    * account; unset, empty or "off": no cards and no request (kill switch).
    */
   MCP_APPS_CARDS?: string;
+  /**
+   * mcp-bridge-resume.FLAG.2 (Kaption-AI monorepo) — "flags": ask the flags worker whether MCP_BRIDGE_RESUME is on for
+   * the phone a bridge signs in with (calls held across a bridge reconnect); unset, empty or "off": never (kill switch).
+   */
+  MCP_BRIDGE_RESUME?: string;
   /** The flags worker (default https://flags.kaptionai.com). */
   FLAGS_URL?: string;
   /** mcp-usage-ledger.TOTALS.1 — global totals objects (default 16; "1" = the old single "global"). */

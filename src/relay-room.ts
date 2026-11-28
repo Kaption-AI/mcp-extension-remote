@@ -27,6 +27,7 @@ import {
 } from "./otp";
 import { rememberPhoneAlias } from "./phone-alias";
 import { readManageFeatures, visibleManageTools, type ManageFeatures } from "./manage-kaption";
+import { bridgeResumeConfigured, bridgeResumeOnForPhone } from "./bridge-resume-flag";
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -34,6 +35,44 @@ interface PendingRequest {
   timeout: ReturnType<typeof setTimeout>;
   /** mcp.CLOUD_RELAY.15 — the socket the request went to; only its close rejects it. */
   ws?: WebSocket | null;
+  /** mcp-bridge-resume.RELAY_HOLD.3 — what was sent, kept so a cut-off read can be sent once more. */
+  method?: string;
+  params?: Record<string, unknown>;
+  extra?: RelayCallExtra;
+  /** mcp-bridge-resume.RELAY_HOLD.3 — read-only: may be re-sent after its bridge dropped. */
+  retry?: boolean;
+  /** Already re-sent once: a second drop rejects it. */
+  retried?: boolean;
+  /** Waiting for a bridge since its own dropped (ms), with the timer that gives up. */
+  orphanedAt?: number;
+  orphanTimer?: ReturnType<typeof setTimeout> | null;
+}
+
+/** mcp-bridge-resume.RELAY_HOLD.1-6 — the room's memory of its bridge, kept in storage across hibernation. */
+interface BridgeResumeState {
+  /** MCP_BRIDGE_RESUME for the phone the last bridge signed in with. */
+  on: boolean;
+  /** The serving bridge's manage features (its auth message), for RELAY_HOLD.6. */
+  features: ManageFeatures | null;
+  /** When the last authenticated bridge closed; null while one is connected (or never seen). */
+  closedAt: number | null;
+}
+
+/** mcp-bridge-resume.RELAY_HOLD.5 — what a held or re-sent call carries in `kaption.resume`. */
+export interface RelayResumeMark {
+  kind: "waited" | "retried";
+  waitMs: number;
+}
+
+/** mcp-bridge-resume.RELAY_HOLD.1, RELAY_HOLD.3 — how long a call waits for a bridge to (re)authenticate. */
+export const RESUME_WAIT_MS = 20_000;
+/** mcp-bridge-resume.RELAY_HOLD.1-2, RELAY_HOLD.6 — a bridge seen this recently is expected back. */
+export const RESUME_GRACE_MS = 10 * 60_000;
+const BRIDGE_RESUME_KEY = "bridge-resume";
+
+/** Coarse wait bucket for the log line (enums only). */
+function waitBucket(ms: number): string {
+  return ms < 2_000 ? "lt2s" : ms < 5_000 ? "2-5s" : ms < 10_000 ? "5-10s" : ms < 20_000 ? "10-20s" : "gt20s";
 }
 
 interface WsAttachment {
@@ -59,6 +98,8 @@ export interface RelayCallExtra {
   metered?: boolean;
   /** mcp-local-hub-growth.CLIENT.3 — the MCP session's clientInfo (already sanitized, CLIENT.5). */
   client?: { name: string; version: string } | null;
+  /** mcp-bridge-resume.RELAY_HOLD.3 — retry: the tool is read-only, so a call cut off by a bridge drop may be re-sent. */
+  resume?: { retry: boolean };
 }
 
 /** mcp-manage-kaption.LIST.2 — MCP sessions (RelayMCP Durable Object ids) told when this room's manage tools change. */
@@ -185,15 +226,35 @@ export class RelayRoom extends DurableObject<Env> {
   ): Promise<unknown> {
     // Restore state from hibernation if needed
     this.restoreFromHibernation();
+    // mcp-bridge-resume.RELAY_HOLD.3 — known before a drop can cut this call off (one storage read per wake).
+    // Not awaited: a connected bridge gets the call in the same turn, as before.
+    if (!this.resumeLoaded) void this.loadResumeState();
 
     // mcp.CLOUD_RELAY.8 — relay is unprivileged; every tool needs live extension
     // mcp.CLOUD_RELAY.15 — several clients of one account may be connected; the newest authenticated one serves.
-    const target = this.servingSocket();
+    let target = this.servingSocket();
+    const arrivedAt = Date.now();
+    let resume: RelayResumeMark | null = null;
     if (!target) {
-      throw Object.assign(
-        new Error("Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge."),
-        { code: "offline" },
-      );
+      // mcp-bridge-resume.RELAY_HOLD.1-2 — a bridge seen in the last 10 minutes (or mid-handshake) is waited for, up to
+      // 20 s; a room with no recent bridge answers at once, as before (so the alias room is tried straight away).
+      const state = await this.loadResumeState();
+      if (state?.on && this.bridgeExpected(state)) {
+        // mcp-bridge-resume.RELAY_HOLD.4 — a held call counts against the 50.
+        if (this.pendingRequests.size + this.resumeWaiters.size >= MAX_PENDING_REQUESTS) {
+          throw new Error("Too many pending requests. Try again shortly.");
+        }
+        target = await this.waitForBridge(RESUME_WAIT_MS);
+        const waitMs = Date.now() - arrivedAt;
+        this.logResume("waited", target ? "served" : "gave-up", waitMs);
+        if (target) resume = { kind: "waited", waitMs };
+      }
+      if (!target) {
+        throw Object.assign(
+          new Error("Extension not connected. Open WhatsApp Web with Kaption extension and enable cloud bridge."),
+          { code: "offline" },
+        );
+      }
     }
 
     // mcp.RATE_LIMITS.3 — 50 in-flight cap; 51st rejects synchronously
@@ -202,36 +263,190 @@ export class RelayRoom extends DurableObject<Env> {
     }
 
     const id = ++this.requestCounter;
+    const socketForCall = target;
 
     return new Promise((resolve, reject) => {
+      // mcp-bridge-resume.RELAY_HOLD.4 — the 2-minute timeout runs from when the call reached the room.
       const timeout = setTimeout(() => {
+        const pending = this.pendingRequests.get(id);
+        if (pending?.orphanTimer) clearTimeout(pending.orphanTimer);
         this.pendingRequests.delete(id);
         reject(
           Object.assign(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`), { code: "timeout" }),
         );
-      }, REQUEST_TIMEOUT_MS);
+      }, Math.max(0, REQUEST_TIMEOUT_MS - (Date.now() - arrivedAt)));
 
-      this.pendingRequests.set(id, { resolve, reject, timeout, ws: target });
+      const pending: PendingRequest = { resolve, reject, timeout, ws: socketForCall };
+      if (extra.resume?.retry) Object.assign(pending, { method, params, extra, retry: true });
+      this.pendingRequests.set(id, pending);
 
       try {
-        target.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id,
-            method,
-            params,
-            // business-plans.MCP_LEDGER.9 — the ledger already decided this call: the cloud bridge must not charge it.
-            ...(extra.metered ? { kaption: { metered: true } } : {}),
-            // mcp-local-hub-growth.CLIENT.3 — which AI app made the call, outside the tool's params.
-            ...(extra.client ? { client: { name: extra.client.name, version: extra.client.version } } : {}),
-          }),
-        );
+        this.sendCall(socketForCall, id, method, params, extra, resume);
       } catch (err) {
         clearTimeout(timeout);
         this.pendingRequests.delete(id);
         reject(err);
       }
     });
+  }
+
+  /** One JSON-RPC call to a bridge. `resume` only after a wait or a re-send (mcp-bridge-resume.RELAY_HOLD.5). */
+  private sendCall(
+    ws: WebSocket,
+    id: number | string,
+    method: string,
+    params: Record<string, unknown>,
+    extra: RelayCallExtra,
+    resume: RelayResumeMark | null,
+  ): void {
+    const kaption = {
+      // business-plans.MCP_LEDGER.9 — the ledger already decided this call: the cloud bridge must not charge it.
+      ...(extra.metered ? { metered: true } : {}),
+      // mcp-bridge-resume.RELAY_HOLD.5 — the bridges read it only for their resumed-call KPI.
+      ...(resume ? { resume: { kind: resume.kind, waitMs: resume.waitMs } } : {}),
+    };
+    ws.send(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method,
+        params,
+        ...(Object.keys(kaption).length ? { kaption } : {}),
+        // mcp-local-hub-growth.CLIENT.3 — which AI app made the call, outside the tool's params.
+        ...(extra.client ? { client: { name: extra.client.name, version: extra.client.version } } : {}),
+      }),
+    );
+  }
+
+  // ─── mcp-bridge-resume.RELAY_HOLD — calls held across a bridge reconnect ─────────────
+
+  private resumeState: BridgeResumeState | null = null;
+  private resumeLoaded = false;
+  private resumeWaiters = new Set<{ resolve: (ws: WebSocket | null) => void; timer: ReturnType<typeof setTimeout> }>();
+
+  /** The stored state (read once per wake); null when nothing was ever stored. */
+  private async loadResumeState(): Promise<BridgeResumeState | null> {
+    if (this.resumeLoaded) return this.resumeState;
+    try {
+      const stored = await this.ctx.storage?.get<BridgeResumeState>(BRIDGE_RESUME_KEY);
+      // A value set while the read ran (an auth, a close) is newer than the stored one.
+      if (!this.resumeLoaded) this.resumeState = stored ?? null;
+    } catch {
+      // no storage (tests): memory only
+    }
+    this.resumeLoaded = true;
+    return this.resumeState;
+  }
+
+  private saveResumeState(next: BridgeResumeState): void {
+    this.resumeState = next;
+    this.resumeLoaded = true;
+    const work = (async () => {
+      await this.ctx.storage?.put(BRIDGE_RESUME_KEY, next);
+    })().catch(() => undefined);
+    this.keepAlive(work);
+  }
+
+  private keepAlive(work: Promise<unknown>): void {
+    try {
+      this.ctx.waitUntil(work);
+    } catch {
+      // no waitUntil outside the runtime (tests): the promise still runs
+    }
+  }
+
+  /** mcp-bridge-resume.RELAY_HOLD.1 — a bridge was here in the last 10 minutes, or one is mid-handshake now. */
+  private bridgeExpected(state: BridgeResumeState): boolean {
+    const now = Date.now();
+    if (state.closedAt !== null && now - state.closedAt < RESUME_GRACE_MS) return true;
+    let sockets: WebSocket[] = [];
+    try {
+      sockets = this.ctx.getWebSockets();
+    } catch {
+      sockets = [];
+    }
+    return sockets.some((socket) => {
+      const attachment = this.readWsAttachment(socket);
+      return !attachment?.authenticated && typeof attachment?.openedAt === "number" && now - attachment.openedAt < STALE_HANDSHAKE_MS;
+    });
+  }
+
+  private waitForBridge(ms: number): Promise<WebSocket | null> {
+    return new Promise((resolve) => {
+      const waiter = {
+        resolve: (ws: WebSocket | null) => {
+          clearTimeout(waiter.timer);
+          this.resumeWaiters.delete(waiter);
+          resolve(ws);
+        },
+        timer: setTimeout(() => waiter.resolve(null), ms),
+      };
+      this.resumeWaiters.add(waiter);
+    });
+  }
+
+  /** mcp-bridge-resume.FLAG.2 — MCP_BRIDGE_RESUME for the phone this bridge signed in with, asked in the background. */
+  private noteBridgeAuthenticated(phone: string | null | undefined, features: ManageFeatures | undefined): void {
+    const previous = this.resumeState;
+    const base: BridgeResumeState = { on: previous?.on ?? false, features: features ?? {}, closedAt: null };
+    if (!bridgeResumeConfigured(this.env)) {
+      // Kill switch: nothing asked; a stored on is cleared so no call waits and no tool stays listed.
+      if (previous?.on) this.saveResumeState({ ...base, on: false });
+      else this.resumeState = previous ? { ...previous, features: base.features, closedAt: null } : null;
+      return;
+    }
+    // Storage is written only while the flag is (or was) on for this room; off, memory only.
+    if (previous?.on) this.saveResumeState(base);
+    else {
+      this.resumeState = base;
+      this.resumeLoaded = true;
+    }
+    if (!phone) return;
+    this.keepAlive(
+      bridgeResumeOnForPhone(this.env, phone)
+        .then((on) => {
+          const current = this.resumeState ?? base;
+          if (current.on !== on) this.saveResumeState({ ...current, on });
+        })
+        .catch(() => undefined),
+    );
+  }
+
+  /** A socket authenticated: held calls go to it, and calls cut off by a drop are sent once more (RELAY_HOLD.1, .3). */
+  private serveHeldCalls(ws: WebSocket | null): void {
+    if (!ws) return;
+    for (const waiter of [...this.resumeWaiters]) waiter.resolve(ws);
+    const now = Date.now();
+    for (const [id, pending] of this.pendingRequests) {
+      if (pending.orphanedAt === undefined) continue;
+      if (pending.orphanTimer) clearTimeout(pending.orphanTimer);
+      const waitMs = now - pending.orphanedAt;
+      pending.orphanTimer = null;
+      pending.orphanedAt = undefined;
+      pending.retried = true;
+      pending.ws = ws;
+      try {
+        this.sendCall(ws, id, pending.method!, pending.params ?? {}, pending.extra ?? {}, { kind: "retried", waitMs });
+        this.logResume("retried", "sent", waitMs);
+      } catch (err) {
+        clearTimeout(pending.timeout);
+        this.pendingRequests.delete(id);
+        pending.reject(err);
+      }
+    }
+  }
+
+  /** mcp-bridge-resume.RELAY_HOLD.6 — after the grace, the sessions are told the tools the room lists now. */
+  async alarm(): Promise<void> {
+    await this.loadResumeState();
+    this.restoreFromHibernation();
+    this.manageMaybeChanged();
+  }
+
+  private logResume(kind: "waited" | "retried", outcome: string, waitMs: number): void {
+    console.log(
+      `[RelayRoom] bridge-resume kind=${kind} outcome=${outcome} wait=${waitBucket(waitMs)} account=${this.accountRef ? sanitizeAccountRefForLog(this.accountRef) : "-"}`,
+    );
   }
 
   /**
@@ -276,7 +491,15 @@ export class RelayRoom extends DurableObject<Env> {
   manageFeatures(exclude: WebSocket | null = null): ManageFeatures | null {
     this.restoreFromHibernation();
     const socket = this.servingSocket(exclude);
-    if (!socket) return null;
+    if (!socket) {
+      // mcp-bridge-resume.RELAY_HOLD.6 — for 10 minutes after the serving bridge closed, its tools stay listed, so a
+      // reconnect does not remove and re-add them in Claude or ChatGPT (alarm() tells the sessions after that).
+      const state = this.resumeState;
+      if (state?.on && state.features && state.closedAt !== null && Date.now() - state.closedAt < RESUME_GRACE_MS) {
+        return readManageFeatures(state.features);
+      }
+      return null;
+    }
     return readManageFeatures(this.readWsAttachment(socket)?.features);
   }
 
@@ -296,6 +519,7 @@ export class RelayRoom extends DurableObject<Env> {
         // no storage (tests): the session still gets the features
       }
     }
+    await this.loadResumeState();
     return this.manageFeatures();
   }
 
@@ -334,13 +558,40 @@ export class RelayRoom extends DurableObject<Env> {
 
   /** mcp.CLOUD_RELAY.15 — a closed socket takes only its own in-flight requests with it. */
   private forgetSocket(ws: WebSocket): void {
+    const wasAuthenticated = this.readWsAttachment(ws)?.authenticated === true || (this.extensionWs === ws && this.authenticated);
+    const closingFeatures = this.readWsAttachment(ws)?.features;
     if (this.extensionWs === ws) {
       this.extensionWs = null;
       this.authenticated = false;
       this.accountRef = null;
     }
+    const state = this.resumeState;
+    const resumeOn = state?.on === true;
+    // mcp-bridge-resume.RELAY_HOLD.1, RELAY_HOLD.6 — the last serving bridge left: remember when, and what it listed.
+    if (resumeOn && wasAuthenticated && !this.servingSocket(ws)) {
+      const closedAt = Date.now();
+      this.saveResumeState({ on: true, features: closingFeatures ? readManageFeatures(closingFeatures) : state!.features, closedAt });
+      this.keepAlive((async () => {
+        await this.ctx.storage?.setAlarm?.(closedAt + RESUME_GRACE_MS);
+      })().catch(() => undefined));
+    }
     for (const [id, pending] of this.pendingRequests) {
+      // mcp-bridge-resume.RELAY_HOLD.3 — already waiting for a bridge: its own timer decides.
+      if (pending.orphanedAt !== undefined) continue;
       if (pending.ws && pending.ws !== ws) continue;
+      // mcp-bridge-resume.RELAY_HOLD.3 — a read cut off by the drop waits (once) for the next bridge; a write never.
+      if (resumeOn && pending.retry && !pending.retried) {
+        pending.ws = null;
+        pending.orphanedAt = Date.now();
+        pending.orphanTimer = setTimeout(() => {
+          if (!this.pendingRequests.has(id)) return;
+          clearTimeout(pending.timeout);
+          this.pendingRequests.delete(id);
+          this.logResume("retried", "gave-up", Date.now() - (pending.orphanedAt ?? Date.now()));
+          pending.reject(new Error("Extension disconnected"));
+        }, RESUME_WAIT_MS);
+        continue;
+      }
       clearTimeout(pending.timeout);
       pending.reject(new Error("Extension disconnected"));
       this.pendingRequests.delete(id);
@@ -492,6 +743,9 @@ export class RelayRoom extends DurableObject<Env> {
           : { type: "auth_ok" },
       ),
     );
+    // mcp-bridge-resume.FLAG.2, RELAY_HOLD.1, RELAY_HOLD.3 — the flag for this phone, then the calls held for a bridge.
+    this.noteBridgeAuthenticated(session.phone, features);
+    this.serveHeldCalls(ws);
     if (session.phone) await this.rememberPhoneSeal(ws, session.phone);
   }
 
@@ -574,6 +828,9 @@ export class RelayRoom extends DurableObject<Env> {
     this.manageMaybeChanged();
     this.rememberAlias(phone, accountRef);
     ws?.send(JSON.stringify({ type: "auth_ok", phone }));
+    // mcp-bridge-resume.FLAG.2, RELAY_HOLD.1, RELAY_HOLD.3 — the flag for this phone, then the calls held for a bridge.
+    this.noteBridgeAuthenticated(phone, features);
+    this.serveHeldCalls(ws);
     await this.rememberPhoneSeal(ws, phone);
   }
 
@@ -693,6 +950,7 @@ export class RelayRoom extends DurableObject<Env> {
    * Durable Object WebSocket hibernation handler for close events.
    */
   async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.loadResumeState();
     this.forgetSocket(ws);
     this.manageMaybeChanged(ws);
   }
