@@ -672,22 +672,22 @@ export async function meterCall(
 /** JSON-RPC code of a plan refusal — the code the extension already answers and every client understands. */
 export const REFUSED_CODE = -32003;
 
-/** business-plans.MCP_LEDGER.6-7, MCP_PAY.5-6 — what the assistant reads when the relay refuses an extra action. */
+/** business-plans.MCP_LEDGER.6-7, MCP_PAY.5-6, weekly-plan-limits.CREDITS_V2.7 — what the assistant reads when the relay refuses an extra action (in credits). */
 export function meterRefusalText(reason: ChargeRefusal, allowance: number): string {
-  const used = `You've used the ${allowance.toLocaleString("en-US")} Claude and ChatGPT actions your Kaption plan includes this month.`;
+  const used = `You've used the ${allowance.toLocaleString("en-US")} Claude and ChatGPT credits your Kaption plan includes this month.`;
   const buy = "Tell the user to open Kaption on WhatsApp Web, Your Plan → Kaption credits, to buy more credit or turn on \"Keep going past my plan\".";
   switch (reason) {
     case "no_credit":
-      return `${used} There is no Kaption credit left for extra actions. ${buy} The count starts again on the 1st (UTC).`;
+      return `${used} There is no Kaption credit left to pay for extra Claude and ChatGPT credits. ${buy} The count starts again on the 1st (UTC).`;
     case "cap_reached":
-      return `${used} The monthly limit for extra actions is reached. Tell the user they can raise it in Kaption on WhatsApp Web, Your Plan → Kaption credits. The count starts again on the 1st (UTC).`;
+      return `${used} The monthly limit for extra Claude and ChatGPT credits is reached. Tell the user they can raise it in Kaption on WhatsApp Web, Your Plan → Kaption credits. The count starts again on the 1st (UTC).`;
     case "cap_zero":
-      return `${used} Extra actions are turned off. Tell the user to turn on "Keep going past my plan" in Kaption on WhatsApp Web, Your Plan → Kaption credits. The count starts again on the 1st (UTC).`;
+      return `${used} Extra Claude and ChatGPT credits are turned off. Tell the user to turn on "Keep going past my plan" in Kaption on WhatsApp Web, Your Plan → Kaption credits. The count starts again on the 1st (UTC).`;
     case "overage_off":
     case "ineligible":
-      return `${used} Extra actions are not available on this account. The count starts again on the 1st (UTC).`;
+      return `${used} Extra Claude and ChatGPT credits are not available on this account. The count starts again on the 1st (UTC).`;
     default:
-      return "Kaption could not check this account's Claude and ChatGPT actions just now. Try again in a minute.";
+      return "Kaption could not check this account's Claude and ChatGPT credits just now. Try again in a minute.";
   }
 }
 

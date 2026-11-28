@@ -200,7 +200,9 @@ describe("meterCall (business-plans.MCP_LEDGER.2, .5-7, .16)", () => {
       const text = meterRefusalText(reason, 500);
       expect(text).not.toMatch(/MCP/);
     }
-    expect(meterRefusalText("no_credit", 500)).toMatch(/500 Claude and ChatGPT actions.*Kaption credits/);
+    expect(meterRefusalText("no_credit", 500)).toMatch(/500 Claude and ChatGPT credits.*Kaption credits/);
+    // weekly-plan-limits.CREDITS_V2.7 — credits, never actions.
+    for (const reason of ["no_credit", "cap_reached", "cap_zero", "overage_off", "unavailable"] as const) expect(meterRefusalText(reason, 500)).not.toMatch(/\bactions?\b/);
   });
 });
 

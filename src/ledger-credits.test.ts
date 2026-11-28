@@ -288,7 +288,9 @@ describe("mcp-usage-ledger.CREDITS a credits month", () => {
     expect(refusalFallback(100, "month", "credits")).toBe(
       "This Kaption account has used this month's 100 Claude and ChatGPT credits. Tell the user they come back on the 1st, or to choose a plan at https://kaptionai.com/pricing for more.",
     );
-    expect(refusalFallback(20)).toContain("this week's 20 Claude and ChatGPT actions");
+    expect(refusalFallback(20, "week")).toContain("this week's 20 Claude and ChatGPT credits");
+    // weekly-plan-limits.CREDITS_V2.7 — never actions.
+    expect(refusalFallback(20)).not.toMatch(/actions/);
   });
 
   it("mcp-usage-ledger.CREDITS.4 — the window answers credits: pending reservations with their own credits", () => {

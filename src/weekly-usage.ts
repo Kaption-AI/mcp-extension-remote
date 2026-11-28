@@ -154,8 +154,11 @@ export function usageHeaders(usage: Usage): Record<string, string> {
   return out;
 }
 
-/** mcp-usage-ledger.SINGLE.4 — the refusal words when rest-api's plan answer carried none. */
-export function refusalFallback(limit: number, period: "week" | "month" | null = "week", unit: "credits" | "actions" = "actions"): string {
+/**
+ * mcp-usage-ledger.SINGLE.4 — the refusal words when rest-api's plan answer carried none. weekly-plan-limits.CREDITS_V2.7
+ * (owner 2026-11-25) — every allowance is credits now: the words say credits whatever the plan answer omitted.
+ */
+export function refusalFallback(limit: number, period: "week" | "month" | null = "month", unit: "credits" = "credits"): string {
   // mcp-usage-ledger.CREDITS.8 — a credits month says so.
   if (period === "month") {
     return `This Kaption account has used this month's ${limit} Claude and ChatGPT ${unit}. Tell the user they come back on the 1st, or to choose a plan at https://kaptionai.com/pricing for more.`;
